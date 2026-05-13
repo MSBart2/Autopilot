@@ -292,3 +292,24 @@ Added deterministic gate primitives and passive engine integration:
 - Kept default behavior unchanged by using an empty gate registry while no default gates are declared.
 - Added gate runner tests for empty definitions, matching gate execution, and missing evaluator diagnostics.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Nineteenth Slice Status
+
+Added the first concrete deterministic gate for model availability:
+
+- Added `BuiltInPipelineGates` with the `model-available` gate registration.
+- Added `ModelAvailabilityGate` backed by the existing `IModelAvailabilityChecker`.
+- Returned actionable corrective guidance when the selected model is unavailable.
+- Registered built-in gates with the pipeline engine while preserving current behavior because no default gates are declared yet.
+- Added model availability gate tests for pass/fail behavior and built-in registration.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Twentieth Slice Status
+
+Added a deterministic gate for required SDK labels:
+
+- Added `RequiredLabelsGate` backed by the existing `ISdkLabelService`.
+- Registered the `required-labels` gate in `BuiltInPipelineGates` alongside `model-available`.
+- Preserved current default behavior because no default stages declare gates yet.
+- Added pass/fail/create-missing tests and built-in registration coverage.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
