@@ -51,13 +51,14 @@ public sealed class SignalRProgressSink(
     public void OnStageCompleted(StageDefinition stage, StageResult result)
     {
         FlushBufferAsync().GetAwaiter().GetResult();
+        var estimatedCost = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens);
         if (currentLog is not null)
         {
             currentLog.Status = result.Status;
             currentLog.CompletedAt = DateTime.UtcNow;
             currentLog.InputTokens = result.InputTokens;
             currentLog.OutputTokens = result.OutputTokens;
-            currentLog.EstimatedCostUsd = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens);
+            currentLog.EstimatedCostUsd = estimatedCost;
         }
 
         dbContext.SaveChanges();
@@ -70,7 +71,7 @@ public sealed class SignalRProgressSink(
             result.Decision,
             inputTokens = result.InputTokens,
             outputTokens = result.OutputTokens,
-            estimatedCostUsd = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens),
+            estimatedCostUsd = estimatedCost,
         }).GetAwaiter().GetResult();
     }
 
