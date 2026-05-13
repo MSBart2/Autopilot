@@ -281,6 +281,63 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public void PipelineEvidence_FromApprovalRequest_CreatesRequestLedgerRow()
+    {
+        var approval = new PipelineApproval
+        {
+            Id = "approval-1",
+            RunId = "run-1",
+            IssueNumber = 42,
+            StageName = "plan",
+            Timing = "AfterStage",
+            Reason = "Plan approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "implement",
+            CreatedAt = DateTime.Parse("2026-05-13T10:00:00Z").ToUniversalTime(),
+        };
+
+        var evidence = PipelineEvidence.FromApprovalRequest(approval);
+
+        Assert.Equal("run-1", evidence.RunId);
+        Assert.Equal("plan", evidence.StageName);
+        Assert.Equal("approval-request", evidence.Kind);
+        Assert.Equal("approval-1", evidence.Name);
+        Assert.Equal("Approval requested for maintainer: Plan approval required.", evidence.Summary);
+        Assert.Equal("approval", evidence.Source);
+        Assert.Equal(approval.CreatedAt, evidence.CreatedAt);
+    }
+
+    [Fact]
+    public void PipelineEvidence_FromApprovalDecision_CreatesDecisionLedgerRow()
+    {
+        var approval = new PipelineApproval
+        {
+            Id = "approval-1",
+            RunId = "run-1",
+            IssueNumber = 42,
+            StageName = "review",
+            Timing = "AfterStage",
+            Reason = "Review approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "docs",
+            Status = "Rejected",
+            DecidedBy = "alice",
+            DecisionReason = "tests failed",
+            DecidedAt = DateTime.Parse("2026-05-13T10:15:00Z").ToUniversalTime(),
+        };
+
+        var evidence = PipelineEvidence.FromApprovalDecision(approval);
+
+        Assert.Equal("run-1", evidence.RunId);
+        Assert.Equal("review", evidence.StageName);
+        Assert.Equal("approval-decision", evidence.Kind);
+        Assert.Equal("approval-1", evidence.Name);
+        Assert.Equal("Approval rejected by alice: tests failed", evidence.Summary);
+        Assert.Equal("approval", evidence.Source);
+        Assert.Equal(approval.DecidedAt, evidence.CreatedAt);
+    }
+
+    [Fact]
     public async Task PipelineApproval_FromPendingRequest_CanBeAddedAndRetrieved()
     {
         var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };

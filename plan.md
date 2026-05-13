@@ -502,3 +502,14 @@ Surfaced the evidence ledger in the Run Room:
 - Rendered a restrained Evidence panel in the Run Room when ledger rows exist, without changing the stage transcript layout.
 - Added controller and view-model tests proving evidence rows are loaded, sorted, and displayed through the details model.
 - Validated with `dotnet build .\Cyberpilot.sln`, web unit tests, and web integration tests.
+
+### Thirty-Ninth Slice Status
+
+Added approval events to the evidence ledger:
+
+- `PipelineEvidence` now creates ledger rows for approval requests and approval decisions.
+- SDK history and web SignalR progress sinks persist approval-request evidence when structured approval gates are raised.
+- Approval approve/reject decisions now write decision evidence rows, including actor and decision reason when provided.
+- The Run Room Evidence panel labels approval request and decision entries clearly.
+- Added SDK persistence/sink tests plus web controller, SignalR sink, and view-model tests for approval evidence.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.

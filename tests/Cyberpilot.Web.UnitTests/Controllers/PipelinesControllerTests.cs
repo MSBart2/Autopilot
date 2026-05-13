@@ -944,6 +944,12 @@ public class PipelinesControllerTests
         Assert.Equal("Stopped", updatedRun.Status);
         Assert.Equal("review", updatedRun.CurrentStage);
         Assert.Contains("needs work", updatedRun.Error);
+
+        var evidence = await db.PipelineEvidence.SingleAsync(item => item.Kind == "approval-decision");
+        Assert.Equal(run.Id, evidence.RunId);
+        Assert.Equal("review", evidence.StageName);
+        Assert.Equal(approval.Id, evidence.Name);
+        Assert.Contains("needs work", evidence.Summary);
     }
 
     [Fact]

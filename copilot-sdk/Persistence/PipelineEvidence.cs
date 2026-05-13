@@ -101,6 +101,50 @@ public sealed class PipelineEvidence
         return rows;
     }
 
+    /// <summary>
+    /// Creates an evidence ledger row for an approval request.
+    /// </summary>
+    /// <param name="approval">The approval request.</param>
+    /// <returns>The approval request evidence row.</returns>
+    public static PipelineEvidence FromApprovalRequest(PipelineApproval approval)
+    {
+        ArgumentNullException.ThrowIfNull(approval);
+
+        return new PipelineEvidence
+        {
+            RunId = approval.RunId,
+            StageName = approval.StageName,
+            Kind = "approval-request",
+            Name = approval.Id,
+            Summary = $"Approval requested for {approval.RequestedRole}: {approval.Reason}",
+            Source = "approval",
+            CreatedAt = approval.CreatedAt,
+        };
+    }
+
+    /// <summary>
+    /// Creates an evidence ledger row for an approval decision.
+    /// </summary>
+    /// <param name="approval">The decided approval request.</param>
+    /// <returns>The approval decision evidence row.</returns>
+    public static PipelineEvidence FromApprovalDecision(PipelineApproval approval)
+    {
+        ArgumentNullException.ThrowIfNull(approval);
+
+        var actor = string.IsNullOrWhiteSpace(approval.DecidedBy) ? "operator" : approval.DecidedBy;
+        var reason = string.IsNullOrWhiteSpace(approval.DecisionReason) ? string.Empty : $": {approval.DecisionReason}";
+        return new PipelineEvidence
+        {
+            RunId = approval.RunId,
+            StageName = approval.StageName,
+            Kind = "approval-decision",
+            Name = approval.Id,
+            Summary = $"Approval {approval.Status.ToLowerInvariant()} by {actor}{reason}",
+            Source = "approval",
+            CreatedAt = approval.DecidedAt ?? DateTime.UtcNow,
+        };
+    }
+
     private static PipelineEvidence Create(
         string runId,
         string stageName,

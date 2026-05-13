@@ -222,6 +222,12 @@ public class SignalRProgressSinkTests : IDisposable
         Assert.Equal("review", approval.StageName);
         Assert.Equal("Pending", approval.Status);
 
+        var evidence = _dbContext.PipelineEvidence.Single();
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("review", evidence.StageName);
+        Assert.Equal("approval-request", evidence.Kind);
+        Assert.Equal("approval-signalr-1", evidence.Name);
+
         _groupClient.Verify(client => client.SendCoreAsync(
             "approvalRequested",
             It.Is<object?[]>(arguments =>

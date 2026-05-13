@@ -892,6 +892,7 @@ public class PipelinesController : Controller
                 : $"Approval '{approval.Id}' was rejected after {approval.StageName}: {approval.DecisionReason}";
         }
 
+        _dbContext.PipelineEvidence.Add(PipelineEvidence.FromApprovalDecision(approval));
         await _dbContext.SaveChangesAsync();
 
         TempData["PipelineNotice"] = decision == nameof(ApprovalStatus.Approved)

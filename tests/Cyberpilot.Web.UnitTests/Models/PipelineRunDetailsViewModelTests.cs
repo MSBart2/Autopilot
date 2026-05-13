@@ -102,6 +102,15 @@ public class PipelineRunDetailsViewModelTests
             {
                 RunId = run.Id,
                 StageName = "plan",
+                Kind = "approval-request",
+                Name = "approval-plan",
+                Summary = "Approval requested for maintainer: Plan approval required.",
+                CreatedAt = DateTime.Parse("2026-05-13T08:00:00Z").ToUniversalTime(),
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "plan",
                 Kind = "stage-artifact",
                 Name = "plan-comment",
                 Summary = "Implementation plan posted.",
@@ -115,6 +124,12 @@ public class PipelineRunDetailsViewModelTests
 
         Assert.Collection(
             vm.EvidenceItems,
+            item =>
+            {
+                Assert.Equal("Plan", item.StageLabel);
+                Assert.Equal("Approval", item.KindLabel);
+                Assert.Equal("approval-plan", item.Name);
+            },
             item =>
             {
                 Assert.Equal("Plan", item.StageLabel);

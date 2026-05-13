@@ -358,6 +358,8 @@ public sealed record PipelineEvidenceViewModel(
         "stage-artifact" => "Artifact",
         "policy-rationale" => "Policy",
         "required-action" => "Action",
+        "approval-request" => "Approval",
+        "approval-decision" => "Decision",
         _ => string.IsNullOrWhiteSpace(Kind) ? "Evidence" : Kind,
     };
 

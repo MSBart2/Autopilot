@@ -122,7 +122,9 @@ public sealed class SignalRProgressSink(
     {
         if (dbContext.PipelineApprovals.Find(request.Id) is null)
         {
-            dbContext.PipelineApprovals.Add(PipelineApproval.FromRequest(runId, request));
+            var approval = PipelineApproval.FromRequest(runId, request);
+            dbContext.PipelineApprovals.Add(approval);
+            dbContext.PipelineEvidence.Add(PipelineEvidence.FromApprovalRequest(approval));
             dbContext.SaveChanges();
         }
 

@@ -75,7 +75,9 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
     {
         if (dbContext.PipelineApprovals.Find(request.Id) is null)
         {
-            dbContext.PipelineApprovals.Add(PipelineApproval.FromRequest(runId, request));
+            var approval = PipelineApproval.FromRequest(runId, request);
+            dbContext.PipelineApprovals.Add(approval);
+            dbContext.PipelineEvidence.Add(PipelineEvidence.FromApprovalRequest(approval));
             dbContext.SaveChanges();
         }
     }

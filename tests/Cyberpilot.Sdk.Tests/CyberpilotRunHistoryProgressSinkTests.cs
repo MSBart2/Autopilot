@@ -201,5 +201,12 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
         Assert.Equal("Pending", approval.Status);
         Assert.Equal("maintainer", approval.RequestedRole);
         Assert.Equal("implement", approval.ResumeStageName);
+
+        var evidence = _dbContext.PipelineEvidence.Single();
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("plan", evidence.StageName);
+        Assert.Equal("approval-request", evidence.Kind);
+        Assert.Equal("approval-history-1", evidence.Name);
+        Assert.Contains("Plan approval required", evidence.Summary);
     }
 }
