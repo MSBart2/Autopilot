@@ -36,6 +36,11 @@ public sealed class CyberpilotDbContext : DbContext
     /// </summary>
     public DbSet<PipelineApproval> PipelineApprovals => Set<PipelineApproval>();
 
+    /// <summary>
+    /// Gets structured evidence ledger rows.
+    /// </summary>
+    public DbSet<PipelineEvidence> PipelineEvidence => Set<PipelineEvidence>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,12 +62,20 @@ public sealed class CyberpilotDbContext : DbContext
                 .WithOne(e => e.Run)
                 .HasForeignKey(e => e.RunId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(e => e.Evidence)
+                .WithOne(e => e.Run)
+                .HasForeignKey(e => e.RunId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<PipelineStageLog>(entity =>
         {
             entity.HasIndex(e => e.RunId);
             entity.HasIndex(e => e.StageName);
+            entity.HasMany(e => e.Evidence)
+                .WithOne(e => e.StageLog)
+                .HasForeignKey(e => e.StageLogId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<PipelineDispatch>(entity =>
@@ -75,6 +88,14 @@ public sealed class CyberpilotDbContext : DbContext
             entity.HasIndex(e => e.RunId);
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.StageName);
+        });
+
+        modelBuilder.Entity<PipelineEvidence>(entity =>
+        {
+            entity.HasIndex(e => e.RunId);
+            entity.HasIndex(e => e.StageLogId);
+            entity.HasIndex(e => e.StageName);
+            entity.HasIndex(e => e.Kind);
         });
     }
 }

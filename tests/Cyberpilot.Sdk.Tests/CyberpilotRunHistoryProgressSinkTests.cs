@@ -83,6 +83,35 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnStageCompleted_WithStructuredEvidence_PersistsEvidenceLedgerRows()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
+        var stage = new StageDefinition("REVIEW", "review", "review.agent.md", "sdk/review");
+        sink.OnStageStarted(stage, 1);
+        var result = new StageResult(
+            "STOP",
+            "changes_requested",
+            true,
+            null,
+            Artifacts: [new StageArtifact("pull-request", "PR #1", "https://github.com/owner/repo/pull/1")],
+            Evidence: [new StageEvidence("test-output", "Tests failed.")],
+            PolicyRationale: "Policy requires passing tests.",
+            RequiredActions: ["Fix failing tests."]);
+
+        sink.OnStageCompleted(stage, result);
+
+        var rows = _dbContext.PipelineEvidence.OrderBy(row => row.Id).ToArray();
+        Assert.Equal(4, rows.Length);
+        Assert.All(rows, row => Assert.Equal(_run.Id, row.RunId));
+        Assert.All(rows, row => Assert.Equal("review", row.StageName));
+        Assert.All(rows, row => Assert.NotNull(row.StageLogId));
+        Assert.Contains(rows, row => row.Kind == "stage-evidence" && row.Name == "test-output");
+        Assert.Contains(rows, row => row.Kind == "stage-artifact" && row.Name == "pull-request");
+        Assert.Contains(rows, row => row.Kind == "policy-rationale" && row.Summary == "Policy requires passing tests.");
+        Assert.Contains(rows, row => row.Kind == "required-action" && row.Summary == "Fix failing tests.");
+    }
+
+    [Fact]
     public void OnMessage_AppendsToStageLog()
     {
         var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);

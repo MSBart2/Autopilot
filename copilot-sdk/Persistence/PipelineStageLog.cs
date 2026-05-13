@@ -60,4 +60,7 @@ public sealed class PipelineStageLog
 
     /// <summary>Gets or sets the owning run.</summary>
     public PipelineRun? Run { get; set; }
+
+    /// <summary>Gets or sets structured evidence rows related to this stage log.</summary>
+    public ICollection<PipelineEvidence> Evidence { get; set; } = [];
 }

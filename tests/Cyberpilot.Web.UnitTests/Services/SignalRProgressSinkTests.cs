@@ -97,6 +97,30 @@ public class SignalRProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnStageCompleted_WithStructuredEvidence_PersistsEvidenceLedgerRows()
+    {
+        var sink = CreateSink();
+        var stage = new StageDefinition("REVIEW", "review", "review.agent.md", "sdk/review");
+        sink.OnStageStarted(stage, 42);
+        var result = new StageResult(
+            "STOP",
+            "changes_requested",
+            true,
+            null,
+            Evidence: [new StageEvidence("review-verdict", "Review requested changes.")],
+            RequiredActions: ["Return to implementation."]);
+
+        sink.OnStageCompleted(stage, result);
+
+        var rows = _dbContext.PipelineEvidence.OrderBy(row => row.Id).ToArray();
+        Assert.Equal(2, rows.Length);
+        Assert.Contains(rows, row => row.Kind == "stage-evidence" && row.Name == "review-verdict");
+        Assert.Contains(rows, row => row.Kind == "required-action" && row.Summary == "Return to implementation.");
+        Assert.All(rows, row => Assert.Equal(_run.Id, row.RunId));
+        Assert.All(rows, row => Assert.Equal("review", row.StageName));
+    }
+
+    [Fact]
     public void OnMessage_AppendsLineToLog()
     {
         var sink = CreateSink();

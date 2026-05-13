@@ -481,3 +481,14 @@ Completed rejected approval handling:
 - `PipelineRunDetailsViewModel` now tracks rejected approvals and hides Continue when any are present.
 - Added controller and view-model tests for rejection status, diagnostics, and Continue blocking.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Thirty-Seventh Slice Status
+
+Started the durable evidence ledger:
+
+- Added `PipelineEvidence` as a generic evidence table for stage evidence, artifacts, policy rationale, and required actions.
+- Related evidence rows to `PipelineRun` and optionally to `PipelineStageLog`, with run cascade delete and nullable stage-log cleanup.
+- Generated the EF Core migration `AddPipelineEvidenceLedger` and updated the model snapshot.
+- `CyberpilotRunHistoryProgressSink` and `SignalRProgressSink` now persist structured evidence rows from completed `StageResult` payloads.
+- Added SDK persistence tests, SDK sink tests, and web SignalR sink tests for evidence row creation.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.

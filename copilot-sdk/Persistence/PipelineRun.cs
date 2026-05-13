@@ -112,4 +112,7 @@ public sealed class PipelineRun
 
     /// <summary>Gets or sets the approval requests for this run.</summary>
     public ICollection<PipelineApproval> Approvals { get; set; } = [];
+
+    /// <summary>Gets or sets structured evidence rows for this run.</summary>
+    public ICollection<PipelineEvidence> Evidence { get; set; } = [];
 }

@@ -53,6 +53,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
             currentLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
                 ? PipelineDefinitionDefaults.ContractVersion
                 : result.ContractVersion;
+            dbContext.PipelineEvidence.AddRange(PipelineEvidence.FromStageResult(runId, stage.Name, currentLog, result));
         }
 
         dbContext.SaveChanges();

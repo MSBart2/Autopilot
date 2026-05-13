@@ -180,6 +180,107 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public async Task PipelineEvidence_CanBeAddedAndRetrieved()
+    {
+        var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        var log = new PipelineStageLog { RunId = run.Id, StageName = "review", Status = "GO" };
+        _dbContext.PipelineStageLogs.Add(log);
+        var evidence = new PipelineEvidence
+        {
+            RunId = run.Id,
+            StageLog = log,
+            StageName = "review",
+            Kind = "stage-evidence",
+            Name = "review-verdict",
+            Summary = "Review approved the pull request.",
+            Uri = "https://github.com/owner/repo/pull/1",
+            MediaType = "text/markdown",
+        };
+        _dbContext.PipelineEvidence.Add(evidence);
+        await _dbContext.SaveChangesAsync();
+
+        var retrieved = await _dbContext.PipelineEvidence.FindAsync(evidence.Id);
+
+        Assert.NotNull(retrieved);
+        Assert.Equal(run.Id, retrieved.RunId);
+        Assert.Equal(log.Id, retrieved.StageLogId);
+        Assert.Equal("review", retrieved.StageName);
+        Assert.Equal("stage-evidence", retrieved.Kind);
+        Assert.Equal("review-verdict", retrieved.Name);
+        Assert.Equal("Review approved the pull request.", retrieved.Summary);
+        Assert.Equal("https://github.com/owner/repo/pull/1", retrieved.Uri);
+        Assert.Equal("text/markdown", retrieved.MediaType);
+        Assert.Equal("stage-result", retrieved.Source);
+    }
+
+    [Fact]
+    public async Task PipelineEvidence_CascadeDeletesWithRun()
+    {
+        var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        _dbContext.PipelineEvidence.Add(new PipelineEvidence
+        {
+            RunId = run.Id,
+            StageName = "plan",
+            Kind = "required-action",
+            Name = "required-action-1",
+            Summary = "Fix failing tests.",
+        });
+        await _dbContext.SaveChangesAsync();
+
+        _dbContext.PipelineRuns.Remove(run);
+        await _dbContext.SaveChangesAsync();
+
+        Assert.Empty(await _dbContext.PipelineEvidence.ToArrayAsync());
+    }
+
+    [Fact]
+    public void PipelineEvidence_FromStageResult_CreatesLedgerRows()
+    {
+        var result = new StageResult(
+            "STOP",
+            "changes_requested",
+            true,
+            null,
+            Artifacts: [new StageArtifact("pull-request", "PR #1", "https://github.com/owner/repo/pull/1", "text/uri-list")],
+            Evidence: [new StageEvidence("test-output", "Tests failed.", "file://test.log")],
+            PolicyRationale: "Strict policy requires tests to pass.",
+            RequiredActions: ["Fix failing tests."]);
+
+        var rows = PipelineEvidence.FromStageResult("run-1", "review", null, result);
+
+        Assert.Collection(
+            rows,
+            evidence =>
+            {
+                Assert.Equal("stage-evidence", evidence.Kind);
+                Assert.Equal("test-output", evidence.Name);
+                Assert.Equal("Tests failed.", evidence.Summary);
+                Assert.Equal("file://test.log", evidence.Uri);
+            },
+            artifact =>
+            {
+                Assert.Equal("stage-artifact", artifact.Kind);
+                Assert.Equal("pull-request", artifact.Name);
+                Assert.Equal("PR #1", artifact.Summary);
+                Assert.Equal("https://github.com/owner/repo/pull/1", artifact.Uri);
+                Assert.Equal("text/uri-list", artifact.MediaType);
+            },
+            rationale =>
+            {
+                Assert.Equal("policy-rationale", rationale.Kind);
+                Assert.Equal("Strict policy requires tests to pass.", rationale.Summary);
+            },
+            action =>
+            {
+                Assert.Equal("required-action", action.Kind);
+                Assert.Equal("required-action-1", action.Name);
+                Assert.Equal("Fix failing tests.", action.Summary);
+            });
+    }
+
+    [Fact]
     public async Task PipelineApproval_FromPendingRequest_CanBeAddedAndRetrieved()
     {
         var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };
