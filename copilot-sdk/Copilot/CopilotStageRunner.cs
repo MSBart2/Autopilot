@@ -45,6 +45,18 @@ internal sealed class CopilotStageRunner(string repoRoot, string model, ICyberpi
             content = streamed.ToString();
         }
 
-        return StageResult.Parse(content ?? string.Empty);
+        int? inputTokens = null, outputTokens = null;
+        try
+        {
+            var metrics = await session.Rpc.Usage.GetMetricsAsync(cancellationToken);
+            inputTokens  = (int?)metrics.LastCallInputTokens;
+            outputTokens = (int?)metrics.LastCallOutputTokens;
+        }
+        catch (Exception ex)
+        {
+            error.WriteLine($"[warn] Token usage capture failed: {ex.Message}");
+        }
+
+        return StageResult.Parse(content ?? string.Empty) with { InputTokens = inputTokens, OutputTokens = outputTokens };
     }
 }

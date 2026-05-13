@@ -123,6 +123,6 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             return terminalSink;
         }
 
-        return new CompositeProgressSink(terminalSink, new CyberpilotRunHistoryProgressSink(run.Id, dbContext));
+        return new CompositeProgressSink(terminalSink, new CyberpilotRunHistoryProgressSink(run.Id, run.Model, dbContext));
     }
 }

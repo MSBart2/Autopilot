@@ -35,6 +35,15 @@ public sealed class PipelineStageLog
     /// <summary>Gets or sets when the stage completed.</summary>
     public DateTime? CompletedAt { get; set; }
 
+    /// <summary>Gets or sets the number of input tokens consumed by this stage.</summary>
+    public int? InputTokens { get; set; }
+
+    /// <summary>Gets or sets the number of output tokens produced by this stage.</summary>
+    public int? OutputTokens { get; set; }
+
+    /// <summary>Gets or sets the estimated USD cost for this stage based on model pricing.</summary>
+    public decimal? EstimatedCostUsd { get; set; }
+
     /// <summary>Gets or sets the owning run.</summary>
     public PipelineRun? Run { get; set; }
 }

@@ -10,7 +10,9 @@ namespace Cyberpilot.Pipeline;
 /// <param name="Decision">The review or stage decision.</param>
 /// <param name="IsValid">Whether the stage output was valid.</param>
 /// <param name="Error">The validation error, when invalid.</param>
-public sealed record StageResult(string Status, string Decision, bool IsValid, string? Error)
+/// <param name="InputTokens">The number of input tokens consumed by this stage, when available.</param>
+/// <param name="OutputTokens">The number of output tokens produced by this stage, when available.</param>
+public sealed record StageResult(string Status, string Decision, bool IsValid, string? Error, int? InputTokens = null, int? OutputTokens = null)
 {
     /// <summary>
     /// Gets an empty successful stage result.

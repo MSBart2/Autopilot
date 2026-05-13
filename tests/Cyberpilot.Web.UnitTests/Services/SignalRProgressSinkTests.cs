@@ -115,10 +115,27 @@ public class SignalRProgressSinkTests : IDisposable
         Assert.Equal("pipeline", log.StageName);
     }
 
-    private SignalRProgressSink CreateSink()
+    [Fact]
+    public void OnStageCompleted_WithTokens_WritesToStageLog()
+    {
+        var sink = CreateSink("gpt-4.1");
+        var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
+        sink.OnStageStarted(stage, 42);
+
+        var result = new StageResult("GO", "approved", true, null, InputTokens: 2_000_000, OutputTokens: 1_000_000);
+        sink.OnStageCompleted(stage, result);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal(2_000_000, log.InputTokens);
+        Assert.Equal(1_000_000, log.OutputTokens);
+        Assert.Equal(12.0m, log.EstimatedCostUsd); // 4.00 in + 8.00 out = $12.00
+    }
+
+    private SignalRProgressSink CreateSink(string model = "")
     {
         return new SignalRProgressSink(
             _run.Id,
+            model,
             42,
             _dbContext,
             _hubContext.Object,

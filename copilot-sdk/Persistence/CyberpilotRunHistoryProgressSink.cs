@@ -6,7 +6,7 @@ namespace Cyberpilot.Persistence;
 /// <summary>
 /// Persists Cyberpilot progress events into the shared run-history database.
 /// </summary>
-public sealed class CyberpilotRunHistoryProgressSink(string runId, CyberpilotDbContext dbContext) : ICyberpilotProgressSink
+public sealed class CyberpilotRunHistoryProgressSink(string runId, string model, CyberpilotDbContext dbContext) : ICyberpilotProgressSink
 {
     private readonly StringBuilder buffer = new();
     private PipelineStageLog? currentLog;
@@ -42,6 +42,9 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, CyberpilotDbC
         {
             currentLog.Status = result.Status;
             currentLog.CompletedAt = DateTime.UtcNow;
+            currentLog.InputTokens = result.InputTokens;
+            currentLog.OutputTokens = result.OutputTokens;
+            currentLog.EstimatedCostUsd = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens);
         }
 
         dbContext.SaveChanges();

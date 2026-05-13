@@ -174,4 +174,25 @@ public sealed class StageResultTests
         Assert.True(result.IsValid);
         Assert.Null(result.Error);
     }
+
+    [Fact]
+    public void InputTokens_DefaultsToNull()
+    {
+        Assert.Null(StageResult.Empty.InputTokens);
+    }
+
+    [Fact]
+    public void OutputTokens_DefaultsToNull()
+    {
+        Assert.Null(StageResult.Empty.OutputTokens);
+    }
+
+    [Fact]
+    public void WithExpression_SetsTokens()
+    {
+        var result = StageResult.Empty with { InputTokens = 500, OutputTokens = 1200 };
+
+        Assert.Equal(500, result.InputTokens);
+        Assert.Equal(1200, result.OutputTokens);
+    }
 }

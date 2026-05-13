@@ -212,6 +212,17 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
     /// <summary>Gets the best available explanation and recovery guidance for a terminal stopped run.</summary>
     public PipelineStopDiagnostic? StopDiagnostic => PipelineStopDiagnostic.Create(Run, Logs, Dispatches ?? []);
 
+    /// <summary>Gets the total input tokens across all stage logs.</summary>
+    public int TotalInputTokens => Logs.Sum(l => l.InputTokens ?? 0);
+
+    /// <summary>Gets the total output tokens across all stage logs.</summary>
+    public int TotalOutputTokens => Logs.Sum(l => l.OutputTokens ?? 0);
+
+    /// <summary>Gets the total estimated USD cost across all stage logs, or null if no cost data is available.</summary>
+    public decimal? TotalEstimatedCostUsd => Logs.Any(l => l.EstimatedCostUsd.HasValue)
+        ? Logs.Sum(l => l.EstimatedCostUsd ?? 0m)
+        : null;
+
     /// <summary>Gets whether this terminal run can be requeued from its current stage.</summary>
     public bool CanContinue => Run.Status is "Failed" or "Stopped" or "Paused" or "Cancelled";
 

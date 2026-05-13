@@ -40,6 +40,9 @@
         output   = l.Output   ?? string.Empty,
         duration = l.CompletedAt.HasValue ? (int)(l.CompletedAt.Value - l.StartedAt).TotalSeconds : 0,
         timestamp = l.StartedAt.ToString("o"),
+        inputTokens = l.InputTokens,
+        outputTokens = l.OutputTokens,
+        estimatedCostUsd = l.EstimatedCostUsd,
     }));
     var dispatchesJson = JsonSerializer.Serialize((Model.Dispatches ?? []).Select(d => new
     {
@@ -163,6 +166,28 @@
             <div class="stat-card">
                 <div class="stat-label">Started</div>
                 <strong>@Model.Run.CreatedAt.ToLocalTime().ToString("g")</strong>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Tokens</div>
+                @if (Model.TotalInputTokens > 0 || Model.TotalOutputTokens > 0)
+                {
+                    <strong id="total-tokens-value">@Model.TotalInputTokens.ToString("N0") in / @Model.TotalOutputTokens.ToString("N0") out</strong>
+                }
+                else
+                {
+                    <span class="muted-cell fst-italic" id="total-tokens-value">—</span>
+                }
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Est. Cost</div>
+                @if (Model.TotalEstimatedCostUsd.HasValue)
+                {
+                    <strong id="total-cost-value">@Model.TotalEstimatedCostUsd.Value.ToString("$0.0000")</strong>
+                }
+                else
+                {
+                    <span class="muted-cell fst-italic" id="total-cost-value">—</span>
+                }
             </div>
         </div>
 
@@ -712,6 +737,8 @@
     .agent-tagline       { font-size: .76rem; color: var(--bs-secondary-color); font-style: italic; }
     .agent-status-badge  { margin-left: auto; }
     .agent-dur           { font-size: .75rem; color: var(--bs-secondary-color); }
+    .agent-token-badge   { font-size: .74rem; color: var(--bs-secondary-color); margin-top: .25rem; }
+    .agent-cost-line     { font-size: .72rem; color: var(--bs-secondary-color); opacity: .8; }
     .agent-state-note {
         display: none;
         align-items: center;
@@ -1528,7 +1555,7 @@
     }
 
     // ── Finalize a card (stage completed or recovered) ─────────────────
-    function finalizeCard(stage, statusLower, durSec) {
+    function finalizeCard(stage, statusLower, durSec, tokenData) {
         const card = getActiveCard(stage);
         if (!card) return;
         const { cls, badge } = resolveState(statusLower, durSec);
@@ -1544,6 +1571,21 @@
             else if (cls === 'state-failed') noteEl.textContent = STATE_NOTES.failed;
             else if (cls === 'state-skipped') noteEl.textContent = STATE_NOTES.skipped;
             else noteEl.textContent = typeof STATE_NOTES.done === 'function' ? STATE_NOTES.done(stage) : STATE_NOTES.done;
+        }
+        if (tokenData && (tokenData.inputTokens > 0 || tokenData.outputTokens > 0)) {
+            const tagline = card.querySelector('.agent-tagline');
+            if (tagline) {
+                const tokenBadge = document.createElement('div');
+                tokenBadge.className = 'agent-token-badge';
+                tokenBadge.innerHTML = `🪙 ${Number(tokenData.inputTokens ?? 0).toLocaleString()} in / ${Number(tokenData.outputTokens ?? 0).toLocaleString()} out`;
+                if (tokenData.estimatedCostUsd > 0) {
+                    const costLine = document.createElement('div');
+                    costLine.className = 'agent-cost-line';
+                    costLine.textContent = `~$${Number(tokenData.estimatedCostUsd).toFixed(4)} (estimated)`;
+                    tokenBadge.appendChild(costLine);
+                }
+                tagline.insertAdjacentElement('afterend', tokenBadge);
+            }
         }
         removeCursor();
     }
@@ -1667,7 +1709,7 @@
         } else if (s === 'running') {
             finalizeCard(log.stage, 'failed', log.duration);
         } else {
-            finalizeCard(log.stage, s, log.duration);
+            finalizeCard(log.stage, s, log.duration, { inputTokens: log.inputTokens, outputTokens: log.outputTokens, estimatedCostUsd: log.estimatedCostUsd });
         }
     }
 
@@ -1835,7 +1877,7 @@
             const statusLower = (e.status ?? '').toLowerCase();
             lastCompletedStage = e.stage;
             lastCompletedStatus = statusLower;
-            finalizeCard(e.stage, statusLower, durSec);
+            finalizeCard(e.stage, statusLower, durSec, { inputTokens: e.inputTokens, outputTokens: e.outputTokens, estimatedCostUsd: e.estimatedCostUsd });
             updateStation(e.stage, STATION_STATE_MAP[statusLower] ?? 'is-complete', statusLower);
             stopTimer();
             currentStage = null;

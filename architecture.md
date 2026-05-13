@@ -58,6 +58,14 @@ Registered services in [web/Program.cs](web/Program.cs):
 | `AddHealthChecks` | Readiness endpoint at `/health/ready` |
 | `CyberpilotDbContext` | SDK-owned migrated SQLite pipeline runs and stage logs |
 | `CyberpilotPipelineService` | Background SDK runner for web-triggered runs |
+| `ModelPricingService` | Static class in `Cyberpilot.Persistence`; maps model IDs to per-1M-token USD rates and returns `0` for unknown models. Powers cost estimation in both sink implementations. |
+
+**Token capture flow:** `CopilotStageRunner` calls `session.Rpc.Usage.GetMetricsAsync()` after each `SendAndWaitAsync`, stamps `InputTokens` and `OutputTokens` onto the returned `StageResult` (non-fatal — wrapped in try/catch), and both sink implementations (`CyberpilotRunHistoryProgressSink` and `SignalRProgressSink`) write those values plus `EstimatedCostUsd` (via `ModelPricingService.Estimate`) to `PipelineStageLog`.
+
+**`PipelineStageLog` token columns** (added in migration `AddTokenUsageToPipelineStageLog`):
+- `InputTokens` (INTEGER, nullable) — input tokens for this stage call
+- `OutputTokens` (INTEGER, nullable) — output tokens for this stage call
+- `EstimatedCostUsd` (REAL, nullable) — computed cost using `ModelPricingService`
 
 Middleware order:
 
