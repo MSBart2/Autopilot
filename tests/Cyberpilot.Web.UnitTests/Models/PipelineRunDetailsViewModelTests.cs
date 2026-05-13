@@ -112,6 +112,15 @@ public class PipelineRunDetailsViewModelTests
             {
                 RunId = run.Id,
                 StageName = "review",
+                Kind = "gate-outcome",
+                Name = "gate:review-approved",
+                Summary = "Gate 'review-approved' passed: Review approved the pull request.",
+                CreatedAt = DateTime.Parse("2026-05-13T09:45:00Z").ToUniversalTime(),
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "review",
                 Kind = "required-action",
                 Name = "required-action-1",
                 Summary = "Fix failing tests.",
@@ -182,6 +191,12 @@ public class PipelineRunDetailsViewModelTests
             item =>
             {
                 Assert.Equal("Review", item.StageLabel);
+                Assert.Equal("Gate", item.KindLabel);
+                Assert.Equal("gate:review-approved", item.Name);
+            },
+            item =>
+            {
+                Assert.Equal("Review", item.StageLabel);
                 Assert.Equal("Action", item.KindLabel);
                 Assert.Equal("Fix failing tests.", item.Summary);
                 Assert.False(item.HasUri);
@@ -192,6 +207,57 @@ public class PipelineRunDetailsViewModelTests
                 Assert.Equal("Delivery", item.KindLabel);
                 Assert.Equal("delivery-complete", item.Name);
             });
+    }
+
+    [Fact]
+    public void PolicyItems_ReturnsOnlyPolicyRelevantEvidenceRows()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var evidence = new[]
+        {
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "plan",
+                Kind = "stage-artifact",
+                Name = "plan-comment",
+                Summary = "Implementation plan posted.",
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "review",
+                Kind = "gate-outcome",
+                Name = "gate:review-approved",
+                Summary = "Gate 'review-approved' passed: Review approved the pull request.",
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "review",
+                Kind = "policy-rationale",
+                Name = "policy-rationale",
+                Summary = "Policy requires passing tests before delivery.",
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "review",
+                Kind = "required-action",
+                Name = "required-action-1",
+                Summary = "Fix failing tests.",
+            },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, [], [], Evidence: evidence);
+
+        Assert.True(vm.HasPolicyItems);
+        Assert.Collection(
+            vm.PolicyItems,
+            item => Assert.Equal("gate:review-approved", item.Name),
+            item => Assert.Equal("policy-rationale", item.Name),
+            item => Assert.Equal("required-action-1", item.Name));
+        Assert.Equal(4, vm.EvidenceItems.Count);
     }
 
     [Fact]

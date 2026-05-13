@@ -260,4 +260,20 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
         Assert.Equal("dispatch", evidence.Source);
         Assert.Equal(2, _dbContext.PipelineDispatches.Count());
     }
+
+    [Fact]
+    public void OnDispatch_WithGateOutcome_PersistsGateEvidence()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
+
+        sink.OnDispatch(DispatchType.Gate, "Gate 'policy-ready' failed for stage 'triage': Policy review is incomplete.");
+
+        var evidence = _dbContext.PipelineEvidence.Single();
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("triage", evidence.StageName);
+        Assert.Equal("gate-outcome", evidence.Kind);
+        Assert.Equal("gate:policy-ready", evidence.Name);
+        Assert.Equal("gate", evidence.Source);
+        Assert.Single(_dbContext.PipelineDispatches);
+    }
 }

@@ -278,6 +278,93 @@ public sealed class PipelineEvidence
         };
     }
 
+    /// <summary>
+    /// Creates an evidence ledger row for a deterministic gate dispatch event.
+    /// </summary>
+    /// <param name="runId">The owning run identifier.</param>
+    /// <param name="type">The dispatch type.</param>
+    /// <param name="message">The dispatch message.</param>
+    /// <returns>A gate evidence row, or null when the dispatch is not a gate event.</returns>
+    public static PipelineEvidence? FromGateDispatch(string runId, string type, string message)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(type);
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+        if (!type.Trim().Equals(DispatchType.Gate, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var trimmedMessage = message.Trim();
+        if (!TryParseGateDispatch(trimmedMessage, out var gateName, out var outcome, out var stageName, out var summary))
+        {
+            return new PipelineEvidence
+            {
+                RunId = runId,
+                StageName = "pipeline",
+                Kind = "gate-outcome",
+                Name = "gate",
+                Summary = trimmedMessage,
+                Source = "gate",
+            };
+        }
+
+        return new PipelineEvidence
+        {
+            RunId = runId,
+            StageName = stageName,
+            Kind = "gate-outcome",
+            Name = $"gate:{gateName}",
+            Summary = $"Gate '{gateName}' {outcome}: {summary}",
+            Source = "gate",
+        };
+    }
+
+    private static bool TryParseGateDispatch(string message, out string gateName, out string outcome, out string stageName, out string summary)
+    {
+        gateName = string.Empty;
+        outcome = string.Empty;
+        stageName = string.Empty;
+        summary = string.Empty;
+
+        const string prefix = "Gate '";
+        if (!message.StartsWith(prefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var gateEnd = message.IndexOf("' ", prefix.Length, StringComparison.Ordinal);
+        if (gateEnd < 0)
+        {
+            return false;
+        }
+
+        var outcomeStart = gateEnd + 2;
+        const string stageMarker = " for stage '";
+        var stageMarkerIndex = message.IndexOf(stageMarker, outcomeStart, StringComparison.Ordinal);
+        if (stageMarkerIndex < 0)
+        {
+            return false;
+        }
+
+        var stageStart = stageMarkerIndex + stageMarker.Length;
+        var stageEnd = message.IndexOf("': ", stageStart, StringComparison.Ordinal);
+        if (stageEnd < 0)
+        {
+            return false;
+        }
+
+        gateName = message[prefix.Length..gateEnd];
+        outcome = message[outcomeStart..stageMarkerIndex];
+        stageName = message[stageStart..stageEnd];
+        summary = message[(stageEnd + 3)..];
+        return !string.IsNullOrWhiteSpace(gateName)
+            && !string.IsNullOrWhiteSpace(outcome)
+            && !string.IsNullOrWhiteSpace(stageName)
+            && !string.IsNullOrWhiteSpace(summary);
+    }
+
     private static PipelineEvidence Create(
         string runId,
         string stageName,

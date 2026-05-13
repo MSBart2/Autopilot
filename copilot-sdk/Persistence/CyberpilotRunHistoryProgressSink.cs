@@ -103,6 +103,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
     public void OnDispatch(string type, string message)
     {
         AddDeliveryEvidence(type, message);
+        AddGateEvidence(type, message);
         dbContext.PipelineDispatches.Add(new PipelineDispatch
         {
             RunId = runId,
@@ -115,6 +116,17 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
     private void AddDeliveryEvidence(string type, string message)
     {
         var evidence = PipelineEvidence.FromDeliveryDispatch(runId, type, message);
+        if (evidence is null)
+        {
+            return;
+        }
+
+        dbContext.PipelineEvidence.Add(evidence);
+    }
+
+    private void AddGateEvidence(string type, string message)
+    {
+        var evidence = PipelineEvidence.FromGateDispatch(runId, type, message);
         if (evidence is null)
         {
             return;

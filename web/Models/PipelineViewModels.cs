@@ -247,8 +247,16 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
         .Select(PipelineEvidenceViewModel.FromEvidence)
         .ToArray();
 
+    /// <summary>Gets policy-relevant evidence rows formatted for compact policy display.</summary>
+    public IReadOnlyList<PipelineEvidenceViewModel> PolicyItems => EvidenceItems
+        .Where(evidence => evidence.Kind is "policy-rationale" or "gate-outcome" or "required-action")
+        .ToArray();
+
     /// <summary>Gets whether this run has a pending human approval request.</summary>
     public bool HasPendingApprovals => ApprovalItems.Any(approval => approval.IsPending);
+
+    /// <summary>Gets whether this run has policy-relevant evidence to summarize.</summary>
+    public bool HasPolicyItems => PolicyItems.Count > 0;
 
     /// <summary>Gets whether this run has a rejected human approval request.</summary>
     public bool HasRejectedApprovals => ApprovalItems.Any(approval => approval.IsRejected);
@@ -364,6 +372,7 @@ public sealed record PipelineEvidenceViewModel(
         "pull-request-reference" => "Pull Request",
         "usage-metrics" => "Usage",
         "delivery-outcome" => "Delivery",
+        "gate-outcome" => "Gate",
         _ => string.IsNullOrWhiteSpace(Kind) ? "Evidence" : Kind,
     };
 

@@ -545,3 +545,24 @@ Added delivery outcomes to the evidence ledger:
 - The Run Room Evidence panel labels delivery outcome rows clearly.
 - Added SDK helper/sink tests plus web SignalR sink and view-model tests for delivery evidence.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Forty-Third Slice Status
+
+Added deterministic gate outcomes to the evidence ledger:
+
+- `PipelineEvidence` now maps gate dispatches into `gate-outcome` rows with gate name, stage, outcome, and summary.
+- SDK history and web SignalR progress sinks persist gate outcome evidence through their existing dispatch paths.
+- Non-gate dispatches remain transcript-only unless another evidence mapper handles them.
+- The Run Room Evidence panel labels gate outcome rows clearly.
+- Added SDK helper/sink tests plus web SignalR sink and view-model tests for gate evidence.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Forty-Fourth Slice Status
+
+Added a compact Run Room policy summary:
+
+- `PipelineRunDetailsViewModel` now derives `PolicyItems` from existing policy rationale, gate outcome, and required action evidence rows.
+- The Run Room renders a dedicated Policy Signals panel before the full Evidence ledger when policy-relevant rows exist.
+- The Policy panel reuses persisted evidence rather than adding new storage or duplicating persistence paths.
+- Added web view-model tests proving policy filtering preserves the full evidence ledger.
+- Validated with `dotnet build .\Cyberpilot.sln`, web unit tests, and web integration tests.

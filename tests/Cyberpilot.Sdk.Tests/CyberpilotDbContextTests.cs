@@ -425,6 +425,31 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public void PipelineEvidence_FromGateDispatch_CreatesGateOutcomeRow()
+    {
+        var evidence = PipelineEvidence.FromGateDispatch(
+            "run-1",
+            DispatchType.Gate,
+            "Gate 'policy-ready' failed for stage 'triage': Policy review is incomplete.");
+
+        Assert.NotNull(evidence);
+        Assert.Equal("run-1", evidence.RunId);
+        Assert.Equal("triage", evidence.StageName);
+        Assert.Equal("gate-outcome", evidence.Kind);
+        Assert.Equal("gate:policy-ready", evidence.Name);
+        Assert.Equal("Gate 'policy-ready' failed: Policy review is incomplete.", evidence.Summary);
+        Assert.Equal("gate", evidence.Source);
+    }
+
+    [Fact]
+    public void PipelineEvidence_FromGateDispatch_WithNonGateDispatch_ReturnsNull()
+    {
+        var evidence = PipelineEvidence.FromGateDispatch("run-1", DispatchType.Routing, "Gate 'policy-ready' passed for stage 'triage': Ready.");
+
+        Assert.Null(evidence);
+    }
+
+    [Fact]
     public async Task PipelineApproval_FromPendingRequest_CanBeAddedAndRetrieved()
     {
         var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };

@@ -278,6 +278,28 @@ public class SignalRProgressSinkTests : IDisposable
             It.IsAny<CancellationToken>()));
     }
 
+    [Fact]
+    public void OnDispatch_WithGateOutcome_PersistsGateEvidenceAndNotifiesClients()
+    {
+        var sink = CreateSink();
+
+        sink.OnDispatch(DispatchType.Gate, "Gate 'review-approved' passed for stage 'review': Review approved the pull request.");
+
+        var evidence = _dbContext.PipelineEvidence.Single();
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("review", evidence.StageName);
+        Assert.Equal("gate-outcome", evidence.Kind);
+        Assert.Equal("gate:review-approved", evidence.Name);
+        Assert.Equal("gate", evidence.Source);
+
+        _groupClient.Verify(client => client.SendCoreAsync(
+            "cyberpilotDispatch",
+            It.Is<object?[]>(arguments =>
+                arguments.Length == 1
+                && (string?)arguments[0]!.GetType().GetProperty("type")!.GetValue(arguments[0]) == DispatchType.Gate),
+            It.IsAny<CancellationToken>()));
+    }
+
     private SignalRProgressSink CreateSink(string model = "")
     {
         return new SignalRProgressSink(
