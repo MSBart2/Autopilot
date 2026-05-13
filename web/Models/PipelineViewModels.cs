@@ -252,7 +252,7 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
         : null;
 
     /// <summary>Gets whether this terminal run can be requeued from its current stage.</summary>
-    public bool CanContinue => Run.Status is "Failed" or "Stopped" or "Paused" or "Cancelled";
+    public bool CanContinue => Run.Status is "Failed" or "Stopped" or "Paused" or "Cancelled" && !HasPendingApprovals;
 
     /// <summary>Gets whether the run can be sent back to implementation after a blocked review.</summary>
     public bool CanReworkFromReview => !Run.IsRemote

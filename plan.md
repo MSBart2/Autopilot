@@ -459,3 +459,15 @@ Completed approval-request progress sink persistence:
 - `CompositeProgressSink` forwards approval requests and `TextWriterProgressSink` reports them in CLI output.
 - Added SDK/web tests for sink persistence, composite forwarding, and engine-level approval request emission.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Thirty-Fifth Slice Status
+
+Completed web-triggered structured pause approvals:
+
+- Exposed `ShouldPauseDecisionAsync` on the public `CyberpilotRunRequest` and mapped it through `CyberpilotRunner` into SDK options.
+- Promoted `PipelinePauseContext` and `PipelinePauseDecision` as documented public SDK types.
+- Web background runs now use structured pause decisions; when a run is marked `Pausing`, the SDK receives an operator approval request that resumes at the next stage.
+- The approval request flows through `SignalRProgressSink.OnApprovalRequested`, so paused web runs now create durable pending approvals automatically.
+- Blocked the normal `Continue` route and hidden Continue affordance while approvals are pending, so approvals cannot be bypassed.
+- Added web service/controller tests for structured pause decision wiring and pending approval Continue guards.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and full solution tests.

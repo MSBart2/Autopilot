@@ -1,3 +1,5 @@
+using Cyberpilot.Pipeline;
+
 namespace Cyberpilot;
 
 /// <summary>
@@ -19,4 +21,5 @@ public sealed record CyberpilotRunRequest(
     Func<CancellationToken, Task<bool>>? ShouldPauseAsync = null,
     string? PipelineDefinitionName = null,
     string? PipelineDefinitionVersion = null,
-    string? PolicyProfileName = null);
+    string? PolicyProfileName = null,
+    Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null);

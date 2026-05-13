@@ -113,6 +113,46 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
         await service.StopAsync(CancellationToken.None);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_PassesStructuredPauseDecisionToRunner()
+    {
+        var queue = new CyberpilotRunQueue();
+        var runner = new BlockingRunner(expectedConcurrentStarts: 1);
+        using var provider = CreateProvider(queue, runner);
+        await SeedRunAsync(provider, "run-1", "owner/repo-one");
+        var service = CreateService(provider, queue);
+
+        await service.StartAsync(CancellationToken.None);
+        await queue.EnqueueAsync(CreateRequest("run-1", "owner/repo-one", "C:\\Repos\\One"));
+
+        await runner.WaitForExpectedStartsAsync();
+        var request = Assert.Single(runner.Requests);
+        Assert.NotNull(request.ShouldPauseDecisionAsync);
+
+        using (var scope = provider.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<CyberpilotDbContext>();
+            var run = await dbContext.PipelineRuns.FindAsync("run-1");
+            Assert.NotNull(run);
+            run.Status = "Pausing";
+            await dbContext.SaveChangesAsync();
+        }
+
+        var pauseDecision = await request.ShouldPauseDecisionAsync(
+            new PipelinePauseContext("plan", request.IssueNumber, "sdk/issue-1-test", null),
+            CancellationToken.None);
+
+        Assert.True(pauseDecision.ShouldPause);
+        Assert.NotNull(pauseDecision.ApprovalRequest);
+        Assert.Equal("run-1-plan-operator-pause", pauseDecision.ApprovalRequest.Id);
+        Assert.Equal("plan", pauseDecision.ApprovalRequest.StageName);
+        Assert.Equal("implement", pauseDecision.ApprovalRequest.ResumeStageName);
+        Assert.Equal("operator", pauseDecision.ApprovalRequest.RequestedRole);
+
+        runner.ReleaseAll();
+        await service.StopAsync(CancellationToken.None);
+    }
+
     private static CyberpilotPipelineService CreateService(ServiceProvider provider, ICyberpilotRunQueue queue)
     {
         var hubContext = provider.GetRequiredService<IHubContext<PipelineHub>>();

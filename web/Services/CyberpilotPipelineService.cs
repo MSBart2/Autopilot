@@ -1,6 +1,7 @@
 using Cyberpilot;
 using Cyberpilot.GitHub;
 using Cyberpilot.Persistence;
+using Cyberpilot.Pipeline;
 using Cyberpilot.Web.Hubs;
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR;
@@ -95,14 +96,33 @@ public sealed class CyberpilotPipelineService(
 
             // Lambda that checks if a pause has been requested (reads fresh from DB)
             var runId = run.Id;
-            async Task<bool> ShouldPauseAsync(CancellationToken ct)
+            async Task<PipelinePauseDecision> ShouldPauseDecisionAsync(PipelinePauseContext context, CancellationToken ct)
             {
                 var current = await dbContext.PipelineRuns
                     .AsNoTracking()
                     .Where(r => r.Id == runId)
                     .Select(r => r.Status)
                     .FirstOrDefaultAsync(ct);
-                return current == "Pausing";
+
+                if (current != "Pausing")
+                {
+                    return PipelinePauseDecision.Continue();
+                }
+
+                var resumeStage = NextStage(context.CompletedStageName) ?? context.CompletedStageName;
+                var approvalRequest = new ApprovalGateRequest(
+                    $"{runId}-{context.CompletedStageName}-operator-pause",
+                    context.IssueNumber,
+                    context.CompletedStageName,
+                    GateTiming.AfterStage,
+                    $"Operator pause requested after {context.CompletedStageName}.",
+                    "operator",
+                    resumeStage,
+                    DateTimeOffset.UtcNow);
+
+                return PipelinePauseDecision.Pause(
+                    $"Pipeline pause requested after {context.CompletedStageName}.",
+                    approvalRequest);
             }
 
             var sinkLogger = scope.ServiceProvider.GetRequiredService<ILogger<SignalRProgressSink>>();
@@ -120,7 +140,7 @@ public sealed class CyberpilotPipelineService(
                 EnsureLabels: options.Value.EnsureLabels,
                 AgentPromptRoot: request.AgentPromptRoot,
                 StartStage: request.StartStage,
-                ShouldPauseAsync: ShouldPauseAsync,
+                ShouldPauseDecisionAsync: ShouldPauseDecisionAsync,
                 PipelineDefinitionName: request.PipelineDefinitionName,
                 PipelineDefinitionVersion: request.PipelineDefinitionVersion,
                 PolicyProfileName: request.PolicyProfileName), sink, cancellationToken);

@@ -418,6 +418,42 @@ public class PipelinesControllerTests
     }
 
     [Fact]
+    public async Task Continue_PendingApproval_DoesNotRequeue()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Paused",
+            CurrentStage = "implement",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(new PipelineApproval
+        {
+            Id = "approval-continue-block",
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "plan",
+            Timing = "AfterStage",
+            Reason = "Plan approval required.",
+            RequestedRole = "operator",
+            ResumeStageName = "implement",
+        });
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Continue(run.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.Equal("Paused", (await db.PipelineRuns.FirstAsync(item => item.Id == run.Id)).Status);
+        Assert.Equal("Resolve pending approvals before continuing this run.", controller.TempData["PipelineError"]);
+    }
+
+    [Fact]
     public async Task Continue_ConfiguredRepository_UsesConfiguredRootAndToken()
     {
         var options = new CyberpilotWebOptions

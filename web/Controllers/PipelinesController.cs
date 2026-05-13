@@ -365,6 +365,14 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
+        var hasPendingApproval = await _dbContext.PipelineApprovals.AnyAsync(approval =>
+            approval.RunId == run.Id && approval.Status == nameof(ApprovalStatus.Pending));
+        if (hasPendingApproval)
+        {
+            TempData["PipelineError"] = "Resolve pending approvals before continuing this run.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
             item.Id != run.Id
             && item.Repository == run.Repository
