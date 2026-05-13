@@ -281,3 +281,14 @@ Added built-in policy profile selection:
 - Updated SDK help text to advertise available profiles.
 - Added selector and option-help tests for the built-in profiles.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Eighteenth Slice Status
+
+Added deterministic gate primitives and passive engine integration:
+
+- Added `IPipelineGate`, `PipelineGateContext`, `PipelineGateResult`, `PipelineGateEvaluation`, and `PipelineGateRunner`.
+- Added a `gate` dispatch type for deterministic policy checks.
+- Wired `PipelineEngine` to run declared pre/post stage gates before accepting routing decisions.
+- Kept default behavior unchanged by using an empty gate registry while no default gates are declared.
+- Added gate runner tests for empty definitions, matching gate execution, and missing evaluator diagnostics.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.

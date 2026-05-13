@@ -8,6 +8,7 @@ internal sealed class PipelineEngine(
     ISdkLabelService labels,
     PipelineBranchCoordinator branchCoordinator,
     StageExecutor stageExecutor,
+    PipelineGateRunner gateRunner,
     ICyberpilotProgressSink progressSink,
     PipelineConsoleWriter console)
 {
@@ -258,9 +259,44 @@ internal sealed class PipelineEngine(
     {
         context.FinalStage = stage.Name;
         var stageDefinition = context.Definition.PipelineStage(stage.Name);
+        var beforeGateResult = await RunGatesAsync(stageDefinition, GateTiming.BeforeStage, cancellationToken);
+        if (beforeGateResult is not null)
+        {
+            context.StageResults.Add(beforeGateResult);
+            return beforeGateResult;
+        }
+
         var result = await stageExecutor.RunAsync(stageDefinition, Options.IssueNumber, Options.StageTimeout, mission, context.Definition.PolicyProfile, cancellationToken);
+        var afterGateResult = await RunGatesAsync(stageDefinition, GateTiming.AfterStage, cancellationToken);
+        if (afterGateResult is not null)
+        {
+            context.StageResults.Add(afterGateResult);
+            return afterGateResult;
+        }
+
         context.StageResults.Add(result);
         return result;
+    }
+
+    private async Task<StageResult?> RunGatesAsync(PipelineStageDefinition stageDefinition, GateTiming timing, CancellationToken cancellationToken)
+    {
+        var evaluations = await gateRunner.RunAsync(context, stageDefinition, timing, cancellationToken);
+        foreach (var evaluation in evaluations)
+        {
+            var outcome = evaluation.Result.Passed ? "passed" : "failed";
+            progressSink.OnDispatch(DispatchType.Gate, $"Gate '{evaluation.Gate.Name}' {outcome} for stage '{stageDefinition.Stage.Name}': {evaluation.Result.Summary}");
+            if (!evaluation.Result.Passed && evaluation.Gate.IsBlocking)
+            {
+                return new StageResult(
+                    "INVALID",
+                    "unknown",
+                    false,
+                    $"Blocking gate '{evaluation.Gate.Name}' failed for stage '{stageDefinition.Stage.Name}': {evaluation.Result.Summary}",
+                    RequiredActions: evaluation.Result.RequiredActions);
+            }
+        }
+
+        return null;
     }
 
     private StageDefinition Stage(string name)

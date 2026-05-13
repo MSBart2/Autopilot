@@ -68,6 +68,9 @@ public static class DispatchType
     /// <summary>Pipeline halted due to unexpected status.</summary>
     public const string Halt = "halt";
 
+    /// <summary>Deterministic policy gate evaluation.</summary>
+    public const string Gate = "gate";
+
     /// <summary>Skip-deliver or early termination.</summary>
     public const string Skip = "skip";
 
