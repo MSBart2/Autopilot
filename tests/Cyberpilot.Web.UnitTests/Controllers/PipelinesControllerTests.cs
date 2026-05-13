@@ -131,11 +131,23 @@ public class PipelinesControllerTests
         var (controller, db) = CreateControllerWithContext();
         var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6" };
         db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "plan",
+            Timing = "AfterStage",
+            Reason = "Plan approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "implement",
+        });
         await db.SaveChangesAsync();
 
         var result = Assert.IsType<ViewResult>(await controller.Details(run.Id));
 
-        Assert.IsType<PipelineRunDetailsViewModel>(result.Model);
+        var model = Assert.IsType<PipelineRunDetailsViewModel>(result.Model);
+        Assert.Single(model.ApprovalItems);
+        Assert.True(model.HasPendingApprovals);
     }
 
     [Fact]

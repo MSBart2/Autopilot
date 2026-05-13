@@ -150,6 +150,123 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public async Task PipelineApproval_CanBeAddedAndRetrieved()
+    {
+        var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "review",
+            Timing = "AfterStage",
+            Reason = "Maintainer approval required before delivery.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "docs",
+        };
+        _dbContext.PipelineApprovals.Add(approval);
+        await _dbContext.SaveChangesAsync();
+
+        var retrieved = await _dbContext.PipelineApprovals.FindAsync(approval.Id);
+
+        Assert.NotNull(retrieved);
+        Assert.Equal(run.Id, retrieved.RunId);
+        Assert.Equal(42, retrieved.IssueNumber);
+        Assert.Equal("review", retrieved.StageName);
+        Assert.Equal("AfterStage", retrieved.Timing);
+        Assert.Equal("Pending", retrieved.Status);
+        Assert.Equal("maintainer", retrieved.RequestedRole);
+        Assert.Equal("docs", retrieved.ResumeStageName);
+    }
+
+    [Fact]
+    public async Task PipelineApproval_FromPendingRequest_CanBeAddedAndRetrieved()
+    {
+        var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        var request = new ApprovalGateRequest(
+            "approval-pending",
+            run.IssueNumber,
+            "plan",
+            GateTiming.AfterStage,
+            "Plan approval required before implementation.",
+            "maintainer",
+            "implement",
+            DateTimeOffset.Parse("2026-05-13T10:00:00Z"));
+        _dbContext.PipelineApprovals.Add(PipelineApproval.FromRequest(run.Id, request));
+        await _dbContext.SaveChangesAsync();
+
+        var retrieved = await _dbContext.PipelineApprovals.FindAsync("approval-pending");
+
+        Assert.NotNull(retrieved);
+        Assert.Equal(run.Id, retrieved.RunId);
+        Assert.Equal("plan", retrieved.StageName);
+        Assert.Equal("AfterStage", retrieved.Timing);
+        Assert.Equal("Pending", retrieved.Status);
+        Assert.Equal("Plan approval required before implementation.", retrieved.Reason);
+        Assert.Equal("maintainer", retrieved.RequestedRole);
+        Assert.Equal("implement", retrieved.ResumeStageName);
+        Assert.Equal(DateTime.Parse("2026-05-13T10:00:00Z").ToUniversalTime(), retrieved.CreatedAt);
+        Assert.Null(retrieved.DecidedBy);
+        Assert.Null(retrieved.DecisionReason);
+        Assert.Null(retrieved.DecidedAt);
+    }
+
+    [Theory]
+    [InlineData("Approved", "ship it")]
+    [InlineData("Rejected", "needs another look")]
+    public async Task PipelineApproval_FromDecidedRequest_CanBeAddedAndRetrieved(string expectedStatus, string decisionReason)
+    {
+        var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        var request = new ApprovalGateRequest(
+            $"approval-{expectedStatus.ToLowerInvariant()}",
+            run.IssueNumber,
+            "review",
+            GateTiming.AfterStage,
+            "Review approval required before delivery.",
+            "maintainer",
+            "docs",
+            DateTimeOffset.Parse("2026-05-13T10:00:00Z"));
+        request = expectedStatus == "Approved"
+            ? request.Approve("alice", decisionReason, DateTimeOffset.Parse("2026-05-13T10:15:00Z"))
+            : request.Reject("alice", decisionReason, DateTimeOffset.Parse("2026-05-13T10:15:00Z"));
+        _dbContext.PipelineApprovals.Add(PipelineApproval.FromRequest(run.Id, request));
+        await _dbContext.SaveChangesAsync();
+
+        var retrieved = await _dbContext.PipelineApprovals.FindAsync(request.Id);
+
+        Assert.NotNull(retrieved);
+        Assert.Equal(expectedStatus, retrieved.Status);
+        Assert.Equal("alice", retrieved.DecidedBy);
+        Assert.Equal(decisionReason, retrieved.DecisionReason);
+        Assert.Equal(DateTime.Parse("2026-05-13T10:15:00Z").ToUniversalTime(), retrieved.DecidedAt);
+    }
+
+    [Fact]
+    public async Task PipelineRun_CascadeDeletesApprovals()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        _dbContext.PipelineApprovals.Add(new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "plan",
+            Timing = "AfterStage",
+            Reason = "Plan approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "implement",
+        });
+        await _dbContext.SaveChangesAsync();
+
+        _dbContext.PipelineRuns.Remove(run);
+        await _dbContext.SaveChangesAsync();
+
+        Assert.Empty(await _dbContext.PipelineApprovals.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task PipelineRun_IssueNumberIndex_AllowsDuplicates()
     {
         _dbContext.PipelineRuns.Add(new PipelineRun { IssueNumber = 99, Repository = "r", Model = "m" });

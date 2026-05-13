@@ -204,7 +204,9 @@ public sealed class PipelineConfiguredIssueLoadRequest
 /// <param name="Labels">GitHub issue labels (best-effort, may be empty).</param>
 /// <param name="Issue">GitHub issue details for the run, when available.</param>
 /// <param name="Dispatches">Orchestrator dispatch events for the spine.</param>
-public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<PipelineStageLog> Logs, IReadOnlyList<string> Labels, GitHubIssueSummary? Issue = null, IReadOnlyList<PipelineDispatch>? Dispatches = null)
+/// <param name="Dispatches">Orchestrator dispatch events for the spine.</param>
+/// <param name="Approvals">Human approval requests for the run.</param>
+public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<PipelineStageLog> Logs, IReadOnlyList<string> Labels, GitHubIssueSummary? Issue = null, IReadOnlyList<PipelineDispatch>? Dispatches = null, IReadOnlyList<PipelineApproval>? Approvals = null)
 {
     /// <summary>Initializes a details view model without labels.</summary>
     public PipelineRunDetailsViewModel(PipelineRun run, IReadOnlyList<PipelineStageLog> logs)
@@ -218,6 +220,16 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
 
     /// <summary>Gets the best available explanation and recovery guidance for a terminal stopped run.</summary>
     public PipelineStopDiagnostic? StopDiagnostic => PipelineStopDiagnostic.Create(Run, Logs, Dispatches ?? []);
+
+    /// <summary>Gets approval requests formatted for display.</summary>
+    public IReadOnlyList<PipelineApprovalViewModel> ApprovalItems => (Approvals ?? [])
+        .OrderByDescending(approval => approval.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+        .ThenBy(approval => approval.CreatedAt)
+        .Select(PipelineApprovalViewModel.FromApproval)
+        .ToArray();
+
+    /// <summary>Gets whether this run has a pending human approval request.</summary>
+    public bool HasPendingApprovals => ApprovalItems.Any(approval => approval.IsPending);
 
     /// <summary>Gets the total input tokens across all stage logs.</summary>
     public int TotalInputTokens => Logs.Sum(l => l.InputTokens ?? 0);
@@ -280,6 +292,74 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
 
     private static bool IsReviewStage(string? stageName)
         => stageName?.Equals("review", StringComparison.OrdinalIgnoreCase) == true;
+}
+
+/// <summary>
+/// Displays one human approval request for a pipeline run.
+/// </summary>
+/// <param name="Id">The approval identifier.</param>
+/// <param name="StageName">The stage that requested approval.</param>
+/// <param name="Timing">Whether approval was requested before or after the stage.</param>
+/// <param name="Reason">The approval reason.</param>
+/// <param name="RequestedRole">The role requested to decide the approval.</param>
+/// <param name="ResumeStageName">The stage to resume after approval.</param>
+/// <param name="Status">The approval status.</param>
+/// <param name="CreatedAt">When the approval was requested.</param>
+/// <param name="DecidedBy">Who decided the approval, when decided.</param>
+/// <param name="DecisionReason">The decision reason, when provided.</param>
+/// <param name="DecidedAt">When the approval was decided.</param>
+public sealed record PipelineApprovalViewModel(
+    string Id,
+    string StageName,
+    string Timing,
+    string Reason,
+    string RequestedRole,
+    string ResumeStageName,
+    string Status,
+    DateTime CreatedAt,
+    string? DecidedBy,
+    string? DecisionReason,
+    DateTime? DecidedAt)
+{
+    /// <summary>Gets whether this approval is still pending.</summary>
+    public bool IsPending => Status.Equals("Pending", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Gets a compact display label for the approval stage and timing.</summary>
+    public string StageTimingLabel => $"{DisplayStage(StageName)} · {DisplayTiming(Timing)}";
+
+    /// <summary>Creates a display model from a persisted approval row.</summary>
+    /// <param name="approval">The persisted approval row.</param>
+    /// <returns>The approval display model.</returns>
+    public static PipelineApprovalViewModel FromApproval(PipelineApproval approval)
+    {
+        ArgumentNullException.ThrowIfNull(approval);
+
+        return new PipelineApprovalViewModel(
+            approval.Id,
+            approval.StageName,
+            approval.Timing,
+            approval.Reason,
+            approval.RequestedRole,
+            approval.ResumeStageName,
+            approval.Status,
+            approval.CreatedAt,
+            approval.DecidedBy,
+            approval.DecisionReason,
+            approval.DecidedAt);
+    }
+
+    private static string DisplayStage(string stageName)
+        => string.IsNullOrWhiteSpace(stageName)
+            ? "Pipeline"
+            : char.ToUpperInvariant(stageName[0]) + stageName[1..];
+
+    private static string DisplayTiming(string timing)
+        => timing switch
+        {
+            "BeforeStage" => "before stage",
+            "AfterStage" => "after stage",
+            _ => string.IsNullOrWhiteSpace(timing) ? "approval" : timing,
+        };
 }
 
 /// <summary>

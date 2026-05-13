@@ -109,4 +109,7 @@ public sealed class PipelineRun
 
     /// <summary>Gets or sets the orchestrator dispatch events for this run.</summary>
     public ICollection<PipelineDispatch> Dispatches { get; set; } = [];
+
+    /// <summary>Gets or sets the approval requests for this run.</summary>
+    public ICollection<PipelineApproval> Approvals { get; set; } = [];
 }

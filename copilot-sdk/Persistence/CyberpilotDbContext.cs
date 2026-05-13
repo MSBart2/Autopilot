@@ -31,6 +31,11 @@ public sealed class CyberpilotDbContext : DbContext
     /// </summary>
     public DbSet<PipelineDispatch> PipelineDispatches => Set<PipelineDispatch>();
 
+    /// <summary>
+    /// Gets human approval requests.
+    /// </summary>
+    public DbSet<PipelineApproval> PipelineApprovals => Set<PipelineApproval>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -48,6 +53,10 @@ public sealed class CyberpilotDbContext : DbContext
                 .WithOne()
                 .HasForeignKey(e => e.RunId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(e => e.Approvals)
+                .WithOne(e => e.Run)
+                .HasForeignKey(e => e.RunId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<PipelineStageLog>(entity =>
@@ -59,6 +68,13 @@ public sealed class CyberpilotDbContext : DbContext
         modelBuilder.Entity<PipelineDispatch>(entity =>
         {
             entity.HasIndex(e => e.RunId);
+        });
+
+        modelBuilder.Entity<PipelineApproval>(entity =>
+        {
+            entity.HasIndex(e => e.RunId);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.StageName);
         });
     }
 }

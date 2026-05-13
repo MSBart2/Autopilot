@@ -214,6 +214,12 @@ public class PipelinesController : Controller
             .AsNoTracking()
             .ToArrayAsync();
 
+        var approvals = await _dbContext.PipelineApprovals
+            .Where(approval => approval.RunId == id)
+            .OrderBy(approval => approval.CreatedAt)
+            .AsNoTracking()
+            .ToArrayAsync();
+
         GitHubIssueSummary? issue = null;
         IReadOnlyList<string> labels = [];
         try
@@ -236,7 +242,7 @@ public class PipelinesController : Controller
             _logger.LogDebug(ex, "Could not fetch GitHub labels for issue #{IssueNumber}.", run.IssueNumber);
         }
 
-        return View(new PipelineRunDetailsViewModel(run, logs, labels, issue, dispatches) { MaxStageRetries = _options.MaxStageRetries });
+        return View(new PipelineRunDetailsViewModel(run, logs, labels, issue, dispatches, approvals) { MaxStageRetries = _options.MaxStageRetries });
     }
 
     /// <summary>

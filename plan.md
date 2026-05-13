@@ -375,3 +375,33 @@ Added a richer pause decision hook for approval-aware pauses:
 - Updated `PipelineEngine` to prefer structured pause decisions and emit approval dispatch events when an approval request is attached.
 - Added pause decision unit tests and runner coverage for approval-aware pauses after plan.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Twenty-Seventh Slice Status
+
+Added durable persistence for pending pipeline approvals:
+
+- Added `PipelineApproval` as a run-owned persistence entity for human approval requests and decisions.
+- Added `PipelineApprovals` to `CyberpilotDbContext` with run, status, and stage indexes plus cascade delete from runs.
+- Generated the EF Core migration `AddPipelineApprovals` and refreshed the model snapshot.
+- Added persistence tests for approval round-trip storage and cascade deletion.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Twenty-Eighth Slice Status
+
+Mapped approval gate requests into durable approval rows:
+
+- Added `PipelineApproval.FromRequest` to translate `ApprovalGateRequest` into persisted approval rows.
+- Preserved pending approval metadata including timing, reason, role, resume stage, and creation time.
+- Persisted approved/rejected decision metadata including actor, reason, status, and decision time.
+- Added SDK persistence tests for pending, approved, and rejected approval request mappings.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Twenty-Ninth Slice Status
+
+Surfaced persisted approvals in pipeline details view models:
+
+- Loaded `PipelineApprovals` in the pipeline details action alongside logs and dispatches.
+- Added `PipelineApprovalViewModel` for display-ready approval state, role, reason, timing, resume stage, and decision metadata.
+- Added pending-first approval ordering and `HasPendingApprovals` on `PipelineRunDetailsViewModel`.
+- Added model and controller tests proving details pages carry pending approvals.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.

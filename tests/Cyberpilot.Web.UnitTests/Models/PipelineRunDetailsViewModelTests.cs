@@ -21,6 +21,69 @@ public class PipelineRunDetailsViewModelTests
     }
 
     [Fact]
+    public void ApprovalItems_FormatsAndOrdersPendingApprovalsFirst()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var decided = new PipelineApproval
+        {
+            RunId = run.Id,
+            StageName = "review",
+            Timing = "AfterStage",
+            Reason = "Review approval was handled.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "docs",
+            Status = "Approved",
+            CreatedAt = DateTime.Parse("2026-05-13T09:00:00Z").ToUniversalTime(),
+            DecidedBy = "alice",
+            DecisionReason = "ship it",
+            DecidedAt = DateTime.Parse("2026-05-13T09:15:00Z").ToUniversalTime(),
+        };
+        var pending = new PipelineApproval
+        {
+            RunId = run.Id,
+            StageName = "plan",
+            Timing = "AfterStage",
+            Reason = "Plan approval required before implementation.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "implement",
+            Status = "Pending",
+            CreatedAt = DateTime.Parse("2026-05-13T10:00:00Z").ToUniversalTime(),
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, [], [], Approvals: [decided, pending]);
+
+        Assert.True(vm.HasPendingApprovals);
+        Assert.Collection(
+            vm.ApprovalItems,
+            approval =>
+            {
+                Assert.True(approval.IsPending);
+                Assert.Equal("Plan · after stage", approval.StageTimingLabel);
+                Assert.Equal("Plan approval required before implementation.", approval.Reason);
+                Assert.Equal("maintainer", approval.RequestedRole);
+                Assert.Equal("implement", approval.ResumeStageName);
+            },
+            approval =>
+            {
+                Assert.False(approval.IsPending);
+                Assert.Equal("Review · after stage", approval.StageTimingLabel);
+                Assert.Equal("alice", approval.DecidedBy);
+                Assert.Equal("ship it", approval.DecisionReason);
+            });
+    }
+
+    [Fact]
+    public void ApprovalItems_WithoutApprovals_DefaultsToEmpty()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+
+        var vm = new PipelineRunDetailsViewModel(run, []);
+
+        Assert.Empty(vm.ApprovalItems);
+        Assert.False(vm.HasPendingApprovals);
+    }
+
+    [Fact]
     public void Constructor_WithoutLabels_DefaultsToEmpty()
     {
         var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
