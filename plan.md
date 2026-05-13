@@ -426,3 +426,24 @@ Added guarded approve/reject endpoints for pending pipeline approvals:
 - Recorded decision status, actor, reason, and timestamp on pending approvals.
 - Added controller tests for approve, reject, delivered-run guard, duplicate-decision guard, and missing approvals.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Thirty-Second Slice Status
+
+Wired Run Room approval cards to approve/reject endpoints:
+
+- Added pending approval decision forms to the Run Room approval panel.
+- Posted approve/reject decisions to the guarded controller endpoints with anti-forgery tokens.
+- Included optional decision notes for both approval and rejection paths.
+- Kept resolved approvals read-only with their recorded decision metadata.
+- Validated with `dotnet build .\Cyberpilot.sln` and web unit tests.
+
+### Thirty-Third Slice Status
+
+Added approved-approval resume from the Run Room:
+
+- Added `ResumeApproval` to requeue a run from an approved approval's resume stage.
+- Guarded active runs, delivered runs, non-resumable statuses, non-approved approvals, unknown resume stages, and competing active runs.
+- Added a Resume button to approved approval cards when the run can continue.
+- Passed an approval-specific retry reason into the queued web run request.
+- Added controller tests for successful approval resume plus pending, delivered, and active-run guard paths.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.

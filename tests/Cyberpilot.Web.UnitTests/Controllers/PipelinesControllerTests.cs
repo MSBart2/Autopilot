@@ -973,6 +973,137 @@ public class PipelinesControllerTests
         Assert.IsType<NotFoundResult>(result);
     }
 
+    [Fact]
+    public async Task ResumeApproval_ApprovedApproval_RequeuesRunFromResumeStage()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 1,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Paused",
+            CurrentStage = "plan",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "plan",
+            Timing = "AfterStage",
+            Reason = "Plan approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "implement",
+            Status = "Approved",
+            DecidedBy = "alice",
+            DecidedAt = DateTime.UtcNow,
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(approval);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ResumeApproval(run.Id, approval.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("Queued", updated.Status);
+        Assert.Equal("implement", updated.CurrentStage);
+        Assert.Null(updated.CompletedAt);
+        Assert.NotNull(queue.LastRequest);
+        Assert.Equal("implement", queue.LastRequest.StartStage);
+        Assert.Contains("Approval", queue.LastRequest.RetryReason);
+    }
+
+    [Fact]
+    public async Task ResumeApproval_PendingApproval_DoesNotRequeueRun()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Paused", StageTimeoutMinutes = 10 };
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "plan",
+            Timing = "AfterStage",
+            Reason = "Plan approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "implement",
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(approval);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ResumeApproval(run.Id, approval.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        var unchanged = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("Paused", unchanged.Status);
+        Assert.Null(queue.LastRequest);
+        Assert.NotNull(controller.TempData["PipelineError"]);
+    }
+
+    [Fact]
+    public async Task ResumeApproval_AnotherActiveRunExists_DoesNotRequeueRun()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun { IssueNumber = 7, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Paused", StageTimeoutMinutes = 10 };
+        var activeRun = new PipelineRun { IssueNumber = 7, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Running" };
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "review",
+            Timing = "AfterStage",
+            Reason = "Review approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "docs",
+            Status = "Approved",
+            DecidedBy = "alice",
+            DecidedAt = DateTime.UtcNow,
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineRuns.Add(activeRun);
+        db.PipelineApprovals.Add(approval);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ResumeApproval(run.Id, approval.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.NotNull(controller.TempData["PipelineError"]);
+    }
+
+    [Fact]
+    public async Task ResumeApproval_DeliveredRun_DoesNotRequeueRun()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Completed", SkipDeliver = false, StageTimeoutMinutes = 10 };
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "deliver",
+            Timing = "BeforeStage",
+            Reason = "Delivery approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "deliver",
+            Status = "Approved",
+            DecidedBy = "alice",
+            DecidedAt = DateTime.UtcNow,
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(approval);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ResumeApproval(run.Id, approval.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.NotNull(controller.TempData["PipelineError"]);
+    }
+
     private sealed class TestTempDataProvider : ITempDataProvider
     {
         public IDictionary<string, object?> LoadTempData(HttpContext context) => new Dictionary<string, object?>();

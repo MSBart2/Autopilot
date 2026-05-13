@@ -326,6 +326,30 @@
                                     {
                                         <p>@approval.DecisionReason</p>
                                     }
+                                    @if (approval.IsApproved && !isActive && !isDelivered && !Model.Run.IsRemote && canContinue)
+                                    {
+                                        <form asp-action="ResumeApproval" asp-route-id="@Model.Run.Id" asp-route-approvalId="@approval.Id" method="post" class="approval-resume-form">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm btn-success w-100">Resume</button>
+                                        </form>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="approval-actions" aria-label="Approval decision actions">
+                                    <form asp-action="ApproveApproval" asp-route-id="@Model.Run.Id" asp-route-approvalId="@approval.Id" method="post" class="approval-action-form">
+                                        @Html.AntiForgeryToken()
+                                        <label class="visually-hidden" for="approve-reason-@approval.Id">Approval note</label>
+                                        <input id="approve-reason-@approval.Id" name="Reason" type="text" maxlength="1000" class="form-control form-control-sm" placeholder="optional note" />
+                                        <button type="submit" class="btn btn-sm btn-success w-100">Approve</button>
+                                    </form>
+                                    <form asp-action="RejectApproval" asp-route-id="@Model.Run.Id" asp-route-approvalId="@approval.Id" method="post" class="approval-action-form">
+                                        @Html.AntiForgeryToken()
+                                        <label class="visually-hidden" for="reject-reason-@approval.Id">Rejection note</label>
+                                        <input id="reject-reason-@approval.Id" name="Reason" type="text" maxlength="1000" class="form-control form-control-sm" placeholder="optional note" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger w-100">Reject</button>
+                                    </form>
                                 </div>
                             }
                         </article>
@@ -639,9 +663,30 @@
     .approval-decision span { display: block; font-weight: 800; }
     .approval-decision small { display: block; color: #047857; margin-top: .1rem; }
     .approval-decision p { margin-top: .45rem; color: #065f46; }
+    .approval-resume-form { margin-top: .55rem; }
+    .approval-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(8rem, 1fr));
+        gap: .5rem;
+        align-self: start;
+        min-width: min(24rem, 42vw);
+    }
+    .approval-action-form {
+        display: grid;
+        gap: .35rem;
+        padding: .55rem;
+        border-radius: 7px;
+        background: rgba(255,255,255,.78);
+        border: 1px solid rgba(148, 163, 184, .22);
+    }
+    .approval-action-form .form-control {
+        min-height: 1.9rem;
+        font-size: .78rem;
+    }
     @@media (max-width: 720px) {
         .approval-item { grid-template-columns: 1fr; }
         .approval-decision { min-width: 0; }
+        .approval-actions { grid-template-columns: 1fr; min-width: 0; }
     }
     @@keyframes halt-pulse {
         0%, 100% { border-color: rgba(220,53,69,.35); box-shadow: 0 0 0 0 rgba(220,53,69,0); }

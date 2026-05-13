@@ -333,6 +333,9 @@ public sealed record PipelineApprovalViewModel(
     /// <summary>Gets whether this approval is still pending.</summary>
     public bool IsPending => Status.Equals("Pending", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Gets whether this approval has been approved.</summary>
+    public bool IsApproved => Status.Equals("Approved", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Gets a compact display label for the approval stage and timing.</summary>
     public string StageTimingLabel => $"{DisplayStage(StageName)} · {DisplayTiming(Timing)}";
 

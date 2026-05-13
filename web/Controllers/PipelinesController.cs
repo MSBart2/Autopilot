@@ -737,6 +737,90 @@ public class PipelinesController : Controller
         return await DecideApprovalAsync(id, approvalId, request, "Rejected");
     }
 
+    /// <summary>
+    /// Resumes a run after a human approval request has been approved.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <param name="approvalId">The approval identifier.</param>
+    /// <returns>A redirect to the run details page.</returns>
+    [HttpPost("{id}/Approvals/{approvalId}/Resume")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResumeApproval(string id, string approvalId)
+    {
+        var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
+        if (run is null)
+        {
+            return NotFound();
+        }
+
+        var approval = await _dbContext.PipelineApprovals.FirstOrDefaultAsync(item => item.Id == approvalId && item.RunId == id);
+        if (approval is null)
+        {
+            return NotFound();
+        }
+
+        if (run.Status is "Queued" or "Running" or "Pausing")
+        {
+            TempData["PipelineError"] = "This run is already active.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (IsDeliveredRun(run))
+        {
+            TempData["PipelineError"] = "Delivered runs cannot be altered.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (run.Status is not ("Failed" or "Stopped" or "Paused" or "Cancelled"))
+        {
+            TempData["PipelineError"] = "This run cannot be resumed from its current status.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (!approval.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["PipelineError"] = "Only approved approval requests can resume a run.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (!PipelineRunDetailsViewModel.ValidStageNames.Any(stage => stage.Equals(approval.ResumeStageName, StringComparison.OrdinalIgnoreCase)))
+        {
+            TempData["PipelineError"] = $"'{approval.ResumeStageName}' is not a recognized approval resume stage.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
+            item.Id != run.Id
+            && item.Repository == run.Repository
+            && item.IssueNumber == run.IssueNumber
+            && (item.Status == "Queued" || item.Status == "Running" || item.Status == "Pausing"));
+        if (hasActiveRun)
+        {
+            TempData["PipelineError"] = $"{run.Repository} issue #{run.IssueNumber} already has an active Cyberpilot run.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var repoRoot = ResolveRepoRoot(_options.RepoRoot);
+        string? token = null;
+        if (TryGetConfiguredRepository(run.Repository, out var configuredRepository))
+        {
+            repoRoot = configuredRepository.RepoRoot;
+            token = configuredRepository.Token;
+        }
+
+        run.Status = "Queued";
+        run.CurrentStage = approval.ResumeStageName;
+        run.CompletedAt = null;
+        run.Error = null;
+        run.TriggeredBy = User.Identity?.Name ?? run.TriggeredBy;
+        await _dbContext.SaveChangesAsync();
+
+        await EnqueueRunAsync(run, repoRoot, token, $"Approval '{approval.Id}' approved; resuming at {approval.ResumeStageName}.");
+
+        TempData["PipelineNotice"] = $"Approval accepted. Cyberpilot will resume at {approval.ResumeStageName}.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     private async Task<IActionResult> DecideApprovalAsync(string id, string approvalId, PipelineApprovalDecisionRequest request, string decision)
     {
         var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
@@ -776,7 +860,7 @@ public class PipelinesController : Controller
         await _dbContext.SaveChangesAsync();
 
         TempData["PipelineNotice"] = decision == "Approved"
-            ? "Approval recorded. Resume controls will be available once approval resume is enabled."
+            ? "Approval recorded. Use Resume from the approval card to continue this run."
             : "Approval rejection recorded. Review the reason before continuing this run.";
 
         return RedirectToAction(nameof(Details), new { id });
