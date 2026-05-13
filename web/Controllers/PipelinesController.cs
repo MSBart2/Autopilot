@@ -235,7 +235,7 @@ public class PipelinesController : Controller
             _logger.LogDebug(ex, "Could not fetch GitHub labels for issue #{IssueNumber}.", run.IssueNumber);
         }
 
-        return View(new PipelineRunDetailsViewModel(run, logs, labels, issue, dispatches));
+        return View(new PipelineRunDetailsViewModel(run, logs, labels, issue, dispatches) { MaxStageRetries = _options.MaxStageRetries });
     }
 
     /// <summary>
@@ -440,6 +440,90 @@ public class PipelinesController : Controller
         await EnqueueRunAsync(run, repoRoot, token);
 
         TempData["PipelineNotice"] = "Review feedback routed back to implementation. Cyberpilot will update the existing PR branch, then return to review.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    /// <summary>
+    /// Requeues a terminal pipeline run from a specific stage chosen by the operator.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <param name="request">The stage retry request containing the stage name and optional overrides.</param>
+    /// <returns>A redirect to the run details page.</returns>
+    [HttpPost("{id}/RetryStage")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RetryStage(string id, RetryStageRequest request)
+    {
+        var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
+        if (run is null)
+        {
+            return NotFound();
+        }
+
+        if (run.Status is "Queued" or "Running" or "Pausing")
+        {
+            TempData["PipelineError"] = "This run is already active.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (run.Status is not ("Failed" or "Stopped" or "Paused" or "Cancelled"))
+        {
+            TempData["PipelineError"] = "This run cannot be retried from its current status.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
+            item.Id != run.Id
+            && item.Repository == run.Repository
+            && item.IssueNumber == run.IssueNumber
+            && (item.Status == "Queued" || item.Status == "Running" || item.Status == "Pausing"));
+        if (hasActiveRun)
+        {
+            TempData["PipelineError"] = $"{run.Repository} issue #{run.IssueNumber} already has an active Cyberpilot run.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (!PipelineRunDetailsViewModel.ValidStageNames.Any(s => s.Equals(request.StageName, StringComparison.OrdinalIgnoreCase)))
+        {
+            TempData["PipelineError"] = $"'{request.StageName}' is not a recognized pipeline stage.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var stageLogCount = await _dbContext.PipelineStageLogs.CountAsync(log =>
+            log.RunId == id && log.StageName.ToLower() == request.StageName.ToLower());
+        if (stageLogCount >= _options.MaxStageRetries)
+        {
+            TempData["PipelineError"] = $"Maximum retry attempts reached for the '{request.StageName}' stage.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Model))
+        {
+            run.Model = request.Model;
+        }
+
+        if (request.StageTimeoutMinutes.HasValue)
+        {
+            run.StageTimeoutMinutes = request.StageTimeoutMinutes.Value;
+        }
+
+        var repoRoot = ResolveRepoRoot(_options.RepoRoot);
+        string? token = null;
+        if (TryGetConfiguredRepository(run.Repository, out var configuredRepository))
+        {
+            repoRoot = configuredRepository.RepoRoot;
+            token = configuredRepository.Token;
+        }
+
+        run.Status = "Queued";
+        run.CurrentStage = request.StageName;
+        run.CompletedAt = null;
+        run.Error = null;
+        run.TriggeredBy = User.Identity?.Name ?? run.TriggeredBy;
+        await _dbContext.SaveChangesAsync();
+
+        await EnqueueRunAsync(run, repoRoot, token);
+
+        TempData["PipelineNotice"] = $"Stage '{request.StageName}' queued for retry.";
         return RedirectToAction(nameof(Details), new { id });
     }
 

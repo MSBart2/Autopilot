@@ -33,6 +33,7 @@
     var stopDiagnostic = Model.StopDiagnostic;
     var canContinue = Model.CanContinue;
     var canReworkFromReview = Model.CanReworkFromReview;
+    var maxStageRetries = Model.MaxStageRetries;
     var logsJson    = JsonSerializer.Serialize(Model.Logs.Select(l => new
     {
         stage    = l.StageName,
@@ -43,6 +44,7 @@
         inputTokens = l.InputTokens,
         outputTokens = l.OutputTokens,
         estimatedCostUsd = l.EstimatedCostUsd,
+        retryCount = l.RetryCount,
     }));
     var dispatchesJson = JsonSerializer.Serialize((Model.Dispatches ?? []).Select(d => new
     {
@@ -129,6 +131,12 @@
                 <button type="submit" class="btn btn-sm btn-outline-danger">Reset</button>
             </form>
         }
+        @if (!isActive && !isDelivered && !Model.Run.IsRemote && canContinue)
+        {
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#resume-stage-panel" aria-expanded="false" aria-controls="resume-stage-panel">
+                ↩ Resume From Stage
+            </button>
+        }
         @if (isActive)
         {
             <span id="cancel-section" class="d-inline-flex gap-1">
@@ -145,6 +153,37 @@
         }
     </div>
 </header>
+
+@if (!isActive && !isDelivered && !Model.Run.IsRemote && canContinue)
+{
+    <div class="collapse" id="resume-stage-panel">
+        <div class="resume-stage-panel mb-3">
+            <h5 class="resume-stage-title">↩ Resume From Stage</h5>
+            <p class="resume-stage-desc text-muted small">Pick any stage to restart from. Optional overrides apply to this attempt only.</p>
+            <form asp-action="RetryStage" asp-route-id="@Model.Run.Id" method="post" class="resume-stage-form d-flex flex-wrap gap-2 align-items-end">
+                @Html.AntiForgeryToken()
+                <div>
+                    <label class="form-label form-label-sm mb-1">Stage</label>
+                    <select name="StageName" class="form-select form-select-sm" style="min-width:130px">
+                        @foreach (var stage in Cyberpilot.Web.Models.PipelineRunDetailsViewModel.ValidStageNames)
+                        {
+                            <option value="@stage">@(char.ToUpperInvariant(stage[0]) + stage[1..])</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label form-label-sm mb-1">Model override <small class="text-muted">(optional)</small></label>
+                    <input name="Model" type="text" class="form-control form-control-sm" placeholder="leave blank to keep @Model.Run.Model" style="min-width:220px" />
+                </div>
+                <div>
+                    <label class="form-label form-label-sm mb-1">Timeout (min) <small class="text-muted">(optional)</small></label>
+                    <input name="StageTimeoutMinutes" type="number" class="form-control form-control-sm" min="1" max="120" placeholder="@Model.Run.StageTimeoutMinutes" style="width:100px" />
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary">↩ Retry Stage</button>
+            </form>
+        </div>
+    </div>
+}
 
 <section class="command-surface run-surface">
         <div class="run-telemetry-grid">
@@ -975,6 +1014,24 @@
         animation: cursor-blink 1s step-end infinite;
     }
 
+    /* ── Resume From Stage panel ─────────────────────────────── */
+    .resume-stage-panel {
+        padding: 1rem 1.25rem;
+        border: 1px solid rgba(34,211,238,.22);
+        border-radius: 10px;
+        background: linear-gradient(135deg, rgba(34,211,238,.06), rgba(5,9,18,.88) 60%);
+    }
+    .resume-stage-title { color: #22d3ee; font-size: .95rem; font-weight: 700; margin-bottom: .25rem; }
+    .resume-stage-desc { margin-bottom: .75rem; }
+
+    /* ── Stage retry button on cards ─────────────────────────── */
+    .stage-retry-btn {
+        margin-top: .5rem;
+        font-size: .72rem;
+        padding: .2rem .55rem;
+        border-radius: 6px;
+    }
+
     /* Orbital Command station overrides */
     .run-surface { min-height: 34rem; }
     .station-strip {
@@ -1168,6 +1225,10 @@
     // ── Round tracking for re-entry ────────────────────────────────────
     const activeCardIds = {};   // stage → current card DOM id
     const roundCounts   = {};   // stage → highest round seen
+    const runIsTerminal = !@(runIsActive ? "true" : "false");
+    const maxStageRetries = @maxStageRetries;
+    const isRemoteRun = @(Model.Run.IsRemote ? "true" : "false");
+    const antiForgeryToken = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
 
     function getActiveCard(stage) {
         const id = activeCardIds[stage] || `card-${stage}`;
@@ -1177,7 +1238,7 @@
     // ── Build a card DOM node ──────────────────────────────────────────
     const STAGE_ORDER = ['triage','plan','implement','review','docs','deliver'];
 
-    function buildCard(stage, round) {
+    function buildCard(stage, round, retryCount) {
         round = round || 1;
         const a = AGENTS[stage];
         if (!a) return null;
@@ -1186,7 +1247,8 @@
         const isRight = stageIndex % 2 === 1;
 
         const cardId = round > 1 ? `card-${stage}-${round}` : `card-${stage}`;
-        const displayName = round > 1 ? `${a.display} (Round ${round})` : a.display;
+        const attemptSuffix = (retryCount != null && retryCount > 0) ? ` (Attempt ${retryCount + 1})` : (round > 1 ? ` (Round ${round})` : '');
+        const displayName = `${a.display}${attemptSuffix}`;
 
         const card = document.createElement('div');
         card.className   = `agent-card state-active ${isRight ? 'card-right' : 'card-left'}`;
@@ -1587,6 +1649,26 @@
                 tagline.insertAdjacentElement('afterend', tokenBadge);
             }
         }
+        // Inject retry button for failed/stopped stages on terminal non-remote runs
+        if (!isRemoteRun && runIsTerminal
+            && (cls === 'state-failed' || cls === 'state-stopped')
+            && !card.querySelector('.stage-retry-btn')) {
+            const stageRetryCount = roundCounts[stage] || 1;
+            if (stageRetryCount < maxStageRetries) {
+                const content = card.querySelector('.agent-content');
+                if (content) {
+                    const form = document.createElement('form');
+                    form.action = `/Pipelines/${runId}/RetryStage`;
+                    form.method = 'post';
+                    form.className = 'd-inline';
+                    form.innerHTML = `
+                        <input type="hidden" name="__RequestVerificationToken" value="${escapeHtml(antiForgeryToken)}" />
+                        <input type="hidden" name="StageName" value="${escapeHtml(stage)}" />
+                        <button type="submit" class="btn btn-sm btn-outline-warning stage-retry-btn">↩ Retry ${escapeHtml(stage)}</button>`;
+                    content.appendChild(form);
+                }
+            }
+        }
         removeCursor();
     }
 
@@ -1639,6 +1721,28 @@
         stopTimer();
         removeCursor();
         clearInterval(elapsedTimer);
+        // Allow retry button injection on newly terminal runs
+        if (['Failed', 'Stopped', 'Cancelled', 'Paused'].includes(status) && !isRemoteRun) {
+            document.querySelectorAll('.agent-card.state-failed, .agent-card.state-stopped').forEach(card => {
+                const stage = card.dataset.stage;
+                if (!stage || card.querySelector('.stage-retry-btn')) return;
+                const stageRetryCount = roundCounts[stage] || 1;
+                if (stageRetryCount < maxStageRetries) {
+                    const content = card.querySelector('.agent-content');
+                    if (content) {
+                        const form = document.createElement('form');
+                        form.action = `/Pipelines/${runId}/RetryStage`;
+                        form.method = 'post';
+                        form.className = 'd-inline';
+                        form.innerHTML = `
+                            <input type="hidden" name="__RequestVerificationToken" value="${escapeHtml(antiForgeryToken)}" />
+                            <input type="hidden" name="StageName" value="${escapeHtml(stage)}" />
+                            <button type="submit" class="btn btn-sm btn-outline-warning stage-retry-btn">↩ Retry ${escapeHtml(stage)}</button>`;
+                        content.appendChild(form);
+                    }
+                }
+            });
+        }
     }
 
     @if (runIsActive)
@@ -1687,7 +1791,7 @@
         roundCounts[log.stage] = (roundCounts[log.stage] || 0) + 1;
         const round = roundCounts[log.stage];
 
-        const card = buildCard(log.stage, round);
+        const card = buildCard(log.stage, round, log.retryCount);
         if (!card) continue;
 
         activeCardIds[log.stage] = card.id;

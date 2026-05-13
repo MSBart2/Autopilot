@@ -15,12 +15,15 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
     public void OnStageStarted(StageDefinition stage, int issueNumber)
     {
         FlushBuffer();
+        var retryCount = dbContext.PipelineStageLogs
+            .Count(log => log.RunId == runId && log.StageName == stage.Name);
         currentLog = new PipelineStageLog
         {
             RunId = runId,
             StageName = stage.Name,
             Status = "Running",
             StartedAt = DateTime.UtcNow,
+            RetryCount = retryCount,
         };
         dbContext.PipelineStageLogs.Add(currentLog);
 

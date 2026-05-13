@@ -575,6 +575,201 @@ public class PipelinesControllerTests
         Assert.Equal("Reset Mission is not available after the code has been delivered.", controller.TempData["PipelineError"]);
     }
 
+    [Fact]
+    public async Task RetryStage_ValidStageName_RequeuesRunFromThatStage()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Failed",
+            CurrentStage = "review",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "implement" }));
+
+        Assert.Equal("Details", result.ActionName);
+        var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("Queued", updated.Status);
+        Assert.Equal("implement", updated.CurrentStage);
+        Assert.Null(updated.CompletedAt);
+        Assert.Null(updated.Error);
+        Assert.NotNull(queue.LastRequest);
+        Assert.Equal("implement", queue.LastRequest.StartStage);
+    }
+
+    [Fact]
+    public async Task RetryStage_WithModelOverride_UpdatesRunModel()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Failed",
+            CurrentStage = "plan",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "plan", Model = "gpt-4.1" });
+
+        var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("gpt-4.1", updated.Model);
+    }
+
+    [Fact]
+    public async Task RetryStage_WithTimeoutOverride_UpdatesRunTimeout()
+    {
+        var (controller, db, _, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Stopped",
+            CurrentStage = "implement",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "implement", StageTimeoutMinutes = 45 });
+
+        var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal(45, updated.StageTimeoutMinutes);
+    }
+
+    [Fact]
+    public async Task RetryStage_UnknownStageName_RedirectsWithError()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Failed",
+            CurrentStage = "plan",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "unknown-stage" }));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.NotNull(controller.TempData["PipelineError"]);
+        Assert.Contains("unknown-stage", controller.TempData["PipelineError"]!.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RetryStage_ActiveRun_RedirectsWithError()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Running",
+            CurrentStage = "implement",
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "implement" }));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.Equal("This run is already active.", controller.TempData["PipelineError"]);
+    }
+
+    [Fact]
+    public async Task RetryStage_ExceedsMaxRetries_RedirectsWithError()
+    {
+        var options = new CyberpilotWebOptions { Repository = "owner/repo", MaxStageRetries = 2 };
+        var (controller, db, queue, _) = CreateControllerWithDependencies(options);
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Failed",
+            CurrentStage = "triage",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        // Insert 2 stage logs for the same stage — MaxStageRetries is 2, so this exceeds cap
+        db.PipelineStageLogs.Add(new PipelineStageLog { RunId = run.Id, StageName = "triage", Status = "STOP", RetryCount = 0 });
+        db.PipelineStageLogs.Add(new PipelineStageLog { RunId = run.Id, StageName = "triage", Status = "STOP", RetryCount = 1 });
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "triage" }));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.NotNull(controller.TempData["PipelineError"]);
+        Assert.Contains("Maximum retry", controller.TempData["PipelineError"]!.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RetryStage_NonExistentRun_ReturnsNotFound()
+    {
+        var controller = CreateController();
+
+        var result = await controller.RetryStage("nonexistent-id", new RetryStageRequest { StageName = "plan" });
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task RetryStage_AnotherActiveRunExists_RedirectsWithError()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Failed",
+            CurrentStage = "triage",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        var activeRun = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Running",
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineRuns.Add(activeRun);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "triage" }));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.NotNull(controller.TempData["PipelineError"]);
+        Assert.Contains("already has an active", controller.TempData["PipelineError"]!.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class TestTempDataProvider : ITempDataProvider
     {
         public IDictionary<string, object?> LoadTempData(HttpContext context) => new Dictionary<string, object?>();

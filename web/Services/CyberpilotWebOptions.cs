@@ -22,6 +22,9 @@ public sealed class CyberpilotWebOptions
 
     /// <summary>Gets or sets whether web-triggered runs create missing SDK labels before running.</summary>
     public bool EnsureLabels { get; set; } = true;
+
+    /// <summary>Gets or sets the maximum number of retry attempts allowed per stage per run. Defaults to 3.</summary>
+    public int MaxStageRetries { get; set; } = 3;
 }
 
 /// <summary>

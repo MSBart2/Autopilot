@@ -209,6 +209,12 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
     public PipelineRunDetailsViewModel(PipelineRun run, IReadOnlyList<PipelineStageLog> logs)
         : this(run, logs, []) { }
 
+    /// <summary>Gets the ordered list of valid pipeline stage names.</summary>
+    public static IReadOnlyList<string> ValidStageNames { get; } = ["triage", "plan", "implement", "review", "docs", "deliver"];
+
+    /// <summary>Gets or sets the maximum number of retry attempts allowed per stage per run.</summary>
+    public int MaxStageRetries { get; init; } = 3;
+
     /// <summary>Gets the best available explanation and recovery guidance for a terminal stopped run.</summary>
     public PipelineStopDiagnostic? StopDiagnostic => PipelineStopDiagnostic.Create(Run, Logs, Dispatches ?? []);
 
@@ -233,6 +239,17 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
             .Where(log => PipelineStopDiagnostic.IsBlockedStatus(log.Status))
             .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
             .FirstOrDefault()?.StageName);
+
+    /// <summary>Gets the retry attempt count for a specific stage (number of existing stage logs for that stage).</summary>
+    public int GetStageRetryCount(string stageName)
+        => Logs.Count(l => l.StageName.Equals(stageName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Gets whether a specific stage can be retried (run is terminal, stage is known, retry count is below the cap).</summary>
+    public bool CanRetryStage(string stageName, int maxStageRetries)
+        => !Run.IsRemote
+        && Run.Status is "Failed" or "Stopped" or "Cancelled" or "Paused"
+        && ValidStageNames.Any(s => s.Equals(stageName, StringComparison.OrdinalIgnoreCase))
+        && GetStageRetryCount(stageName) < maxStageRetries;
 
     private static bool IsReviewStage(string? stageName)
         => stageName?.Equals("review", StringComparison.OrdinalIgnoreCase) == true;
@@ -504,6 +521,25 @@ public sealed record PipelineGuideViewModel(
     string Summary,
     string HtmlContent,
     string SourceFileName);
+
+/// <summary>
+/// Captures a request to retry a specific pipeline stage.
+/// </summary>
+public sealed class RetryStageRequest
+{
+    /// <summary>Gets or sets the stage name to retry (e.g., "plan", "implement", "review").</summary>
+    [Required]
+    [StringLength(80)]
+    public string StageName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets an optional model override for this retry attempt.</summary>
+    [StringLength(120)]
+    public string? Model { get; set; }
+
+    /// <summary>Gets or sets an optional stage timeout override in minutes for this retry attempt.</summary>
+    [Range(1, 120)]
+    public int? StageTimeoutMinutes { get; set; }
+}
 
 /// <summary>
 /// Captures a request to start Cyberpilot from the web UI.
