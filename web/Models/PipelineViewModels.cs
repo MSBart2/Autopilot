@@ -215,7 +215,8 @@ public sealed class PipelineApprovalDecisionRequest
 /// <param name="Issue">GitHub issue details for the run, when available.</param>
 /// <param name="Dispatches">Orchestrator dispatch events for the spine.</param>
 /// <param name="Approvals">Human approval requests for the run.</param>
-public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<PipelineStageLog> Logs, IReadOnlyList<string> Labels, GitHubIssueSummary? Issue = null, IReadOnlyList<PipelineDispatch>? Dispatches = null, IReadOnlyList<PipelineApproval>? Approvals = null)
+/// <param name="Evidence">Structured evidence rows for the run.</param>
+public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<PipelineStageLog> Logs, IReadOnlyList<string> Labels, GitHubIssueSummary? Issue = null, IReadOnlyList<PipelineDispatch>? Dispatches = null, IReadOnlyList<PipelineApproval>? Approvals = null, IReadOnlyList<PipelineEvidence>? Evidence = null)
 {
     /// <summary>Initializes a details view model without labels.</summary>
     public PipelineRunDetailsViewModel(PipelineRun run, IReadOnlyList<PipelineStageLog> logs)
@@ -235,6 +236,15 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
         .OrderByDescending(approval => approval.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
         .ThenBy(approval => approval.CreatedAt)
         .Select(PipelineApprovalViewModel.FromApproval)
+        .ToArray();
+
+    /// <summary>Gets evidence ledger rows formatted for display.</summary>
+    public IReadOnlyList<PipelineEvidenceViewModel> EvidenceItems => (Evidence ?? [])
+        .OrderBy(evidence => StageSortOrder(evidence.StageName))
+        .ThenBy(evidence => evidence.StageName)
+        .ThenBy(evidence => evidence.Kind)
+        .ThenBy(evidence => evidence.CreatedAt)
+        .Select(PipelineEvidenceViewModel.FromEvidence)
         .ToArray();
 
     /// <summary>Gets whether this run has a pending human approval request.</summary>
@@ -304,6 +314,77 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
 
     private static bool IsReviewStage(string? stageName)
         => stageName?.Equals("review", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static int StageSortOrder(string stageName)
+    {
+        for (var index = 0; index < ValidStageNames.Count; index++)
+        {
+            if (ValidStageNames[index].Equals(stageName, StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return int.MaxValue;
+    }
+}
+
+/// <summary>
+/// Displays one structured evidence ledger row for a pipeline run.
+/// </summary>
+/// <param name="StageName">The stage that produced the evidence.</param>
+/// <param name="Kind">The evidence kind.</param>
+/// <param name="Name">The evidence name.</param>
+/// <param name="Summary">The evidence summary.</param>
+/// <param name="Uri">A URI for evidence details, when available.</param>
+/// <param name="MediaType">The evidence media type, when available.</param>
+/// <param name="CreatedAt">When the evidence row was captured.</param>
+public sealed record PipelineEvidenceViewModel(
+    string StageName,
+    string Kind,
+    string Name,
+    string Summary,
+    string? Uri,
+    string? MediaType,
+    DateTime CreatedAt)
+{
+    /// <summary>Gets a compact display label for the stage.</summary>
+    public string StageLabel => DisplayStage(StageName);
+
+    /// <summary>Gets a compact display label for the evidence kind.</summary>
+    public string KindLabel => Kind switch
+    {
+        "stage-evidence" => "Evidence",
+        "stage-artifact" => "Artifact",
+        "policy-rationale" => "Policy",
+        "required-action" => "Action",
+        _ => string.IsNullOrWhiteSpace(Kind) ? "Evidence" : Kind,
+    };
+
+    /// <summary>Gets whether this evidence has a detail link.</summary>
+    public bool HasUri => !string.IsNullOrWhiteSpace(Uri);
+
+    /// <summary>Creates a display model from a persisted evidence row.</summary>
+    /// <param name="evidence">The persisted evidence row.</param>
+    /// <returns>The evidence display model.</returns>
+    public static PipelineEvidenceViewModel FromEvidence(PipelineEvidence evidence)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        return new PipelineEvidenceViewModel(
+            evidence.StageName,
+            evidence.Kind,
+            evidence.Name,
+            evidence.Summary,
+            evidence.Uri,
+            evidence.MediaType,
+            evidence.CreatedAt);
+    }
+
+    private static string DisplayStage(string stageName)
+        => string.IsNullOrWhiteSpace(stageName)
+            ? "Pipeline"
+            : char.ToUpperInvariant(stageName[0]) + stageName[1..];
 }
 
 /// <summary>

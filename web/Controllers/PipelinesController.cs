@@ -220,6 +220,14 @@ public class PipelinesController : Controller
             .AsNoTracking()
             .ToArrayAsync();
 
+        var evidence = await _dbContext.PipelineEvidence
+            .Where(item => item.RunId == id)
+            .OrderBy(item => item.StageName)
+            .ThenBy(item => item.Kind)
+            .ThenBy(item => item.CreatedAt)
+            .AsNoTracking()
+            .ToArrayAsync();
+
         GitHubIssueSummary? issue = null;
         IReadOnlyList<string> labels = [];
         try
@@ -242,7 +250,7 @@ public class PipelinesController : Controller
             _logger.LogDebug(ex, "Could not fetch GitHub labels for issue #{IssueNumber}.", run.IssueNumber);
         }
 
-        return View(new PipelineRunDetailsViewModel(run, logs, labels, issue, dispatches, approvals) { MaxStageRetries = _options.MaxStageRetries });
+        return View(new PipelineRunDetailsViewModel(run, logs, labels, issue, dispatches, approvals, evidence) { MaxStageRetries = _options.MaxStageRetries });
     }
 
     /// <summary>

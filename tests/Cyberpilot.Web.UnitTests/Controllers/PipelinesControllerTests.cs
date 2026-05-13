@@ -141,12 +141,21 @@ public class PipelinesControllerTests
             RequestedRole = "maintainer",
             ResumeStageName = "implement",
         });
+        db.PipelineEvidence.Add(new PipelineEvidence
+        {
+            RunId = run.Id,
+            StageName = "plan",
+            Kind = "stage-artifact",
+            Name = "plan-comment",
+            Summary = "Implementation plan posted.",
+        });
         await db.SaveChangesAsync();
 
         var result = Assert.IsType<ViewResult>(await controller.Details(run.Id));
 
         var model = Assert.IsType<PipelineRunDetailsViewModel>(result.Model);
         Assert.Single(model.ApprovalItems);
+        Assert.Single(model.EvidenceItems);
         Assert.True(model.HasPendingApprovals);
     }
 

@@ -492,3 +492,13 @@ Started the durable evidence ledger:
 - `CyberpilotRunHistoryProgressSink` and `SignalRProgressSink` now persist structured evidence rows from completed `StageResult` payloads.
 - Added SDK persistence tests, SDK sink tests, and web SignalR sink tests for evidence row creation.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Thirty-Eighth Slice Status
+
+Surfaced the evidence ledger in the Run Room:
+
+- Details now loads persisted `PipelineEvidence` rows alongside logs, dispatches, and approvals.
+- Added compact `PipelineEvidenceViewModel` display items with stage labels, kind labels, optional media type, and evidence links.
+- Rendered a restrained Evidence panel in the Run Room when ledger rows exist, without changing the stage transcript layout.
+- Added controller and view-model tests proving evidence rows are loaded, sorted, and displayed through the details model.
+- Validated with `dotnet build .\Cyberpilot.sln`, web unit tests, and web integration tests.

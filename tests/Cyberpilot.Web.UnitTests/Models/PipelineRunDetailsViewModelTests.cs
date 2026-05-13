@@ -84,6 +84,55 @@ public class PipelineRunDetailsViewModelTests
     }
 
     [Fact]
+    public void EvidenceItems_FormatsAndOrdersEvidenceRows()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var evidence = new[]
+        {
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "review",
+                Kind = "required-action",
+                Name = "required-action-1",
+                Summary = "Fix failing tests.",
+                CreatedAt = DateTime.Parse("2026-05-13T10:00:00Z").ToUniversalTime(),
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "plan",
+                Kind = "stage-artifact",
+                Name = "plan-comment",
+                Summary = "Implementation plan posted.",
+                Uri = "https://github.com/owner/repo/issues/1#comment",
+                MediaType = "text/markdown",
+                CreatedAt = DateTime.Parse("2026-05-13T09:00:00Z").ToUniversalTime(),
+            },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, [], [], Evidence: evidence);
+
+        Assert.Collection(
+            vm.EvidenceItems,
+            item =>
+            {
+                Assert.Equal("Plan", item.StageLabel);
+                Assert.Equal("Artifact", item.KindLabel);
+                Assert.Equal("plan-comment", item.Name);
+                Assert.True(item.HasUri);
+                Assert.Equal("text/markdown", item.MediaType);
+            },
+            item =>
+            {
+                Assert.Equal("Review", item.StageLabel);
+                Assert.Equal("Action", item.KindLabel);
+                Assert.Equal("Fix failing tests.", item.Summary);
+                Assert.False(item.HasUri);
+            });
+    }
+
+    [Fact]
     public void CanContinue_WithRejectedApproval_ReturnsFalse()
     {
         var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m", Status = "Stopped" };

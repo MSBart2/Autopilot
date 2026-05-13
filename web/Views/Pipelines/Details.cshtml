@@ -358,6 +358,43 @@
             </section>
         }
 
+        @if (Model.EvidenceItems.Any())
+        {
+            <section class="evidence-panel" aria-labelledby="evidence-panel-title">
+                <div class="evidence-panel-header">
+                    <div>
+                        <p class="eyebrow">Evidence ledger</p>
+                        <h3 id="evidence-panel-title">Evidence</h3>
+                    </div>
+                    <span class="evidence-count">@Model.EvidenceItems.Count</span>
+                </div>
+                <div class="evidence-list">
+                    @foreach (var evidence in Model.EvidenceItems)
+                    {
+                        <article class="evidence-item evidence-kind-@evidence.Kind">
+                            <div class="evidence-item-header">
+                                <span class="evidence-kind">@evidence.KindLabel</span>
+                                <span class="evidence-stage">@evidence.StageLabel</span>
+                            </div>
+                            <h4>@evidence.Name</h4>
+                            <p>@evidence.Summary</p>
+                            <div class="evidence-meta">
+                                <span>@evidence.CreatedAt.ToLocalTime().ToString("g")</span>
+                                @if (!string.IsNullOrWhiteSpace(evidence.MediaType))
+                                {
+                                    <span>@evidence.MediaType</span>
+                                }
+                            </div>
+                            @if (evidence.HasUri)
+                            {
+                                <a class="evidence-link" href="@evidence.Uri" target="_blank" rel="noopener">Open evidence</a>
+                            }
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+
         @if (Model.Run.Status == "Completed" && Model.Run.SkipDeliver)
         {
             <div class="delivery-panel" id="delivery-panel">
@@ -682,6 +719,103 @@
     .approval-action-form .form-control {
         min-height: 1.9rem;
         font-size: .78rem;
+    }
+    .evidence-panel {
+        margin-bottom: 1rem;
+        border: 1px solid rgba(59, 130, 246, .2);
+        border-radius: 8px;
+        background: rgba(255,255,255,.92);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+    }
+    .evidence-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .85rem 1rem;
+        border-bottom: 1px solid rgba(148, 163, 184, .2);
+        background: linear-gradient(135deg, rgba(59,130,246,.08), rgba(16,185,129,.05));
+    }
+    .evidence-panel-header h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .evidence-count {
+        min-width: 1.75rem;
+        min-height: 1.75rem;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 999px;
+        color: #1e3a8a;
+        background: rgba(59, 130, 246, .14);
+        border: 1px solid rgba(59, 130, 246, .26);
+        font-size: .75rem;
+        font-weight: 900;
+    }
+    .evidence-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+        gap: .65rem;
+        padding: .8rem;
+    }
+    .evidence-item {
+        min-width: 0;
+        padding: .75rem;
+        border: 1px solid rgba(148, 163, 184, .24);
+        border-left: 4px solid #3b82f6;
+        border-radius: 8px;
+        background: rgba(248, 250, 252, .88);
+    }
+    .evidence-kind-stage-artifact { border-left-color: #10b981; }
+    .evidence-kind-policy-rationale { border-left-color: #8b5cf6; }
+    .evidence-kind-required-action { border-left-color: #f59e0b; }
+    .evidence-item-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .5rem;
+        margin-bottom: .45rem;
+    }
+    .evidence-kind,
+    .evidence-stage {
+        font-size: .64rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+    }
+    .evidence-kind { color: #1d4ed8; }
+    .evidence-stage { color: #64748b; }
+    .evidence-item h4 {
+        margin: 0 0 .25rem;
+        font-size: .9rem;
+        font-weight: 850;
+        overflow-wrap: anywhere;
+    }
+    .evidence-item p {
+        margin: 0;
+        color: #475569;
+        font-size: .82rem;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+    .evidence-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem .65rem;
+        margin-top: .55rem;
+        color: #64748b;
+        font-size: .72rem;
+    }
+    .evidence-link {
+        display: inline-flex;
+        margin-top: .55rem;
+        font-size: .78rem;
+        font-weight: 800;
+        text-decoration: none;
     }
     @@media (max-width: 720px) {
         .approval-item { grid-template-columns: 1fr; }
