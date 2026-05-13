@@ -127,6 +127,7 @@ internal sealed class PipelineEngine(
                 return 4;
             }
 
+            docsStage = TransitionTarget("review", "approved");
             progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Docs stage");
 
             var pauseResult = await CheckPauseAsync("review", cancellationToken);
@@ -221,7 +222,7 @@ internal sealed class PipelineEngine(
 
             progressSink.OnDispatch(DispatchType.ReviewLoop, "Review requested changes — cycling back to Implement");
             console.WriteStep("Review requested changes. Handing back to implementation for a go-around.");
-            var implementStage = Stage("implement");
+            var implementStage = TransitionTarget("review", "changes_requested");
             await labels.SetStageAsync(Options.IssueNumber, implementStage.Label, cancellationToken);
             var rework = await RunStageAsync(implementStage, "Address the latest review findings, push fixes to the existing PR branch, and update the issue.", cancellationToken);
             if (!StageStatus.IsGo(rework))
@@ -269,5 +270,10 @@ internal sealed class PipelineEngine(
     private bool ShouldRun(PipelineStart start, StageDefinition stage)
     {
         return context.Definition.ShouldRun(start, stage);
+    }
+
+    private StageDefinition TransitionTarget(string fromStage, string condition)
+    {
+        return context.Definition.TransitionTarget(fromStage, condition);
     }
 }

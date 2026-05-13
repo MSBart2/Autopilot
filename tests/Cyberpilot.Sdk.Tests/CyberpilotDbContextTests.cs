@@ -100,6 +100,41 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public void PipelineStageLog_StructuredResultColumns_DefaultToNull()
+    {
+        var log = new PipelineStageLog();
+
+        Assert.Null(log.StageResultJson);
+        Assert.Null(log.StageResultContractVersion);
+        Assert.Null(log.RetryReason);
+    }
+
+    [Fact]
+    public async Task PipelineStageLog_StructuredResultMetadata_CanBeAddedAndRetrieved()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        var log = new PipelineStageLog
+        {
+            RunId = run.Id,
+            StageName = "review",
+            Status = "GO",
+            StageResultJson = "{\"status\":\"GO\",\"decision\":\"approved\"}",
+            StageResultContractVersion = PipelineDefinitionDefaults.ContractVersion,
+            RetryReason = "Retry after addressing review feedback.",
+        };
+        _dbContext.PipelineStageLogs.Add(log);
+        await _dbContext.SaveChangesAsync();
+
+        var retrieved = await _dbContext.PipelineStageLogs.FindAsync(log.Id);
+
+        Assert.NotNull(retrieved);
+        Assert.Equal(log.StageResultJson, retrieved.StageResultJson);
+        Assert.Equal(PipelineDefinitionDefaults.ContractVersion, retrieved.StageResultContractVersion);
+        Assert.Equal("Retry after addressing review feedback.", retrieved.RetryReason);
+    }
+
+    [Fact]
     public async Task PipelineRun_CascadeDeletesStageLogs()
     {
         var run = new PipelineRun { IssueNumber = 1, Repository = "test/repo", Model = "m" };

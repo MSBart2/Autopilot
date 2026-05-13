@@ -47,6 +47,17 @@ public sealed class PipelineStageLog
     /// <summary>Gets or sets the retry attempt number for this stage log (0 = first attempt).</summary>
     public int? RetryCount { get; set; }
 
+    /// <summary>Gets or sets the serialized structured stage result.</summary>
+    public string? StageResultJson { get; set; }
+
+    /// <summary>Gets or sets the structured stage result contract version.</summary>
+    [StringLength(40)]
+    public string? StageResultContractVersion { get; set; }
+
+    /// <summary>Gets or sets the operator-provided reason for retrying this stage.</summary>
+    [StringLength(500)]
+    public string? RetryReason { get; set; }
+
     /// <summary>Gets or sets the owning run.</summary>
     public PipelineRun? Run { get; set; }
 }

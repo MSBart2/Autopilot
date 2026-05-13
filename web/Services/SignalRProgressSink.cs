@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Cyberpilot;
 using Cyberpilot.Persistence;
 using Cyberpilot.Pipeline;
@@ -62,6 +63,8 @@ public sealed class SignalRProgressSink(
             currentLog.InputTokens = result.InputTokens;
             currentLog.OutputTokens = result.OutputTokens;
             currentLog.EstimatedCostUsd = estimatedCost;
+            currentLog.StageResultJson = JsonSerializer.Serialize(result);
+            currentLog.StageResultContractVersion = PipelineDefinitionDefaults.ContractVersion;
         }
 
         dbContext.SaveChanges();

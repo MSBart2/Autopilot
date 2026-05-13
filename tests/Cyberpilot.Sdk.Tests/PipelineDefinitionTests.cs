@@ -96,6 +96,61 @@ public sealed class PipelineDefinitionTests
         Assert.Contains(transitions, transition => transition is { FromStage: "review", ToStage: "docs", Condition: "approved" });
     }
 
+    [Theory]
+    [InlineData("review", "changes_requested", "implement")]
+    [InlineData("review", "approved", "docs")]
+    public void DefaultDefinition_TransitionTarget_ResolvesDeclaredTransition(string fromStage, string condition, string expectedTargetStage)
+    {
+        var target = DefaultPipelineDefinitionProvider.Definition.TransitionTarget(fromStage, condition);
+
+        Assert.Equal(expectedTargetStage, target.Name);
+    }
+
+    [Fact]
+    public void DefaultDefinition_TransitionTarget_ThrowsForMissingTransition()
+    {
+        Assert.Throws<MissingPipelineTransitionException>(() =>
+            DefaultPipelineDefinitionProvider.Definition.TransitionTarget("docs", "changes_requested"));
+    }
+
+    [Fact]
+    public void PipelineStartResolver_UsesSelectedDefinitionOrder()
+    {
+        var definition = CreateCustomDefinition(
+            Stage("alpha", "sdk/alpha"),
+            Stage("review", "sdk/custom-review"),
+            Stage("omega", "sdk/omega"));
+
+        var start = PipelineStartResolver.Resolve("review", definition);
+
+        Assert.Equal(1, start.Index);
+        Assert.True(start.IsResume);
+        Assert.Equal("review", start.Stage.Name);
+        Assert.Equal("sdk/custom-review", start.Stage.Label);
+    }
+
+    [Fact]
+    public void PipelineDefinitionStageLookup_ShouldRun_UsesSelectedDefinitionOrder()
+    {
+        var definition = CreateCustomDefinition(
+            Stage("alpha", "sdk/alpha"),
+            Stage("review", "sdk/custom-review"),
+            Stage("omega", "sdk/omega"));
+        var start = PipelineStartResolver.Resolve("review", definition);
+
+        Assert.False(definition.ShouldRun(start, definition.Stage("alpha")));
+        Assert.True(definition.ShouldRun(start, definition.Stage("review")));
+        Assert.True(definition.ShouldRun(start, definition.Stage("omega")));
+    }
+
+    [Fact]
+    public void PipelineDefinitionStageLookup_UnknownStage_Throws()
+    {
+        var definition = CreateCustomDefinition(Stage("alpha", "sdk/alpha"));
+
+        Assert.Throws<UnknownPipelineStageException>(() => definition.Stage("missing"));
+    }
+
     [Fact]
     public void PipelineDefinitionSelector_DefaultOptions_SelectsDefaultDefinition()
     {
@@ -106,6 +161,41 @@ public sealed class PipelineDefinitionTests
         Assert.True(selected);
         Assert.Same(DefaultPipelineDefinitionProvider.Definition, definition);
         Assert.Null(error);
+    }
+
+    [Fact]
+    public void PipelineDefinitionValidator_DefaultDefinition_HasNoErrors()
+    {
+        var errors = PipelineDefinitionValidator.Validate(DefaultPipelineDefinitionProvider.Definition);
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void PipelineDefinitionValidator_InvalidDefinition_ReturnsActionableErrors()
+    {
+        var duplicateStage = new StageDefinition("TRIAGE", "triage", string.Empty, string.Empty);
+        var definition = new PipelineDefinition(
+            string.Empty,
+            new PipelineDefinitionVersion(string.Empty),
+            new PolicyProfile(string.Empty, PolicyStrictness.Standard),
+            [
+                new PipelineStageDefinition(duplicateStage, new StageContract(string.Empty, []), []),
+                new PipelineStageDefinition(duplicateStage, new StageContract("1.0", []), []),
+            ],
+            [new StageTransition("triage", "missing", string.Empty)]);
+
+        var errors = PipelineDefinitionValidator.Validate(definition);
+
+        Assert.Contains("Pipeline definition name is required.", errors);
+        Assert.Contains("Pipeline definition version is required.", errors);
+        Assert.Contains("Pipeline policy profile name is required.", errors);
+        Assert.Contains("Pipeline stage 'triage' is declared more than once.", errors);
+        Assert.Contains("Pipeline stage 'triage' must declare a prompt file.", errors);
+        Assert.Contains("Pipeline stage 'triage' must declare a label.", errors);
+        Assert.Contains("Pipeline stage 'triage' must declare a contract version.", errors);
+        Assert.Contains("Pipeline transition targets unknown stage 'missing'.", errors);
+        Assert.Contains("Pipeline transition from 'triage' to 'missing' must declare a condition.", errors);
     }
 
     [Theory]
@@ -139,4 +229,15 @@ public sealed class PipelineDefinitionTests
         Assert.Null(definition);
         Assert.Contains(expectedError, error);
     }
+
+    private static PipelineDefinition CreateCustomDefinition(params StageDefinition[] stages)
+        => new(
+            "custom",
+            new PipelineDefinitionVersion("1.0"),
+            new PolicyProfile("standard", PolicyStrictness.Standard),
+            stages.Select(stage => new PipelineStageDefinition(stage, new StageContract("1.0", []), [])).ToArray(),
+            []);
+
+    private static StageDefinition Stage(string name, string label)
+        => new(name.ToUpperInvariant(), name, $"{name}.agent.md", label);
 }

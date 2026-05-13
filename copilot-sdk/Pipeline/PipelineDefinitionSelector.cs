@@ -27,6 +27,14 @@ internal static class PipelineDefinitionSelector
         }
 
         definition = DefaultPipelineDefinitionProvider.Definition;
+        var validationErrors = PipelineDefinitionValidator.Validate(definition);
+        if (validationErrors.Count > 0)
+        {
+            error = $"Pipeline definition '{definition.Name}' is invalid: {string.Join(" ", validationErrors)}";
+            definition = null;
+            return false;
+        }
+
         error = null;
         return true;
     }

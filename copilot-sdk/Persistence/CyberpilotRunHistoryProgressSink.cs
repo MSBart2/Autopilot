@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Cyberpilot.Pipeline;
 
 namespace Cyberpilot.Persistence;
@@ -48,6 +49,8 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
             currentLog.InputTokens = result.InputTokens;
             currentLog.OutputTokens = result.OutputTokens;
             currentLog.EstimatedCostUsd = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens);
+            currentLog.StageResultJson = JsonSerializer.Serialize(result);
+            currentLog.StageResultContractVersion = PipelineDefinitionDefaults.ContractVersion;
         }
 
         dbContext.SaveChanges();

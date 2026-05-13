@@ -189,3 +189,40 @@ Validated selected pipeline definition/profile before routing starts:
 - Added clear unsupported-definition/profile diagnostics with exit code `12` before issue, label, model, or stage side effects.
 - Added selector and runner tests for supported and unsupported selections.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Ninth Slice Status
+
+Made declared pipeline transitions queryable and used them for review routing decisions:
+
+- Added transition lookup helpers for condition-based routing.
+- Used the default definition's `review -> implement` transition for review rework.
+- Used the default definition's `review -> docs` transition after approval.
+- Added transition lookup tests, including missing-transition diagnostics.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Tenth Slice Status
+
+Validated selected pipeline definitions before routing starts:
+
+- Added `PipelineDefinitionValidator` for definition identity, stage metadata, contract versions, duplicates, and transition endpoints.
+- Wired validation into `PipelineDefinitionSelector` so invalid selected definitions fail before routing.
+- Added tests for the valid default definition and actionable invalid-definition errors.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Eleventh Slice Status
+
+Added passive persistence fields for richer structured stage results:
+
+- Added nullable `StageResultJson`, `StageResultContractVersion`, and `RetryReason` fields to `PipelineStageLog`.
+- Generated the EF Core migration `AddStructuredStageResultMetadata`.
+- Added SDK persistence tests proving defaults remain null and structured result metadata round-trips.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Twelfth Slice Status
+
+Persisted serialized stage results from progress sinks:
+
+- Updated SDK history progress sink to store `StageResultJson` and `StageResultContractVersion` when a stage completes.
+- Updated web SignalR progress sink to store the same structured metadata while preserving existing live events.
+- Added SDK and web sink tests proving structured result metadata is persisted.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.

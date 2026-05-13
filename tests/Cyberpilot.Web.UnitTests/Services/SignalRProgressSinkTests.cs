@@ -76,6 +76,9 @@ public class SignalRProgressSinkTests : IDisposable
         var log = _dbContext.PipelineStageLogs.Single();
         Assert.Equal("GO", log.Status);
         Assert.NotNull(log.CompletedAt);
+        Assert.Contains("\"Status\":\"GO\"", log.StageResultJson);
+        Assert.Contains("\"Decision\":\"approved\"", log.StageResultJson);
+        Assert.Equal(PipelineDefinitionDefaults.ContractVersion, log.StageResultContractVersion);
     }
 
     [Fact]
