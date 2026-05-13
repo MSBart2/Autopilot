@@ -50,7 +50,9 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
             currentLog.OutputTokens = result.OutputTokens;
             currentLog.EstimatedCostUsd = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens);
             currentLog.StageResultJson = JsonSerializer.Serialize(result);
-            currentLog.StageResultContractVersion = PipelineDefinitionDefaults.ContractVersion;
+            currentLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
+                ? PipelineDefinitionDefaults.ContractVersion
+                : result.ContractVersion;
         }
 
         dbContext.SaveChanges();

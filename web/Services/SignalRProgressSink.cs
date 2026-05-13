@@ -84,7 +84,9 @@ public sealed class SignalRProgressSink(
             currentLog.OutputTokens = result.OutputTokens;
             currentLog.EstimatedCostUsd = estimatedCost;
             currentLog.StageResultJson = JsonSerializer.Serialize(result);
-            currentLog.StageResultContractVersion = PipelineDefinitionDefaults.ContractVersion;
+            currentLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
+                ? PipelineDefinitionDefaults.ContractVersion
+                : result.ContractVersion;
         }
 
         dbContext.SaveChanges();

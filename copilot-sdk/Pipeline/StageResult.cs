@@ -12,7 +12,23 @@ namespace Cyberpilot.Pipeline;
 /// <param name="Error">The validation error, when invalid.</param>
 /// <param name="InputTokens">The number of input tokens consumed by this stage, when available.</param>
 /// <param name="OutputTokens">The number of output tokens produced by this stage, when available.</param>
-public sealed record StageResult(string Status, string Decision, bool IsValid, string? Error, int? InputTokens = null, int? OutputTokens = null)
+/// <param name="ContractVersion">The structured result contract version used by this stage result.</param>
+/// <param name="Artifacts">The artifacts produced by the stage.</param>
+/// <param name="Evidence">The evidence gathered or referenced by the stage.</param>
+/// <param name="PolicyRationale">The policy rationale supplied by the stage.</param>
+/// <param name="RequiredActions">The corrective actions required before the pipeline can continue.</param>
+public sealed record StageResult(
+    string Status,
+    string Decision,
+    bool IsValid,
+    string? Error,
+    int? InputTokens = null,
+    int? OutputTokens = null,
+    string? ContractVersion = PipelineDefinitionDefaults.ContractVersion,
+    IReadOnlyList<StageArtifact>? Artifacts = null,
+    IReadOnlyList<StageEvidence>? Evidence = null,
+    string? PolicyRationale = null,
+    IReadOnlyList<string>? RequiredActions = null)
 {
     /// <summary>
     /// Gets an empty successful stage result.
@@ -54,7 +70,20 @@ public sealed record StageResult(string Status, string Decision, bool IsValid, s
                 return Invalid($"Unknown decision '{decision}'.");
             }
 
-            return new StageResult(normalizedStatus, decision, true, null);
+            return new StageResult(
+                normalizedStatus,
+                decision,
+                true,
+                null,
+                ContractVersion: ReadString(document.RootElement, "contractVersion")
+                    ?? ReadString(document.RootElement, "contract_version")
+                    ?? PipelineDefinitionDefaults.ContractVersion,
+                Artifacts: ReadArtifacts(document.RootElement),
+                Evidence: ReadEvidence(document.RootElement),
+                PolicyRationale: ReadString(document.RootElement, "policyRationale")
+                    ?? ReadString(document.RootElement, "policy_rationale"),
+                RequiredActions: ReadStringArray(document.RootElement, "requiredActions")
+                    ?? ReadStringArray(document.RootElement, "required_actions"));
         }
         catch (JsonException ex)
         {
@@ -67,8 +96,139 @@ public sealed record StageResult(string Status, string Decision, bool IsValid, s
         return element.TryGetProperty(name, out var property) ? property.GetString() : null;
     }
 
+    private static IReadOnlyList<string>? ReadStringArray(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var property) || property.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var values = property.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToArray();
+
+        return values.Length == 0 ? null : values;
+    }
+
+    private static IReadOnlyList<StageArtifact>? ReadArtifacts(JsonElement element)
+    {
+        if (!element.TryGetProperty("artifacts", out var property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind == JsonValueKind.Object)
+        {
+            var artifacts = property.EnumerateObject()
+                .Select(item => new StageArtifact(item.Name, ReadElementAsString(item.Value)))
+                .ToArray();
+            return artifacts.Length == 0 ? null : artifacts;
+        }
+
+        if (property.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var values = property.EnumerateArray()
+            .Select(ReadArtifact)
+            .OfType<StageArtifact>()
+            .ToArray();
+
+        return values.Length == 0 ? null : values;
+    }
+
+    private static StageArtifact? ReadArtifact(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var value = element.GetString();
+            return string.IsNullOrWhiteSpace(value) ? null : new StageArtifact(value);
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var name = ReadString(element, "name") ?? ReadString(element, "type");
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        return new StageArtifact(
+            name,
+            ReadString(element, "value") ?? ReadString(element, "summary"),
+            ReadString(element, "uri") ?? ReadString(element, "url"),
+            ReadString(element, "mediaType") ?? ReadString(element, "media_type"));
+    }
+
+    private static IReadOnlyList<StageEvidence>? ReadEvidence(JsonElement element)
+    {
+        if (!element.TryGetProperty("evidence", out var property) || property.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var values = property.EnumerateArray()
+            .Select(ReadEvidenceItem)
+            .OfType<StageEvidence>()
+            .ToArray();
+
+        return values.Length == 0 ? null : values;
+    }
+
+    private static StageEvidence? ReadEvidenceItem(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var value = element.GetString();
+            return string.IsNullOrWhiteSpace(value) ? null : new StageEvidence(value, value);
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var name = ReadString(element, "name") ?? ReadString(element, "type");
+        var summary = ReadString(element, "summary") ?? ReadString(element, "value") ?? name;
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(summary))
+        {
+            return null;
+        }
+
+        return new StageEvidence(name, summary, ReadString(element, "uri") ?? ReadString(element, "url"));
+    }
+
+    private static string? ReadElementAsString(JsonElement element)
+    {
+        return element.ValueKind == JsonValueKind.String ? element.GetString() : element.GetRawText();
+    }
+
     private static StageResult Invalid(string error)
     {
         return new StageResult("INVALID", "unknown", false, error);
     }
 }
+
+/// <summary>
+/// Describes an artifact produced by a pipeline stage.
+/// </summary>
+/// <param name="Name">The artifact name or type.</param>
+/// <param name="Value">The artifact value or summary, when available.</param>
+/// <param name="Uri">A URI pointing to the artifact, when available.</param>
+/// <param name="MediaType">The artifact media type, when available.</param>
+public sealed record StageArtifact(string Name, string? Value = null, string? Uri = null, string? MediaType = null);
+
+/// <summary>
+/// Describes evidence captured or referenced by a pipeline stage.
+/// </summary>
+/// <param name="Name">The evidence name or type.</param>
+/// <param name="Summary">A concise evidence summary.</param>
+/// <param name="Uri">A URI pointing to evidence details, when available.</param>
+public sealed record StageEvidence(string Name, string Summary, string? Uri = null);

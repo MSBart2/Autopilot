@@ -173,6 +173,7 @@ public sealed class StageResultTests
         Assert.Equal("unknown", result.Decision);
         Assert.True(result.IsValid);
         Assert.Null(result.Error);
+        Assert.Equal(PipelineDefinitionDefaults.ContractVersion, result.ContractVersion);
     }
 
     [Fact]
@@ -194,5 +195,70 @@ public sealed class StageResultTests
 
         Assert.Equal(500, result.InputTokens);
         Assert.Equal(1200, result.OutputTokens);
+    }
+
+    [Fact]
+    public void Parse_WithContractArtifactsEvidenceAndActions_ReturnsStructuredFields()
+    {
+        var result = StageResult.Parse("""
+                        ```json
+                        {
+                            "status": "STOP",
+                            "decision": "changes_requested",
+                            "contract_version": "1.1",
+                            "artifacts": [
+                                { "name": "validation-summary", "summary": "Tests failed", "uri": "file://validation.md" }
+                            ],
+                            "evidence": [
+                                { "name": "build", "summary": "dotnet build failed", "uri": "log://build" }
+                            ],
+                            "policy_rationale": "Strict profile requires a green build.",
+                            "required_actions": ["Fix the failing build", "Rerun validation"]
+                        }
+                        ```
+                        """);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("1.1", result.ContractVersion);
+        var artifact = Assert.Single(result.Artifacts!);
+        Assert.Equal("validation-summary", artifact.Name);
+        Assert.Equal("Tests failed", artifact.Value);
+        Assert.Equal("file://validation.md", artifact.Uri);
+        var evidence = Assert.Single(result.Evidence!);
+        Assert.Equal("build", evidence.Name);
+        Assert.Equal("dotnet build failed", evidence.Summary);
+        Assert.Equal("log://build", evidence.Uri);
+        Assert.Equal("Strict profile requires a green build.", result.PolicyRationale);
+        Assert.Equal(["Fix the failing build", "Rerun validation"], result.RequiredActions);
+    }
+
+    [Fact]
+    public void Parse_WithArtifactObject_ReturnsArtifactEntries()
+    {
+        var result = StageResult.Parse("""
+                        ```json
+                        {
+                            "status": "GO",
+                            "artifacts": {
+                                "plan-comment": "Posted implementation plan",
+                                "branch": "cyberpilot/issue-42"
+                            }
+                        }
+                        ```
+                        """);
+
+        Assert.True(result.IsValid);
+        Assert.Collection(
+                result.Artifacts!,
+                artifact =>
+                {
+                    Assert.Equal("plan-comment", artifact.Name);
+                    Assert.Equal("Posted implementation plan", artifact.Value);
+                },
+                artifact =>
+                {
+                    Assert.Equal("branch", artifact.Name);
+                    Assert.Equal("cyberpilot/issue-42", artifact.Value);
+                });
     }
 }

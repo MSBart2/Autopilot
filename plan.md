@@ -237,3 +237,14 @@ Captured operator retry reasons for web retry/rework attempts:
 - Displayed retry reasons on Run Room stage cards without changing the transcript layout.
 - Added controller and SignalR sink tests for retry reason queueing, persistence, and live event payloads.
 - Validated with `dotnet build .\Cyberpilot.sln` and web unit tests.
+
+### Fourteenth Slice Status
+
+Added backward-compatible stage result contract/artifact/evidence fields:
+
+- Extended `StageResult` with optional contract version, artifacts, evidence, policy rationale, and required actions.
+- Parsed those optional fields from stage JSON using both camelCase and snake_case names where relevant.
+- Preserved existing constructor calls and defaulted empty results to the current contract version.
+- Updated SDK and web progress sinks to persist the result's contract version, falling back to the default when missing.
+- Added SDK tests for structured field parsing and SDK/web sink tests for result-specific contract version persistence.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.

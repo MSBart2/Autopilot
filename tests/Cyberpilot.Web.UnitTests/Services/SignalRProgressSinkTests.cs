@@ -83,6 +83,20 @@ public class SignalRProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnStageCompleted_WithResultContractVersion_PersistsResultContractVersion()
+    {
+        var sink = CreateSink();
+        var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
+        sink.OnStageStarted(stage, 42);
+
+        sink.OnStageCompleted(stage, StageResult.Empty with { ContractVersion = "1.1" });
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("1.1", log.StageResultContractVersion);
+        Assert.Contains("\"ContractVersion\":\"1.1\"", log.StageResultJson);
+    }
+
+    [Fact]
     public void OnMessage_AppendsLineToLog()
     {
         var sink = CreateSink();

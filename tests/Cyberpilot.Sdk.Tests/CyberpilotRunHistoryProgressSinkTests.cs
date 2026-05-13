@@ -69,6 +69,20 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnStageCompleted_WithResultContractVersion_PersistsResultContractVersion()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
+        var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
+        sink.OnStageStarted(stage, 1);
+
+        sink.OnStageCompleted(stage, StageResult.Empty with { ContractVersion = "1.1" });
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("1.1", log.StageResultContractVersion);
+        Assert.Contains("\"ContractVersion\":\"1.1\"", log.StageResultJson);
+    }
+
+    [Fact]
     public void OnMessage_AppendsToStageLog()
     {
         var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
