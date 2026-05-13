@@ -1,0 +1,37 @@
+/* Component Showcase styles */
+
+.component-preview-frame {
+    width: 100%;
+    min-height: 200px;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.375rem;
+    background: var(--bs-body-bg, #fff);
+}
+
+.copy-markup-container {
+    position: relative;
+    margin-top: 0.5rem;
+}
+
+.copy-markup-container pre {
+    background: var(--bs-tertiary-bg, #f8f9fa);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.375rem;
+    padding: 1rem;
+    padding-right: 4rem;
+    margin: 0;
+    overflow-x: auto;
+    font-size: 0.875rem;
+}
+
+.copy-markup-container code {
+    color: var(--bs-body-color, #212529);
+    font-size: inherit;
+}
+
+.copy-markup-container .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 0.75rem;
+}

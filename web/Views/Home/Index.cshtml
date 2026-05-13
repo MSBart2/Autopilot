@@ -1,0 +1,61 @@
+@{
+    ViewData["Title"] = "Mission Control";
+}
+
+<section class="mission-viewport command-home">
+    <aside class="command-rail">
+        <p class="eyebrow">AI-SDLC</p>
+        <h1>Mission Control</h1>
+        <div class="rail-metric">
+            <span>06</span>
+            <small>agent stations</small>
+        </div>
+        <div class="rail-actions">
+            <a class="btn btn-primary btn-lg" asp-controller="Pipelines" asp-action="Issues">Open Dispatch</a>
+            <a class="btn btn-outline-light btn-lg" asp-controller="Pipelines" asp-action="Index">Mission Lanes</a>
+        </div>
+    </aside>
+
+    <section class="command-surface orbital-map" aria-label="Cyberpilot delivery sequence">
+        <div class="surface-header">
+            <div>
+                <p class="eyebrow">Control surface</p>
+                <h2>Agentic delivery loop</h2>
+            </div>
+            <span class="telemetry-chip">cyberpunk cockpit / dark only</span>
+        </div>
+        <ol class="pipeline-track orbital-track">
+            <li><span>01</span><strong>Triage</strong><small>detective</small></li>
+            <li><span>02</span><strong>Plan</strong><small>architect</small></li>
+            <li><span>03</span><strong>Implement</strong><small>engineer</small></li>
+            <li><span>04</span><strong>Review</strong><small>quality gate</small></li>
+            <li><span>05</span><strong>Docs</strong><small>archivist</small></li>
+            <li><span>06</span><strong>Deliver</strong><small>flight lead</small></li>
+        </ol>
+    </section>
+</section>
+
+<section class="ops-grid">
+    <article class="telemetry-panel">
+        <p class="eyebrow">Local</p>
+        <h2>Controller Session</h2>
+        <p>Run the controller agent from VS Code or Copilot CLI.</p>
+        <a asp-controller="Pipelines" asp-action="Guide" asp-route-mode="local" class="btn btn-outline-primary">Local
+            Protocol</a>
+        </article>
+        <article class="telemetry-panel">
+            <p class="eyebrow">Cloud</p>
+            <h2>Actions Orbit</h2>
+            <p>Start GitHub-native automation through agentic workflows.</p>
+            <a asp-controller="Pipelines" asp-action="Guide" asp-route-mode="cloud" class="btn btn-outline-primary">Cloud
+                Protocol</a>
+            </article>
+            <article class="telemetry-panel wide-panel">
+                <p class="eyebrow">SDK</p>
+                <h2>Web Dispatch</h2>
+                <p>Launch repeatable SDK runs against configured repositories, watch agents move through the mission lanes, and
+                    inspect station telemetry when a run stops or lands.</p>
+                    <a asp-controller="Pipelines" asp-action="Guide" asp-route-mode="sdk" class="btn btn-outline-primary">SDK
+                        Protocol</a>
+                    </article>
+                </section>

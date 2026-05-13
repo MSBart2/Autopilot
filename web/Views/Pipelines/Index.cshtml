@@ -1,0 +1,280 @@
+@model PipelineDashboardViewModel
+@{
+    ViewData["Title"] = "Pipelines";
+}
+
+@if (TempData["PipelineNotice"] is string notice)
+{
+    <div class="alert alert-info" role="alert">@notice</div>
+}
+
+@if (TempData["PipelineError"] is string pipelineError)
+{
+    <div class="alert alert-warning" role="alert">@pipelineError</div>
+}
+
+<header class="dash-command-bar">
+    <div class="dash-bar-identity">
+        <p class="eyebrow">Mission Stack</p>
+        <h1 class="dash-bar-title">Orbital Command</h1>
+    </div>
+    <div class="dash-bar-stats">
+        <div class="dash-stat">
+            <span class="dash-stat-value">@Model.Runs.Count</span>
+            <small>tracked runs</small>
+        </div>
+    </div>
+    <div class="dash-bar-actions">
+        <a class="btn btn-primary" asp-action="Issues">Open Dispatch</a>
+        <a class="btn btn-outline-light" asp-action="Guide" asp-route-mode="sdk">SDK Protocol</a>
+    </div>
+</header>
+
+<section class="dash-surface">
+    <div class="surface-header">
+        <div>
+            <p class="eyebrow">Run ledger</p>
+            <h2>Recent transmissions</h2>
+        </div>
+        <a class="btn btn-outline-primary" asp-action="Issues">Open issue launcher</a>
+    </div>
+
+    @if (!Model.Runs.Any())
+    {
+        <div class="empty-state command-empty">
+            <div class="empty-mark" aria-hidden="true">0</div>
+            No web-triggered SDK runs yet. Open dispatch when a target repository is ready.
+        </div>
+    }
+    else
+    {
+        <div class="table-shell">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle app-table" id="runs-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="number">Issue <span class="sort-arrow"></span></th>
+                            <th class="sortable" data-sort="text">Title <span class="sort-arrow"></span></th>
+                            <th class="sortable" data-sort="text">Repo <span class="sort-arrow"></span></th>
+                            <th class="sortable" data-sort="text">Status <span class="sort-arrow"></span></th>
+                            <th class="sortable" data-sort="text">Stage <span class="sort-arrow"></span></th>
+                            <th class="sortable" data-sort="text">Model <span class="sort-arrow"></span></th>
+                            <th>Branch / PR</th>
+                            <th class="sortable" data-sort="date">Started <span class="sort-arrow"></span></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var run in Model.Runs)
+                        {
+                            var badgeClass = run.Status switch
+                            {
+                                "Completed" => "text-bg-success",
+                                "Failed" => "text-bg-danger",
+                                "Running" => "text-bg-primary",
+                                "Pausing" => "text-bg-info",
+                                "Paused" => "text-bg-warning text-dark",
+                                "Stopped" => "text-bg-warning text-dark",
+                                "Cancelled" => "text-bg-warning",
+                                _ => "text-bg-secondary"
+                            };
+                            var titleSnippet = run.IssueTitle ?? "";
+                            if (titleSnippet.Length > 60) { titleSnippet = titleSnippet[..57] + "…"; }
+                            <tr>
+                                <td data-value="@run.IssueNumber">
+                                    <a href="https://github.com/@run.Repository/issues/@run.IssueNumber" target="_blank"
+                                           rel="noopener" class="run-link">
+                                        #@run.IssueNumber
+                                    </a>
+                                </td>
+                                <td class="issue-title-cell text-truncate" style="max-width:18rem" title="@run.IssueTitle">
+                                    @if (!string.IsNullOrWhiteSpace(run.IssueTitle))
+                                    {
+                                        @titleSnippet
+                                    }
+                                    else
+                                    {
+                                        <span class="muted-cell">—</span>
+                                    }
+                                </td>
+                                <td class="repo-cell text-truncate" title="@run.Repository">@run.Repository</td>
+                                <td><span class="badge @badgeClass">@run.Status</span></td>
+                                <td><span class="stage-pill">@(run.CurrentStage ?? "queued")</span></td>
+                                <td class="small text-truncate muted-cell" style="max-width: 10rem" title="@run.Model">
+                                    @run.Model
+                                </td>
+                                <td class="small">
+                                    @if (!string.IsNullOrWhiteSpace(run.PrUrl))
+                                    {
+                                        <a href="@run.PrUrl" target="_blank" rel="noopener" class="text-decoration-none">PR</a>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(run.BranchName))
+                                    {
+                                        <code>@run.BranchName</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted-cell">pending</span>
+                                    }
+                                </td>
+                                <td class="muted-cell small text-nowrap" data-value="@run.CreatedAt.ToString("o")">
+                                    @run.CreatedAt.ToLocalTime().ToString("g")
+                                </td>
+                                <td class="text-end"><a class="btn btn-sm btn-outline-primary" asp-action="Details"
+                                                            asp-route-id="@run.Id">Details</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</section>
+
+<style>
+    /* ── Command bar: horizontal top strip ── */
+    .dash-command-bar {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        padding: 1.1rem 1.5rem;
+        margin-bottom: 1rem;
+        border: 1px solid var(--oc-line);
+        border-radius: var(--oc-radius);
+        background:
+            linear-gradient(135deg, rgba(12, 18, 33, .92), rgba(6, 10, 18, .78)),
+            linear-gradient(90deg, rgba(34, 211, 238, .06), transparent 34%, rgba(244, 114, 182, .05));
+        box-shadow: var(--oc-shadow);
+    }
+    .dash-command-bar::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 2px;
+        background: linear-gradient(90deg, var(--oc-cyan), var(--oc-magenta), var(--oc-amber));
+        opacity: .86;
+    }
+    .dash-bar-identity { flex: 1 1 auto; min-width: 0; }
+    .dash-bar-title {
+        margin: 0;
+        color: #fff;
+        font-size: clamp(1.5rem, 2.5vw, 2.2rem);
+        line-height: 1;
+        font-weight: 950;
+        text-transform: uppercase;
+    }
+    .dash-bar-stats { flex: 0 0 auto; display: flex; gap: 1.5rem; }
+    .dash-stat {
+        padding: .5rem 1rem;
+        border: 1px solid rgba(34, 211, 238, .18);
+        border-radius: 10px;
+        background: rgba(34, 211, 238, .06);
+        text-align: center;
+    }
+    .dash-stat-value {
+        display: block;
+        color: #fff;
+        font-size: 1.8rem;
+        line-height: 1;
+        font-weight: 950;
+    }
+    .dash-stat small {
+        color: var(--oc-muted);
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        font-size: .7rem;
+    }
+    .dash-bar-actions { flex: 0 0 auto; display: flex; gap: .5rem; }
+
+    /* ── Full-width run surface ── */
+    .dash-surface {
+        position: relative;
+        overflow: hidden;
+        padding: clamp(1rem, 2vw, 1.35rem);
+        border: 1px solid var(--oc-line);
+        border-radius: var(--oc-radius);
+        background:
+            linear-gradient(135deg, rgba(12, 18, 33, .92), rgba(6, 10, 18, .78)),
+            linear-gradient(90deg, rgba(34, 211, 238, .06), transparent 34%, rgba(244, 114, 182, .05));
+        box-shadow: var(--oc-shadow);
+    }
+    .dash-surface::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 2px;
+        background: linear-gradient(90deg, var(--oc-cyan), var(--oc-magenta), var(--oc-amber));
+        opacity: .86;
+    }
+
+    /* ── Sortable table ── */
+    .sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    .sortable:hover { color: var(--bs-primary, #0d6efd); }
+    .sort-arrow { font-size: .7rem; opacity: .4; margin-left: .2rem; }
+    .sort-arrow.asc::after  { content: "▲"; opacity: 1; }
+    .sort-arrow.desc::after { content: "▼"; opacity: 1; }
+    .issue-title-cell { font-size: .85rem; color: var(--bs-body-color, #dee2e6); }
+
+    @@media (max-width: 768px) {
+        .dash-command-bar { flex-wrap: wrap; gap: 1rem; }
+        .dash-bar-actions { width: 100%; justify-content: stretch; }
+        .dash-bar-actions .btn { flex: 1; }
+    }
+</style>
+
+<script>
+(function () {
+    const table = document.getElementById('runs-table');
+    if (!table) return;
+
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+
+    let currentCol = -1;
+    let currentDir = 'asc';
+
+    thead.addEventListener('click', function (e) {
+        const th = e.target.closest('th.sortable');
+        if (!th) return;
+
+        const colIdx = Array.from(th.parentElement.children).indexOf(th);
+        const sortType = th.dataset.sort;
+
+        if (colIdx === currentCol) {
+            currentDir = currentDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentDir = 'asc';
+            currentCol = colIdx;
+        }
+
+        thead.querySelectorAll('.sort-arrow').forEach(a => { a.className = 'sort-arrow'; });
+        th.querySelector('.sort-arrow').classList.add(currentDir);
+
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort((a, b) => {
+            const cellA = a.children[colIdx];
+            const cellB = b.children[colIdx];
+            let valA, valB;
+
+            if (sortType === 'number') {
+                valA = parseFloat(cellA.dataset.value || cellA.textContent) || 0;
+                valB = parseFloat(cellB.dataset.value || cellB.textContent) || 0;
+            } else if (sortType === 'date') {
+                valA = new Date(cellA.dataset.value || cellA.textContent).getTime() || 0;
+                valB = new Date(cellB.dataset.value || cellB.textContent).getTime() || 0;
+            } else {
+                valA = (cellA.textContent || '').trim().toLowerCase();
+                valB = (cellB.textContent || '').trim().toLowerCase();
+            }
+
+            if (valA < valB) return currentDir === 'asc' ? -1 : 1;
+            if (valA > valB) return currentDir === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        rows.forEach(r => tbody.appendChild(r));
+    });
+})();
+</script>

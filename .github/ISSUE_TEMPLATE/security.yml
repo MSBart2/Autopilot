@@ -1,0 +1,42 @@
+name: "🛡️ Security issue"
+description: "Report a security vulnerability"
+labels: [security]
+title: "[SECURITY] <short description>"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ Please avoid sharing sensitive details publicly. If this is critical, consider reporting privately.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: "HSTS not enforced in production"
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Impact / Risk
+      description: Potential consequences, affected users/systems
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce / Evidence
+    validations:
+      required: true
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Suggested mitigation
+  - type: checkboxes
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - label: Critical
+        - label: High
+        - label: Medium
+        - label: Low

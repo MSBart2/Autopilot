@@ -1,0 +1,226 @@
+@model Cyberpilot.Web.Models.PipelineIssuesViewModel
+@using Cyberpilot.Web.Models
+@{
+    ViewData["Title"] = "Cyberpilot Issues";
+
+    // Per-runner visual config: (card border class, badge bg class, pill text prefix)
+    static (string border, string badge, string text) RunnerStyle(CyberpilotStatus s) => s switch
+    {
+        { Runner: CyberpilotRunnerType.Local, IsActive: true } => ("border-warning", "text-bg-warning", "Local"),
+        { Runner: CyberpilotRunnerType.Local, IsDone: true } => ("border-warning", "text-bg-warning", "Local"),
+        { Runner: CyberpilotRunnerType.Local, IsFailed: true } => ("border-danger", "text-bg-danger", "Local"),
+        { Runner: CyberpilotRunnerType.Sdk, IsActive: true } => ("border-primary", "text-bg-primary", "SDK"),
+        { Runner: CyberpilotRunnerType.Sdk, IsDone: true } => ("border-success", "text-bg-success", "SDK"),
+        { Runner: CyberpilotRunnerType.Sdk, IsFailed: true } => ("border-danger", "text-bg-danger", "SDK"),
+        _ => ("", "text-bg-success", ""),
+    };
+
+    static string PillLabel(CyberpilotStatus s)
+    {
+        if (!s.HasAny) return "Open";
+        var (_, _, prefix) = RunnerStyle(s);
+        var stage = s.Stage ?? string.Empty;
+        return s switch
+        {
+            { IsDone: true } => $"{prefix} · done ✓",
+            { IsFailed: true } => $"{prefix} · failed",
+            { IsActive: true } => $"{prefix} · {stage}",
+            _ => $"{prefix} · {stage}",
+        };
+    }
+}
+
+<section class="dispatch-viewport">
+    <aside class="command-rail dispatch-rail">
+        <p class="eyebrow">Dispatch</p>
+        <h1>Launch Board</h1>
+        <div class="rail-metric">
+            <span>@Model.Issues.Count</span>
+            <small>open signals</small>
+        </div>
+        <div class="rail-actions">
+            <button class="btn btn-outline-light" onclick="location.reload()">Refresh Signals</button>
+            <a class="btn btn-primary" asp-action="Index">Mission Lanes</a>
+        </div>
+    </aside>
+
+    <section class="command-surface dispatch-console">
+        <div class="surface-header">
+            <div>
+                <p class="eyebrow">Repository uplink</p>
+                <h2>@Model.Repository</h2>
+            </div>
+            <span class="telemetry-chip">clone-on-demand enabled</span>
+        </div>
+        @if (Model.ConfiguredRepositories.Any())
+        {
+            <form asp-action="LoadConfiguredIssues" method="post" class="command-form compact-form"
+                  id="configuredRepositoryForm">
+                @Html.AntiForgeryToken()
+                <div>
+                    <label class="form-label" for="ConfiguredRepository">Configured repository</label>
+                    <select class="form-select" id="ConfiguredRepository" name="Repository" onchange="this.form.submit()">
+                        @foreach (var repository in Model.ConfiguredRepositories)
+                        {
+                            <option value="@repository.Repository"
+                                    selected="@(repository.Repository.Equals(Model.Repository, StringComparison.OrdinalIgnoreCase) ? "selected" : null)">
+                                @repository.Name (@repository.Repository) - @repository.RepoRoot
+                            </option>
+                        }
+                    </select>
+                    @if (Model.ConfiguredRepositories.FirstOrDefault(repository =>
+                                    repository.Repository.Equals(Model.Repository, StringComparison.OrdinalIgnoreCase)) is { }
+                                    selectedRepository)
+                    {
+                        <div class="form-text text-break">Local clone target: @selectedRepository.RepoRoot</div>
+                    }
+                </div>
+            </form>
+        }
+        <form asp-action="LoadIssues" method="post" class="command-form">
+            @Html.AntiForgeryToken()
+            <div>
+                <label class="form-label" for="RepositoryUrl">Repository</label>
+                <input class="form-control" id="RepositoryUrl" name="RepositoryUrl" value="@Model.RepositoryInput"
+                       autocomplete="off" placeholder="owner/name or https://github.com/owner/name" />
+            </div>
+            <div>
+                <label class="form-label" for="Token">GitHub token</label>
+                <input class="form-control" id="Token" name="Token" type="password" autocomplete="off"
+                       placeholder="Fine-grained token with repo access" />
+            </div>
+            <div class="d-grid">
+                <button class="btn btn-primary" type="submit">Load issues</button>
+            </div>
+        </form>
+    </section>
+</section>
+
+@* Legend *@
+<div class="runner-legend">
+    <span>Runner</span>
+    <span class="badge text-bg-success">Open</span>
+    <span class="badge text-bg-warning text-dark">Local</span>
+    <span class="badge text-bg-primary">SDK</span>
+    <span class="badge text-bg-danger">Failed</span>
+</div>
+
+@if (TempData["PipelineError"] is string error)
+{
+    <div class="alert alert-warning" role="alert">@error</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.Error))
+{
+    <div class="alert alert-danger" role="alert">@Model.Error</div>
+}
+
+@if (!Model.Issues.Any())
+{
+    <div class="empty-state text-center">
+        <div class="empty-mark mx-auto" aria-hidden="true">0</div>
+        <p>No open issues found.</p>
+    </div>
+}
+else
+{
+    <div class="dispatch-grid">
+        @foreach (var issue in Model.Issues)
+        {
+            var status = Model.GetStatus(issue);
+            var (borderCls, badgeCls, _) = RunnerStyle(status);
+            var pillLabel = PillLabel(status);
+            var disableForm = status.IsActive;
+
+            <article class="issue-card dispatch-card @(borderCls != "" ? borderCls + " is-tagged" : "")">
+                <div class="issue-card-header">
+                    <a href="@issue.Url" class="issue-number" target="_blank" rel="noopener">
+                        #@issue.Number
+                    </a>
+                    <span
+                        class="badge @badgeCls @(status.Runner == CyberpilotRunnerType.Local && !status.IsFailed ? "text-dark" : "") d-flex align-items-center gap-1">
+                        @if (status.IsActive)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"
+                                  style="width:.6rem;height:.6rem;border-width:.15em"></span>
+                        }
+                        @pillLabel
+                    </span>
+                </div>
+                <div class="issue-card-body">
+                    <a href="@issue.Url" class="issue-title" target="_blank" rel="noopener">
+                        @issue.Title
+                    </a>
+                    @{
+                        var displayLabels = issue.Labels
+                            .Where(l => !l.StartsWith("sdk/", StringComparison.OrdinalIgnoreCase)
+                                     && !l.StartsWith("local/", StringComparison.OrdinalIgnoreCase)
+                                     && !l.StartsWith("cloud/", StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                    }
+                    @if (displayLabels.Any())
+                    {
+                        <div class="label-row">
+                            @foreach (var label in displayLabels)
+                            {
+                                <span class="badge text-bg-light border text-truncate" style="max-width:10rem"
+                                      title="@label">@label</span>
+                            }
+                        </div>
+                    }
+                    <p class="issue-updated">
+                        Updated @issue.UpdatedAt.ToLocalTime().ToString("g")
+                    </p>
+                    @if (Model.LatestSdkRunIds.TryGetValue(issue.Number, out var runId))
+                    {
+                        <a asp-action="Details" asp-route-id="@runId" class="btn btn-outline-primary btn-sm mt-1 w-100">
+                            View run details
+                        </a>
+                    }
+                </div>
+                <div class="issue-card-footer">
+                    <form asp-action="StartIssue" asp-route-issueNumber="@issue.Number" method="post"
+                          class="d-flex flex-column gap-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="IssueNumber" value="@issue.Number" />
+                        <input type="hidden" name="Repository" value="@Model.Repository" />
+                        <input type="hidden" name="ConnectionId" value="@Model.ConnectionId" />
+                        <select class="form-select form-select-sm" name="Model" aria-label="Model" @(disableForm ? "disabled" :
+                                                                                                                                                   null)>
+                            @foreach (var m in Cyberpilot.Web.Models.PipelineIssuesViewModel.AvailableModels)
+                            {
+                                <option value="@m" selected="@(m == "claude-sonnet-4.6" ? "selected" : null)">@m</option>
+                            }
+                        </select>
+                        <input type="hidden" name="StageTimeoutMinutes" value="20" />
+                        <div class="form-check form-switch mb-2">
+                            <input type="hidden" name="SkipDeliver" value="false" />
+                            <input class="form-check-input" type="checkbox" name="SkipDeliver" value="true" id="skip-deliver-@issue.Number">
+                            <label class="form-check-label small" for="skip-deliver-@issue.Number">Skip delivery (review before merge)</label>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary flex-fill" type="submit" @(disableForm ? "disabled" : null)
+                                    title="@(disableForm ? "A run is already in progress" : "Run SDK Cyberpilot")">
+                                Run SDK
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </article>
+        }
+    </div>
+}
+
+@section Styles {
+}
+
+@section Scripts {
+    <script>
+        // Auto-refresh every 10s while any issue has an active run
+        const hasActive = @(Model.SdkActiveIssueNumbers.Count > 0 ? "true" : "false");
+        if (hasActive) {
+            setTimeout(() => location.reload(), 10000);
+        }
+
+    </script>
+}

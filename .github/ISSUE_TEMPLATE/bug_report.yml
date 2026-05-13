@@ -1,0 +1,63 @@
+name: "🐞 Bug report"
+description: "Report a bug in Cyberpilot"
+labels: [bug]
+title: "[BUG] <short description>"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug!
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: Short description of the bug
+      placeholder: "Homepage throws when ..."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Be specific; include URLs, payloads, configs
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: logs
+    attributes:
+      label: Relevant logs/stack traces
+      description: Attach or paste snippets
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "OS, Browser, .NET SDK version"
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - label: "Blocking"
+        - label: "High"
+        - label: "Medium"
+        - label: "Low"
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context

@@ -1,0 +1,580 @@
+using Cyberpilot.GitHub;
+using Cyberpilot.Persistence;
+using Cyberpilot.Web.Controllers;
+using Cyberpilot.Web.Models;
+using Cyberpilot.Web.Services;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+
+namespace Cyberpilot.Web.UnitTests.Controllers;
+
+public class PipelinesControllerTests
+{
+    [Fact]
+    public async Task Index_ReturnsDashboardWithRuns()
+    {
+        var controller = CreateController();
+
+        var result = Assert.IsType<ViewResult>(await controller.Index());
+
+        var model = Assert.IsType<PipelineDashboardViewModel>(result.Model);
+        Assert.Empty(model.Runs);
+    }
+
+    [Fact]
+    public void Guide_WithUnknownMode_ReturnsNotFound()
+    {
+        var controller = CreateController();
+
+        var result = controller.Guide("unknown");
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public void Guide_WithKnownMode_ReturnsGuideViewModel()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var webRoot = Path.Combine(repositoryRoot, "web");
+        var (controller, _, _, _) = CreateControllerWithDependencies(contentRootPath: webRoot);
+
+        var result = Assert.IsType<ViewResult>(controller.Guide("sdk"));
+
+        var model = Assert.IsType<PipelineGuideViewModel>(result.Model);
+        Assert.Equal("SDK", model.Mode);
+        Assert.Contains("Programmatic Copilot SDK execution", model.Summary);
+        Assert.Contains("<h1", model.HtmlContent, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "AI-SDLC.md")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root for guide tests.");
+    }
+
+    private static PipelinesController CreateController()
+    {
+        var (controller, _) = CreateControllerWithContext();
+        return controller;
+    }
+
+    private static (PipelinesController Controller, CyberpilotDbContext DbContext) CreateControllerWithContext()
+    {
+        var (controller, dbContext, _, _) = CreateControllerWithDependencies();
+        return (controller, dbContext);
+    }
+
+    private static (PipelinesController Controller, CyberpilotDbContext DbContext, TestRunQueue Queue, TestRepositoryConnectionStore ConnectionStore) CreateControllerWithDependencies(CyberpilotWebOptions? webOptions = null, string? contentRootPath = null)
+    {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        var options = new DbContextOptionsBuilder<CyberpilotDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        var dbContext = new CyberpilotDbContext(options);
+        dbContext.Database.EnsureCreated();
+        var queue = new TestRunQueue();
+        var connectionStore = new TestRepositoryConnectionStore();
+        var environment = new TestEnvironment();
+        if (!string.IsNullOrWhiteSpace(contentRootPath))
+        {
+            environment.ContentRootPath = contentRootPath;
+        }
+
+        var controller = new PipelinesController(
+            dbContext,
+            environment,
+            queue,
+            new TestIssueClient(),
+            new TestIssueClientFactory(),
+            connectionStore,
+            new MemoryCache(new MemoryCacheOptions()),
+            Microsoft.Extensions.Options.Options.Create(webOptions ?? new CyberpilotWebOptions { Repository = "rbmathis/Cyberpilot" }),
+            NullLogger<PipelinesController>.Instance);
+        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+        controller.TempData = new TempDataDictionary(controller.HttpContext, new TestTempDataProvider());
+
+        return (controller, dbContext, queue, connectionStore);
+    }
+
+    [Fact]
+    public async Task Issues_ReturnsViewWithViewModel()
+    {
+        var controller = CreateController();
+
+        var result = Assert.IsType<ViewResult>(await controller.Issues());
+
+        Assert.IsType<PipelineIssuesViewModel>(result.Model);
+    }
+
+    [Fact]
+    public async Task Details_ExistingRun_ReturnsViewWithDetails()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6" };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<ViewResult>(await controller.Details(run.Id));
+
+        Assert.IsType<PipelineRunDetailsViewModel>(result.Model);
+    }
+
+    [Fact]
+    public async Task Details_ConfiguredRepository_LoadsIssueDetailsFromTargetRepository()
+    {
+        var options = new CyberpilotWebOptions
+        {
+            Repository = "owner/repo",
+            Repositories =
+            [
+                new ConfiguredRepositoryOptions { Name = "Repo", Repository = "owner/repo", RepoRoot = "C:\\Repos\\Repo", Token = "configured-token" }
+            ]
+        };
+        var (controller, db, _, _) = CreateControllerWithDependencies(options);
+        var run = new PipelineRun { IssueNumber = 7, Repository = "owner/repo", Model = "claude-sonnet-4.6" };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<ViewResult>(await controller.Details(run.Id));
+
+        var model = Assert.IsType<PipelineRunDetailsViewModel>(result.Model);
+        Assert.NotNull(model.Issue);
+        Assert.Equal("Issue", model.Issue.Title);
+        Assert.Equal("Issue details", model.Issue.Body);
+    }
+
+    [Fact]
+    public async Task Details_NonExistentRun_ReturnsNotFound()
+    {
+        var controller = CreateController();
+
+        var result = await controller.Details("nonexistent-id");
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task Start_ValidRequest_CreatesRunAndRedirects()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var request = new PipelineStartRequest { IssueNumber = 1, Repository = "rbmathis/Cyberpilot", Model = "claude-sonnet-4.6" };
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Start(request));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Single(db.PipelineRuns);
+    }
+
+    [Fact]
+    public async Task LoadIssues_ValidConnection_ReturnsIssuesAndConnectionId()
+    {
+        var controller = CreateController();
+        var request = new PipelineIssueLoadRequest { RepositoryUrl = "https://github.com/owner/repo", Token = "token" };
+
+        var result = Assert.IsType<ViewResult>(await controller.LoadIssues(request));
+
+        Assert.Equal("Issues", result.ViewName);
+        var model = Assert.IsType<PipelineIssuesViewModel>(result.Model);
+        Assert.Equal("owner/repo", model.Repository);
+        Assert.False(string.IsNullOrWhiteSpace(model.ConnectionId));
+        Assert.Single(model.Issues);
+    }
+
+    [Fact]
+    public async Task LoadConfiguredIssues_ValidConfiguredRepository_ReturnsIssuesAndConnectionId()
+    {
+        var options = new CyberpilotWebOptions
+        {
+            Repository = "owner/repo",
+            Repositories =
+            [
+                new ConfiguredRepositoryOptions { Name = "Configured", Repository = "https://github.com/owner/repo", RepoRoot = "C:\\Repos\\Repo", Token = "configured-token" }
+            ]
+        };
+        var (controller, _, _, _) = CreateControllerWithDependencies(options);
+        var request = new PipelineConfiguredIssueLoadRequest { Repository = "owner/repo" };
+
+        var result = Assert.IsType<ViewResult>(await controller.LoadConfiguredIssues(request));
+
+        Assert.Equal("Issues", result.ViewName);
+        var model = Assert.IsType<PipelineIssuesViewModel>(result.Model);
+        Assert.Equal("owner/repo", model.Repository);
+        Assert.False(string.IsNullOrWhiteSpace(model.ConnectionId));
+        Assert.Single(model.ConfiguredRepositories);
+        Assert.Equal(Path.GetFullPath("C:\\Repos\\Repo"), model.ConfiguredRepositories[0].RepoRoot);
+        Assert.Single(model.Issues);
+    }
+
+    [Fact]
+    public async Task Start_WithConnection_QueuesRunWithConnectionToken()
+    {
+        var (controller, db, queue, store) = CreateControllerWithDependencies();
+        var connectionId = store.Save("owner/repo", "C:\\Repos\\Repo", "token-value");
+        var request = new PipelineStartRequest
+        {
+            IssueNumber = 7,
+            Repository = "https://github.com/owner/repo",
+            ConnectionId = connectionId,
+            Model = "claude-sonnet-4.6"
+        };
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Start(request));
+
+        Assert.Equal("Details", result.ActionName);
+        var run = Assert.Single(db.PipelineRuns);
+        Assert.Equal("owner/repo", run.Repository);
+        Assert.NotNull(queue.LastRequest);
+        Assert.Equal("owner/repo", queue.LastRequest.Repository);
+        Assert.Equal("C:\\Repos\\Repo", queue.LastRequest.RepoRoot);
+        Assert.Equal(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..")), queue.LastRequest.AgentPromptRoot);
+        Assert.Equal("token-value", queue.LastRequest.GitHubToken);
+    }
+
+    [Fact]
+    public async Task Start_WithConfiguredAgentPromptRoot_QueuesRunWithPromptRoot()
+    {
+        var options = new CyberpilotWebOptions { Repository = "owner/repo", AgentPromptRoot = "C:\\Repos\\Cyberpilot" };
+        var (controller, _, queue, store) = CreateControllerWithDependencies(options);
+        var connectionId = store.Save("owner/repo", "C:\\Repos\\Repo", "token-value");
+        var request = new PipelineStartRequest
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            ConnectionId = connectionId,
+            Model = "claude-sonnet-4.6"
+        };
+
+        await controller.Start(request);
+
+        Assert.NotNull(queue.LastRequest);
+        Assert.Equal(Path.GetFullPath("C:\\Repos\\Cyberpilot"), queue.LastRequest.AgentPromptRoot);
+    }
+
+    [Fact]
+    public async Task Start_InvalidModelState_RedirectsToIssues()
+    {
+        var controller = CreateController();
+        controller.ModelState.AddModelError("IssueNumber", "Required");
+        var request = new PipelineStartRequest();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Start(request));
+
+        Assert.Equal("Issues", result.ActionName);
+    }
+
+    [Fact]
+    public async Task Start_ActiveRunExists_RedirectsToIssuesWithError()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        db.PipelineRuns.Add(new PipelineRun { IssueNumber = 42, Repository = "owner/repo", Model = "gpt-4.1", Status = "Running" });
+        await db.SaveChangesAsync();
+
+        var request = new PipelineStartRequest { IssueNumber = 42, Repository = "owner/repo", Model = "claude-sonnet-4.6" };
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Start(request));
+
+        Assert.Equal("Issues", result.ActionName);
+    }
+
+    [Fact]
+    public async Task Cancel_ExistingQueuedRun_MarksAsCancelled()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "gpt-4.1", Status = "Queued" };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        await controller.Cancel(run.Id);
+
+        var updated = await db.PipelineRuns.FirstAsync(r => r.Id == run.Id);
+        Assert.Equal("Cancelled", updated.Status);
+        Assert.NotNull(updated.CompletedAt);
+    }
+
+    [Fact]
+    public async Task Cancel_CompletedRun_DoesNotChangeStatus()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "gpt-4.1", Status = "Completed" };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        await controller.Cancel(run.Id);
+
+        var updated = await db.PipelineRuns.FirstAsync(r => r.Id == run.Id);
+        Assert.Equal("Completed", updated.Status);
+    }
+
+    [Fact]
+    public async Task Cancel_NonExistentRun_ReturnsNotFound()
+    {
+        var controller = CreateController();
+
+        var result = await controller.Cancel("nonexistent");
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task Continue_TerminalRun_RequeuesSameRun()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Stopped",
+            CompletedAt = DateTime.UtcNow,
+            Error = "Needs human input.",
+            SkipDeliver = true,
+            StageTimeoutMinutes = 10,
+            AllowMissingDocs = true,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Continue(run.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("Queued", updated.Status);
+        Assert.Null(updated.CompletedAt);
+        Assert.Null(updated.Error);
+        Assert.NotNull(queue.LastRequest);
+        Assert.Equal(run.Id, queue.LastRequest.RunId);
+        Assert.Equal("owner/repo", queue.LastRequest.Repository);
+        Assert.True(queue.LastRequest.SkipDeliver);
+        Assert.True(queue.LastRequest.AllowMissingDocs);
+    }
+
+    [Fact]
+    public async Task Continue_ActiveRun_DoesNotRequeue()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun { IssueNumber = 7, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Running" };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Continue(run.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.Equal("Running", (await db.PipelineRuns.FirstAsync(item => item.Id == run.Id)).Status);
+    }
+
+    [Fact]
+    public async Task Continue_ConfiguredRepository_UsesConfiguredRootAndToken()
+    {
+        var options = new CyberpilotWebOptions
+        {
+            Repository = "owner/repo",
+            Repositories =
+            [
+                new ConfiguredRepositoryOptions { Name = "Repo", Repository = "owner/repo", RepoRoot = "C:\\Repos\\Repo", Token = "configured-token" }
+            ]
+        };
+        var (controller, db, queue, _) = CreateControllerWithDependencies(options);
+        var run = new PipelineRun { IssueNumber = 7, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Failed", StageTimeoutMinutes = 10 };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        await controller.Continue(run.Id);
+
+        Assert.NotNull(queue.LastRequest);
+        Assert.Equal(Path.GetFullPath("C:\\Repos\\Repo"), queue.LastRequest.RepoRoot);
+        Assert.Equal("configured-token", queue.LastRequest.GitHubToken);
+    }
+
+    [Fact]
+    public async Task ResetMission_TerminalRun_RemovesLocalRunAndLogs()
+    {
+        var (controller, db, _, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Stopped",
+            CurrentStage = "triage",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineStageLogs.Add(new PipelineStageLog { RunId = run.Id, StageName = "triage", Status = "Stopped", Output = "output" });
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ResetMission(run.Id));
+
+        Assert.Equal("Index", result.ActionName);
+        Assert.Empty(await db.PipelineRuns.Where(item => item.Id == run.Id).ToArrayAsync());
+        Assert.Empty(await db.PipelineStageLogs.Where(item => item.RunId == run.Id).ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task ResetMission_DeliveredRun_DoesNotRemoveLocalRun()
+    {
+        var (controller, db, _, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Completed",
+            CurrentStage = "deliver",
+            CompletedAt = DateTime.UtcNow,
+            SkipDeliver = false,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ResetMission(run.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.True(await db.PipelineRuns.AnyAsync(item => item.Id == run.Id));
+        Assert.Equal("Reset Mission is not available after the code has been delivered.", controller.TempData["PipelineError"]);
+    }
+
+    private sealed class TestTempDataProvider : ITempDataProvider
+    {
+        public IDictionary<string, object?> LoadTempData(HttpContext context) => new Dictionary<string, object?>();
+        public void SaveTempData(HttpContext context, IDictionary<string, object?> values) { }
+    }
+
+    private sealed class TestRunQueue : ICyberpilotRunQueue
+    {
+        public WebPipelineRunRequest? LastRequest { get; private set; }
+
+        public ValueTask EnqueueAsync(WebPipelineRunRequest request, CancellationToken cancellationToken = default)
+        {
+            LastRequest = request;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<WebPipelineRunRequest> DequeueAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class TestIssueClient : IGitHubIssueClient
+    {
+        private readonly bool includeIssues;
+        public List<string> RemovedLabels { get; } = [];
+        public List<string> AddedLabels { get; } = [];
+        public List<long> DeletedComments { get; } = [];
+
+        public TestIssueClient(bool includeIssues = false)
+        {
+            this.includeIssues = includeIssues;
+        }
+
+        public Task AddIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default)
+        {
+            AddedLabels.Add(label);
+            return Task.CompletedTask;
+        }
+
+        public Task CommentAsync(int issueNumber, string body, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<GitHubIssueComment>> ListIssueCommentsAsync(int issueNumber, CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<GitHubIssueComment> comments =
+            [
+                new(1, "## 🕵️ Case File — Triage Report\nFound something.", "github-copilot"),
+                new(2, "Human note", "octocat"),
+            ];
+            return Task.FromResult(comments);
+        }
+
+        public Task DeleteIssueCommentAsync(long commentId, CancellationToken cancellationToken = default)
+        {
+            DeletedComments.Add(commentId);
+            return Task.CompletedTask;
+        }
+
+        public Task CreateOrUpdateLabelAsync(string label, string color, string description, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<GitHubIssueSummary?> GetIssueAsync(int issueNumber, CancellationToken cancellationToken = default)
+        {
+            GitHubIssueSummary? issue = includeIssues
+                ? new(issueNumber, "Issue", $"https://github.com/owner/repo/issues/{issueNumber}", ["bug"], DateTimeOffset.UtcNow, "OPEN", false, "Issue details")
+                : null;
+            return Task.FromResult(issue);
+        }
+
+        public Task<IReadOnlyList<string>> GetIssueLabelsAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>(["sdk", "sdk/triage", "bug"]);
+
+        public Task<string> GetIssueStateAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult("OPEN");
+
+        public Task<IReadOnlySet<string>> GetRepositoryLabelsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
+
+        public Task<IReadOnlyList<GitHubIssueSummary>> ListOpenIssuesAsync(CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<GitHubIssueSummary> issues = includeIssues
+                ? [new(1, "Issue", "https://github.com/owner/repo/issues/1", [], DateTimeOffset.UtcNow, "OPEN", false, "Issue details")]
+                : [];
+            return Task.FromResult(issues);
+        }
+
+        public Task RemoveIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default)
+        {
+            RemovedLabels.Add(label);
+            return Task.CompletedTask;
+        }
+
+        public Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<GitHubPullRequestInfo?>(null);
+    }
+
+    private sealed class TestIssueClientFactory : IGitHubIssueClientFactory
+    {
+        public IGitHubIssueClient Create(string repository, string token) => new TestIssueClient(includeIssues: true);
+    }
+
+    private sealed class TestRepositoryConnectionStore : IRepositoryConnectionStore
+    {
+        private readonly Dictionary<string, RepositoryConnection> connections = new(StringComparer.OrdinalIgnoreCase);
+
+        public string Save(string repository, string repoRoot, string token)
+        {
+            var id = "connection-1";
+            connections[id] = new RepositoryConnection(id, repository, repoRoot, token);
+            return id;
+        }
+
+        public RepositoryConnection? Get(string? id)
+            => id is not null && connections.TryGetValue(id, out var connection) ? connection : null;
+    }
+
+    private sealed class TestEnvironment : IWebHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "Cyberpilot.Web";
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public string EnvironmentName { get; set; } = "Testing";
+
+        public string WebRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
+    }
+}

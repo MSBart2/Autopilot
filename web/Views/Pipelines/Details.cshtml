@@ -1,0 +1,1782 @@
+@model Cyberpilot.Web.Models.PipelineRunDetailsViewModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = $"Run — Issue #{Model.Run.IssueNumber}";
+    var isActive = Model.Run.Status is "Queued" or "Running" or "Pausing";
+    var isAwaitingCopilot = Model.Run.Status == "AwaitingCopilot";
+    var statusClass = Model.Run.Status switch
+    {
+        "Completed" => "text-bg-success",
+        "Failed"    => "text-bg-danger",
+        "Running"   => "text-bg-primary",
+        "Pausing"   => "text-bg-info awaiting-pulse",
+        "Paused"    => "text-bg-warning text-dark",
+        "Stopped"   => "text-bg-warning text-dark",
+        "Cancelled" => "text-bg-warning",
+        "AwaitingCopilot" => "text-bg-info awaiting-pulse",
+        _           => "text-bg-secondary"
+    };
+    var elapsed = Model.Run.CompletedAt.HasValue
+        ? Model.Run.CompletedAt.Value - Model.Run.CreatedAt
+        : DateTime.UtcNow - Model.Run.CreatedAt;
+    var elapsedStr = elapsed.TotalHours >= 1
+        ? elapsed.ToString(@"h\:mm\:ss")
+        : elapsed.ToString(@"m\:ss");
+    var displayRepo = Model.Run.Repository;
+    var ghIssueUrl = !string.IsNullOrWhiteSpace(Model.Run.IssueUrl)
+        ? Model.Run.IssueUrl
+        : $"https://github.com/{displayRepo}/issues/{Model.Run.IssueNumber}";
+    var issueTitle = string.IsNullOrWhiteSpace(Model.Issue?.Title) ? $"Issue #{Model.Run.IssueNumber}" : Model.Issue.Title;
+    var issueBody = Model.Issue?.Body?.Trim() ?? string.Empty;
+    var runIsActive = Model.Run.Status is "Queued" or "Running" or "Pausing";
+    var isDelivered = Model.Run.Status == "Completed" && !Model.Run.SkipDeliver;
+    var logsJson    = JsonSerializer.Serialize(Model.Logs.Select(l => new
+    {
+        stage    = l.StageName,
+        status   = l.Status   ?? "unknown",
+        output   = l.Output   ?? string.Empty,
+        duration = l.CompletedAt.HasValue ? (int)(l.CompletedAt.Value - l.StartedAt).TotalSeconds : 0,
+        timestamp = l.StartedAt.ToString("o"),
+    }));
+    var dispatchesJson = JsonSerializer.Serialize((Model.Dispatches ?? []).Select(d => new
+    {
+        type = d.Type,
+        message = d.Message,
+        timestamp = d.CreatedAt.ToString("o"),
+    }));
+}
+
+@* Breadcrumb *@
+<nav aria-label="breadcrumb" class="mb-3 app-breadcrumb command-breadcrumb">
+    <ol class="breadcrumb small">
+        <li class="breadcrumb-item"><a asp-action="Index">Runs</a></li>
+        <li class="breadcrumb-item"><a asp-action="Issues">Issues</a></li>
+        <li class="breadcrumb-item active">Issue #@Model.Run.IssueNumber</li>
+    </ol>
+</nav>
+
+@if (TempData["PipelineNotice"] is string notice)
+{
+    <div class="alert alert-info" role="alert">@notice</div>
+}
+
+@if (TempData["PipelineError"] is string pipelineError)
+{
+    <div class="alert alert-warning" role="alert">@pipelineError</div>
+}
+
+<header class="run-command-bar" id="run-command-bar">
+    <div class="run-bar-identity">
+        <p class="eyebrow">Mission @Model.Run.IssueNumber</p>
+        <h1 class="run-bar-title">Run Room</h1>
+    </div>
+    <div class="run-bar-stats">
+        <div class="run-bar-stat">
+            <span class="run-bar-stat-value" id="run-elapsed">@elapsedStr</span>
+            <small>elapsed</small>
+        </div>
+        <div class="run-bar-stat">
+            <span class="badge @statusClass" id="run-status-badge">
+                @if (Model.Run.Status == "Running")
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" id="run-spinner"></span>
+                }
+                <span id="run-status">@Model.Run.Status</span>
+            </span>
+        </div>
+    </div>
+    <div class="run-bar-actions" id="run-bar-actions">
+        <a href="@ghIssueUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-info">Issue #@Model.Run.IssueNumber ↗</a>
+        @if (!string.IsNullOrWhiteSpace(Model.Run.PrUrl))
+        {
+            <a href="@Model.Run.PrUrl" class="btn btn-sm btn-primary" target="_blank" rel="noopener" id="pr-link-live">View PR</a>
+        }
+        @if (isAwaitingCopilot)
+        {
+            <form asp-action="ResumeReview" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-success" title="Copilot agent working — resume when PR is ready">▶ Resume Review</button>
+            </form>
+        }
+        @if (!isActive && !isAwaitingCopilot)
+        {
+            <form asp-action="Continue" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-primary">
+                    @(Model.Run.Status == "Paused" ? "▶ Resume" : "Continue")
+                </button>
+            </form>
+        }
+        @if (!isActive && !isDelivered && !Model.Run.IsRemote)
+        {
+            <form asp-action="ResetMission" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-outline-danger">Reset</button>
+            </form>
+        }
+        @if (isActive)
+        {
+            <span id="cancel-section" class="d-inline-flex gap-1">
+                <form asp-action="Pause" asp-route-id="@Model.Run.Id" method="post" class="d-inline" id="pause-form"
+                      style="@(Model.Run.Status == "Pausing" ? "display:none" : "")">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-sm btn-outline-warning" id="pause-btn">⏸ Pause</button>
+                </form>
+                <form asp-action="Cancel" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                </form>
+            </span>
+        }
+    </div>
+</header>
+
+<section class="command-surface run-surface">
+        <div class="run-telemetry-grid">
+            <div class="stat-card">
+                <div class="stat-label">Model</div>
+                <strong class="text-truncate d-block" title="@Model.Run.Model">@Model.Run.Model</strong>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Branch</div>
+                @if (!string.IsNullOrWhiteSpace(Model.Run.BranchName))
+                {
+                    <code class="small" id="branch-value">@Model.Run.BranchName</code>
+                }
+                else
+                {
+                    <span class="muted-cell fst-italic" id="branch-value">pending</span>
+                }
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Started</div>
+                <strong>@Model.Run.CreatedAt.ToLocalTime().ToString("g")</strong>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.Run.Error))
+        {
+            <div class="alert alert-danger d-flex gap-2" role="alert">
+                <span class="flex-shrink-0">!</span>
+                <div><strong>Diagnostic:</strong> @Model.Run.Error</div>
+            </div>
+        }
+
+        @if (Model.Run.Status == "Completed" && Model.Run.SkipDeliver)
+        {
+            <div class="delivery-panel" id="delivery-panel">
+                <div class="delivery-panel-header">
+                    <span class="delivery-icon">🚀</span>
+                    <div>
+                        <h3>Ready for delivery</h3>
+                        <p>All stages passed. Code is ready but has <strong>not been merged</strong> yet.</p>
+                    </div>
+                </div>
+                <div class="delivery-panel-body">
+                    <p class="delivery-explainer">Clicking <strong>Deliver Now</strong> will:</p>
+                    <ul>
+                        <li>Merge the approved PR into the target branch</li>
+                        <li>Delete the feature branch</li>
+                        <li>Post the landing report on the issue</li>
+                    </ul>
+                    @if (!string.IsNullOrWhiteSpace(Model.Run.PrUrl))
+                    {
+                        <p><a href="@Model.Run.PrUrl" target="_blank" rel="noopener" class="delivery-pr-link">📋 Review PR before delivering →</a></p>
+                    }
+                </div>
+                <form asp-action="DeliverNow" asp-route-id="@Model.Run.Id" method="post" class="delivery-panel-action">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-warning btn-lg w-100" onclick="return confirm('This will merge the PR into the target branch. Proceed?')">
+                        🚀 Deliver Now
+                    </button>
+                    <small class="text-muted mt-1 d-block text-center">This action merges code — it cannot be undone.</small>
+                </form>
+            </div>
+        }
+
+        @* Hidden template for live injection of delivery panel via SignalR *@
+        <template id="delivery-panel-template">
+            <div class="delivery-panel" id="delivery-panel">
+                <div class="delivery-panel-header">
+                    <span class="delivery-icon">🚀</span>
+                    <div>
+                        <h3>Ready for delivery</h3>
+                        <p>All stages passed. Code is ready but has <strong>not been merged</strong> yet.</p>
+                    </div>
+                </div>
+                <div class="delivery-panel-body">
+                    <p class="delivery-explainer">Clicking <strong>Deliver Now</strong> will:</p>
+                    <ul>
+                        <li>Merge the approved PR into the target branch</li>
+                        <li>Delete the feature branch</li>
+                        <li>Post the landing report on the issue</li>
+                    </ul>
+                </div>
+                <form action="/Pipelines/@Model.Run.Id/DeliverNow" method="post" class="delivery-panel-action">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-warning btn-lg w-100" onclick="return confirm('This will merge the PR into the target branch. Proceed?')">
+                        🚀 Deliver Now
+                    </button>
+                    <small class="text-muted mt-1 d-block text-center">This action merges code — it cannot be undone.</small>
+                </form>
+            </div>
+        </template>
+
+        <div class="agent-heading">
+            <div>
+                <p class="eyebrow">Station telemetry</p>
+                <h2>Agent activity</h2>
+            </div>
+        </div>
+
+        <div id="agent-feed" class="agent-station-feed"></div>
+
+        <article class="issue-brief" aria-labelledby="issue-brief-title">
+            <div class="issue-brief-kicker">Mission brief</div>
+            <h3 id="issue-brief-title">
+                <a href="@ghIssueUrl" target="_blank" rel="noopener">#@Model.Run.IssueNumber @issueTitle</a>
+            </h3>
+            @if (!string.IsNullOrWhiteSpace(issueBody))
+            {
+                <p>@issueBody</p>
+            }
+            else
+            {
+                <p class="muted-cell">Issue details are not available yet. The run will continue using the GitHub issue as its source of truth.</p>
+            }
+        </article>
+
+        @if (Model.Labels.Any())
+        {
+            <div class="label-row mb-3">
+                @foreach (var label in Model.Labels)
+                {
+                    <span class="badge text-bg-light border">@label</span>
+                }
+            </div>
+        }
+</section>
+
+@section Styles {
+<style>
+    /* ── Card enter animation ──────────────────────────────── */
+    @@keyframes card-enter {
+        from { opacity: 0; transform: translateY(16px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @@keyframes card-glow {
+        0%, 100% { box-shadow: var(--glow-sm) 0 0 0 2px, 0 4px 16px rgba(0,0,0,.08); }
+        50%       { box-shadow: var(--glow)    0 0 0 6px, 0 8px 28px rgba(0,0,0,.14); }
+    }
+    @@keyframes glyph-float {
+        0%, 100% { transform: translateY(0px); }
+        50%       { transform: translateY(-5px); }
+    }
+    @@keyframes face-scan {
+        0%   { transform: translateX(-120%); opacity: 0; }
+        18%  { opacity: .85; }
+        70%  { opacity: .35; }
+        100% { transform: translateX(120%); opacity: 0; }
+    }
+    @@keyframes stopped-stripe {
+        to { background-position: 42px 0; }
+    }
+    @@keyframes cursor-blink { 50% { opacity: 0; } }
+    @@keyframes awaiting-glow {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .55; }
+    }
+    .awaiting-pulse { animation: awaiting-glow 2s ease-in-out infinite; }
+    @@keyframes reentry-flash {
+        0%   { box-shadow: 0 0 0 4px rgba(250,204,21,.8), 0 0 30px rgba(250,204,21,.4); }
+        100% { box-shadow: 0 0 0 0px rgba(250,204,21,0), 0 0 0px rgba(250,204,21,0); }
+    }
+    .reentry-flash { animation: reentry-flash 1.2s ease-out; }
+    .reentry-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .25rem;
+        padding: .1rem .4rem;
+        border-radius: 999px;
+        font-size: .62rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        color: #fbbf24;
+        background: rgba(250,204,21,.15);
+        border: 1px solid rgba(250,204,21,.3);
+    }
+
+    /* ── Halt / retry-exhausted banner ─────────────────────── */
+    .halt-banner {
+        background: linear-gradient(135deg, rgba(220,53,69,.1), rgba(245,158,11,.06));
+        border: 1px solid rgba(220,53,69,.35);
+        border-left: 4px solid #dc3545;
+        border-radius: .75rem;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+        animation: halt-pulse 2.5s ease-in-out infinite;
+    }
+    .halt-banner-title { font-weight: 700; color: #f87171; font-size: 1rem; margin-bottom: .25rem; }
+    .halt-banner-message { color: #94a3b8; margin: 0; font-size: .85rem; line-height: 1.45; }
+    @@keyframes halt-pulse {
+        0%, 100% { border-color: rgba(220,53,69,.35); box-shadow: 0 0 0 0 rgba(220,53,69,0); }
+        50% { border-color: rgba(220,53,69,.6); box-shadow: 0 0 12px rgba(220,53,69,.12); }
+    }
+
+    /* ── Run command bar: horizontal header ────────────── */
+    .run-command-bar {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1.25rem;
+        padding: .85rem 1.25rem;
+        margin-bottom: 1rem;
+        border: 1px solid var(--oc-line);
+        border-radius: var(--oc-radius);
+        background:
+            linear-gradient(135deg, rgba(12, 18, 33, .92), rgba(6, 10, 18, .78)),
+            linear-gradient(90deg, rgba(34, 211, 238, .06), transparent 34%, rgba(244, 114, 182, .05));
+        box-shadow: var(--oc-shadow);
+    }
+    .run-command-bar::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 2px;
+        background: linear-gradient(90deg, var(--oc-cyan), var(--oc-magenta), var(--oc-amber));
+        opacity: .86;
+    }
+    .run-bar-identity { flex: 0 0 auto; }
+    .run-bar-title {
+        margin: 0;
+        color: #fff;
+        font-size: clamp(1.3rem, 2.2vw, 1.85rem);
+        line-height: 1;
+        font-weight: 950;
+        text-transform: uppercase;
+    }
+    .run-bar-stats { flex: 0 0 auto; display: flex; gap: .75rem; align-items: center; }
+    .run-bar-stat {
+        padding: .3rem .65rem;
+        border: 1px solid rgba(34, 211, 238, .18);
+        border-radius: 10px;
+        background: rgba(34, 211, 238, .06);
+        text-align: center;
+    }
+    .run-bar-stat-value {
+        display: block;
+        color: #fff;
+        font-size: 1.3rem;
+        line-height: 1;
+        font-weight: 950;
+    }
+    .run-bar-stat small {
+        color: var(--oc-muted);
+        text-transform: uppercase;
+        letter-spacing: .1em;
+        font-size: .62rem;
+    }
+    .run-bar-actions {
+        flex: 1 1 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: .35rem;
+        justify-content: flex-end;
+        align-items: center;
+    }
+
+    /* ── Inline spine dispatch (interleaved in agent feed) ── */
+    .spine-dispatch { animation: card-enter .3s ease-out both; }
+    .spine-dispatch-inner {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        padding: .55rem 1rem;
+        border-radius: 8px;
+        background: linear-gradient(135deg, rgba(34,211,238,.08), rgba(139,92,246,.06), rgba(5,9,18,.6));
+        border: 1px solid rgba(34,211,238,.18);
+        border-left: 3px solid rgba(34,211,238,.45);
+        margin: .25rem 0;
+        box-shadow: 0 0 16px rgba(34,211,238,.06), inset 0 0 0 1px rgba(255,255,255,.02);
+    }
+    .spine-dispatch-avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1.5px solid rgba(34,211,238,.35);
+        flex-shrink: 0;
+        filter: drop-shadow(0 0 4px rgba(34,211,238,.3));
+    }
+    .spine-dot {
+        flex-shrink: 0;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        border: 2px solid currentColor;
+        background: rgba(6,10,18,.9);
+        box-shadow: 0 0 6px currentColor;
+    }
+    .spine-dot.dot-preflight  { color: var(--oc-cyan); }
+    .spine-dot.dot-routing    { color: #34d399; }
+    .spine-dot.dot-branch     { color: var(--oc-amber); }
+    .spine-dot.dot-review_loop { color: var(--oc-magenta); }
+    .spine-dot.dot-halt       { color: #f87171; }
+    .spine-dot.dot-skip       { color: var(--oc-amber); }
+    .spine-dot.dot-issue_close { color: #34d399; }
+    .spine-dispatch-text {
+        font-size: .78rem;
+        color: rgba(34,211,238,.88);
+        line-height: 1.4;
+        font-style: italic;
+        text-shadow: 0 0 12px rgba(34,211,238,.2);
+    }
+
+    /* ── Agent card shell ─────────────────────────────────── */
+    .agent-card {
+        display: flex;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid rgba(148, 163, 184, .24);
+        margin-bottom: 1.25rem;
+        background: rgba(255,255,255,.9);
+        animation: card-enter .4s ease-out both;
+        transition: background .35s ease, border-color .35s ease, box-shadow .35s ease, transform .35s ease;
+        min-height: 180px;
+        box-shadow: var(--shadow-sm);
+        position: relative;
+    }
+    .agent-card::before {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 5px;
+        background: var(--glow-color, #7c3aed);
+        opacity: .95;
+    }
+    .agent-card.state-active {
+        border-color: var(--glow-color, #7c3aed);
+        animation: card-enter .4s ease-out both,
+                   card-glow 2.4s ease-in-out infinite .4s;
+    }
+    .agent-card.state-done {
+        border-color: rgba(25, 135, 84, .55);
+        background: linear-gradient(90deg, rgba(25,135,84,.09), rgba(255,255,255,.96) 34%);
+    }
+    .agent-card.state-done::before { background: #198754; }
+    .agent-card.state-stopped {
+        border-color: rgba(217, 119, 6, .75);
+        background:
+            repeating-linear-gradient(135deg, rgba(245,158,11,.18) 0 10px, rgba(255,255,255,0) 10px 21px),
+            linear-gradient(90deg, rgba(245,158,11,.18), rgba(255,255,255,.96) 38%);
+        box-shadow: 0 0 0 2px rgba(245,158,11,.16), var(--shadow-sm);
+    }
+    .agent-card.state-stopped::before {
+        width: 10px;
+        background: repeating-linear-gradient(180deg, #facc15 0 10px, #111827 10px 18px);
+        animation: stopped-stripe 1.1s linear infinite;
+    }
+    .agent-card.state-failed {
+        border-color: rgba(220, 53, 69, .72);
+        background: linear-gradient(90deg, rgba(220,53,69,.13), rgba(255,255,255,.96) 36%);
+        box-shadow: 0 0 0 2px rgba(220,53,69,.12), var(--shadow-sm);
+    }
+    .agent-card.state-failed::before { background: #dc3545; width: 8px; }
+    .agent-card.state-skipped {
+        border-style: dashed;
+        opacity: .78;
+        background: linear-gradient(90deg, rgba(100,116,139,.12), rgba(255,255,255,.9) 34%);
+    }
+    .agent-card.state-skipped::before { background: #64748b; }
+
+    /* ── Portrait (King's Quest dialogue-box layout) ────── */
+    .agent-portrait {
+        width: 140px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem .65rem;
+        position: relative;
+        overflow: hidden;
+        user-select: none;
+    }
+    .portrait-frame {
+        position: relative;
+        width: 86px;
+        height: 86px;
+        border: 3px solid rgba(255,255,255,.35);
+        border-radius: 10px;
+        background: rgba(0,0,0,.5);
+        box-shadow: 0 0 20px rgba(0,0,0,.5), inset 0 0 12px rgba(0,0,0,.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    .portrait-frame::before {
+        content: '';
+        position: absolute;
+        inset: -2px;
+        border-radius: 12px;
+        border: 2px solid var(--agent-color, #7c3aed);
+        opacity: .6;
+    }
+    .portrait-frame::after {
+        content: '';
+        position: absolute;
+        top: 3px; left: 3px; right: 3px; bottom: 3px;
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 7px;
+        pointer-events: none;
+    }
+    .portrait-nameplate {
+        margin-top: .5rem;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        gap: .1rem;
+    }
+    /* dot-grid texture */
+    .agent-portrait::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(circle, rgba(255,255,255,.13) 1px, transparent 1px);
+        background-size: 10px 10px;
+        pointer-events: none;
+    }
+    .agent-portrait::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
+        transform: translateX(-120%);
+        pointer-events: none;
+        z-index: 1;
+    }
+    .state-active .agent-portrait::before { animation: face-scan 2.2s ease-in-out infinite; }
+    .portrait-cls {
+        font-size: .5rem;
+        font-weight: 800;
+        letter-spacing: .18em;
+        color: rgba(255,255,255,.7);
+        text-transform: uppercase;
+        z-index: 1;
+    }
+    .portrait-face {
+        width: 72px;
+        height: 72px;
+        z-index: 2;
+        position: relative;
+        transition: filter .35s ease, transform .35s ease;
+    }
+    .portrait-face img {
+        width: 72px;
+        height: 72px;
+        display: block;
+        object-fit: cover;
+        border-radius: 6px;
+        pointer-events: none;
+        filter: drop-shadow(0 8px 16px rgba(0,0,0,.3));
+    }
+    .state-active .portrait-face { animation: glyph-float 1.6s ease-in-out infinite; }
+    .portrait-name {
+        font-size: .58rem;
+        font-weight: 800;
+        letter-spacing: .13em;
+        color: rgba(255,255,255,.9);
+        text-transform: uppercase;
+        z-index: 1;
+    }
+
+    /* Portrait state effects */
+    .state-done .portrait-frame { border-color: rgba(25,135,84,.7); }
+    .state-done .portrait-frame::before { border-color: #198754; }
+    .state-stopped .portrait-face { filter: sepia(.18) saturate(1.2); transform: rotate(-3deg); }
+    .state-stopped .portrait-frame { border-color: rgba(217,119,6,.7); }
+    .state-failed .portrait-face { filter: grayscale(.16) saturate(1.28); }
+    .state-failed .portrait-frame { border-color: rgba(220,53,69,.7); }
+    .state-skipped .portrait-face { filter: grayscale(.65); opacity: .68; }
+    .state-skipped .portrait-frame { border-color: rgba(100,116,139,.5); }
+
+    /* ── Card face positioning (all cards same width) ───── */
+    .agent-card.card-left  { flex-direction: row; }
+    .agent-card.card-right { flex-direction: row-reverse; }
+    .agent-card.card-right .agent-portrait { border-radius: 0 8px 8px 0; }
+    .agent-card.card-right::before { left: auto; right: 0; }
+    .agent-card.card-left .agent-content { border-radius: 0 8px 8px 0; }
+    .agent-card.card-right .agent-content { border-radius: 8px 0 0 8px; }
+
+    /* ── Content panel ────────────────────────────────────── */
+    .agent-content {
+        flex: 1;
+        padding: .875rem 1.125rem;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: .35rem;
+    }
+    .agent-content-header {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: .4rem;
+    }
+    .agent-display-name  { font-weight: 700; font-size: .92rem; letter-spacing: .02em; }
+    .agent-role-label    { font-size: .78rem; color: var(--bs-secondary-color); }
+    .agent-tagline       { font-size: .76rem; color: var(--bs-secondary-color); font-style: italic; }
+    .agent-status-badge  { margin-left: auto; }
+    .agent-dur           { font-size: .75rem; color: var(--bs-secondary-color); }
+    .agent-state-note {
+        display: none;
+        align-items: center;
+        gap: .4rem;
+        border-radius: 7px;
+        padding: .45rem .6rem;
+        font-size: .78rem;
+        font-weight: 700;
+        letter-spacing: 0;
+        line-height: 1.45;
+        text-shadow: 0 1px 0 rgba(0,0,0,.25);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+    }
+    .state-done .agent-state-note,
+    .state-stopped .agent-state-note,
+    .state-failed .agent-state-note,
+    .state-skipped .agent-state-note { display: flex; }
+    .state-done .agent-state-note {
+        color: #dcfce7;
+        background: linear-gradient(135deg, rgba(20,83,45,.72), rgba(20,83,45,.28));
+        border: 1px solid rgba(74,222,128,.42);
+    }
+    .state-stopped .agent-state-note {
+        color: #fef3c7;
+        background: linear-gradient(135deg, rgba(146,64,14,.74), rgba(120,53,15,.34));
+        border: 1px solid rgba(251,191,36,.56);
+    }
+    .state-failed .agent-state-note {
+        color: #ffe4e6;
+        background: linear-gradient(135deg, rgba(127,29,29,.82), rgba(76,5,25,.46));
+        border: 1px solid rgba(251,113,133,.46);
+    }
+    .state-skipped .agent-state-note {
+        color: #e2e8f0;
+        background: rgba(51,65,85,.38);
+        border: 1px dashed rgba(148,163,184,.35);
+    }
+
+    /* ── Output terminal ──────────────────────────────────── */
+    .agent-output {
+        flex: 1;
+        font-size: .78rem;
+        line-height: 1.5;
+        background: #111827;
+        color: #d1d5db;
+        border-radius: 7px;
+        padding: .65rem .75rem;
+        overflow-y: auto;
+        white-space: normal;
+        word-break: normal;
+        min-height: 110px;
+        max-height: 260px;
+        scrollbar-width: thin;
+        scrollbar-color: #30363d #0d1117;
+        border: 1px solid transparent;
+    }
+    .output-empty { color: #94a3b8; font-style: italic; }
+    .output-raw,
+    .output-code {
+        margin: .35rem 0 0;
+        padding: .55rem .65rem;
+        border-radius: 6px;
+        background: #020617;
+        color: #d1d5db;
+        font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+        font-size: .72rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .output-summary {
+        display: grid;
+        gap: .55rem;
+    }
+    .output-verdict {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .7rem;
+        padding: .6rem .7rem;
+        border-radius: 7px;
+        background: rgba(15,23,42,.78);
+        border: 1px solid rgba(148,163,184,.22);
+    }
+    .output-verdict strong { color: #f8fafc; font-size: .82rem; letter-spacing: .08em; }
+    .output-verdict span { color: #cbd5e1; font-size: .73rem; }
+    .output-verdict.status-stop { border-color: rgba(245,158,11,.55); background: rgba(120,53,15,.45); }
+    .output-verdict.status-go { border-color: rgba(34,197,94,.45); background: rgba(20,83,45,.38); }
+    .output-verdict.status-duplicate { border-color: rgba(14,165,233,.5); background: rgba(12,74,110,.38); }
+    .output-field-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: .45rem;
+    }
+    .output-field {
+        padding: .5rem .55rem;
+        border-radius: 6px;
+        background: rgba(255,255,255,.055);
+        border: 1px solid rgba(148,163,184,.16);
+    }
+    .output-field-label {
+        display: block;
+        margin-bottom: .2rem;
+        color: #94a3b8;
+        font-size: .62rem;
+        font-weight: 800;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+    }
+    .output-chip-row { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .output-chip {
+        display: inline-flex;
+        align-items: center;
+        max-width: 100%;
+        padding: .16rem .45rem;
+        border-radius: 999px;
+        color: #e2e8f0;
+        background: rgba(148,163,184,.18);
+        border: 1px solid rgba(148,163,184,.22);
+        font-size: .68rem;
+        overflow-wrap: anywhere;
+    }
+    .output-list {
+        margin: 0;
+        padding-left: 1rem;
+        color: #e5e7eb;
+    }
+    .output-list li + li { margin-top: .25rem; }
+    .output-details summary {
+        cursor: pointer;
+        color: #93c5fd;
+        font-size: .72rem;
+        font-weight: 700;
+    }
+    .output-markdown h3,
+    .output-markdown h4 {
+        margin: .55rem 0 .3rem;
+        color: #f8fafc;
+        font-size: .82rem;
+    }
+    .output-markdown p { margin: .25rem 0; color: #d1d5db; }
+    .output-markdown ul { margin: .25rem 0 .45rem; padding-left: 1rem; }
+    .output-markdown li + li { margin-top: .18rem; }
+
+    /* ── Smart prose rendering ─────────────────────────────── */
+    .output-prose { display: flex; flex-direction: column; gap: .4rem; }
+    .prose-para {
+        margin: 0;
+        color: #d1d5db;
+        font-size: .78rem;
+        line-height: 1.6;
+        padding: .3rem .45rem;
+        border-radius: 5px;
+        border-left: 2px solid transparent;
+    }
+    .prose-conclusion {
+        color: #f1f5f9;
+        font-weight: 600;
+        background: rgba(148,163,184,.08);
+        border-left-color: var(--agent-color, #7c3aed);
+        border-radius: 5px;
+        padding: .45rem .6rem;
+    }
+    .prose-thinking {
+        margin: .15rem 0;
+        border-radius: 6px;
+        background: rgba(148,163,184,.06);
+        border: 1px solid rgba(148,163,184,.12);
+        padding: .25rem .5rem;
+    }
+    .prose-thinking summary {
+        cursor: pointer;
+        color: #64748b;
+        font-size: .7rem;
+        font-weight: 600;
+        letter-spacing: .03em;
+        user-select: none;
+    }
+    .prose-thinking summary:hover { color: #94a3b8; }
+    .prose-thought {
+        margin: .25rem 0;
+        color: #6b7280;
+        font-size: .72rem;
+        line-height: 1.5;
+        font-style: italic;
+    }
+    .prose-collapsed {
+        margin: .2rem 0;
+        border-radius: 6px;
+        background: rgba(148,163,184,.05);
+        border: 1px dashed rgba(148,163,184,.18);
+        padding: .25rem .5rem;
+    }
+    .prose-collapsed summary {
+        cursor: pointer;
+        color: #93c5fd;
+        font-size: .7rem;
+        font-weight: 600;
+    }
+    .prose-code {
+        padding: .1rem .3rem;
+        border-radius: 3px;
+        background: rgba(148,163,184,.15);
+        color: #e2e8f0;
+        font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+        font-size: .72rem;
+    }
+    .output-table {
+        width: 100%;
+        margin: .45rem 0;
+        border-collapse: collapse;
+        overflow: hidden;
+        border-radius: 6px;
+        font-size: .72rem;
+    }
+    .output-table th,
+    .output-table td {
+        padding: .38rem .48rem;
+        border: 1px solid rgba(148,163,184,.18);
+        vertical-align: top;
+    }
+    .output-table th { color: #f8fafc; background: rgba(148,163,184,.18); }
+    .output-table td { color: #d1d5db; background: rgba(255,255,255,.04); }
+    .state-stopped .agent-output { border-color: rgba(245,158,11,.55); box-shadow: inset 0 0 0 1px rgba(245,158,11,.12); }
+    .state-failed .agent-output { border-color: rgba(220,53,69,.48); box-shadow: inset 0 0 0 1px rgba(220,53,69,.11); }
+    .agent-output::-webkit-scrollbar        { width: 4px; }
+    .agent-output::-webkit-scrollbar-track  { background: #0d1117; }
+    .agent-output::-webkit-scrollbar-thumb  { background: #30363d; border-radius: 2px; }
+    .terminal-cursor {
+        display: inline-block;
+        width: 7px; height: 13px;
+        background: #c9d1d9;
+        vertical-align: text-bottom;
+        animation: cursor-blink 1s step-end infinite;
+    }
+
+    /* Orbital Command station overrides */
+    .run-surface { min-height: 34rem; }
+    .station-strip {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(8rem, 1fr));
+        gap: .65rem;
+        margin-bottom: 1rem;
+        overflow-x: auto;
+        padding-bottom: .25rem;
+    }
+    .station-node {
+        position: relative;
+        min-height: 6.25rem;
+        padding: .75rem;
+        border: 1px solid rgba(34,211,238,.18);
+        border-radius: 10px;
+        background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.015));
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.025);
+    }
+    .station-node::before {
+        content: '';
+        position: absolute;
+        inset: 0 0 auto;
+        height: 3px;
+        background: #334155;
+    }
+    .station-node.is-running { border-color: rgba(34,211,238,.55); box-shadow: 0 0 28px rgba(34,211,238,.13); }
+    .station-node.is-running::before { background: #22d3ee; }
+    .station-node.is-complete::before { background: #34d399; }
+    .station-node.is-stopped::before { background: #facc15; }
+    .station-node.is-failed::before { background: #fb3f68; }
+    .station-node.is-skipped { opacity: .55; border-style: dashed; border-color: rgba(100,116,139,.35); }
+    .station-node.is-skipped::before { background: #64748b; }
+    .station-node.is-skipped small { font-style: italic; }
+
+    /* ── Delivery panel ──────────────────────────────────── */
+    .delivery-panel {
+        margin-bottom: 1.5rem;
+        padding: 1.25rem;
+        border: 1px solid rgba(250,204,21,.4);
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(250,204,21,.08), rgba(5,9,18,.92) 60%);
+    }
+    .delivery-panel-header {
+        display: flex;
+        align-items: flex-start;
+        gap: .75rem;
+        margin-bottom: .75rem;
+    }
+    .delivery-icon { font-size: 1.8rem; line-height: 1; }
+    .delivery-panel-header h3 { color: #facc15; font-size: 1.1rem; margin: 0; }
+    .delivery-panel-header p { color: #e2e8f0; font-size: .85rem; margin: .2rem 0 0; }
+    .delivery-panel-body {
+        padding: .75rem 1rem;
+        margin-bottom: .75rem;
+        border-radius: 8px;
+        background: rgba(0,0,0,.3);
+        font-size: .82rem;
+        color: #cbd5e1;
+    }
+    .delivery-panel-body ul { margin: .35rem 0; padding-left: 1.25rem; }
+    .delivery-panel-body li + li { margin-top: .2rem; }
+    .delivery-explainer { margin: 0 0 .3rem; color: #94a3b8; }
+    .delivery-pr-link { color: #93c5fd; text-decoration: none; font-weight: 600; }
+    .delivery-pr-link:hover { color: #bfdbfe; text-decoration: underline; }
+    .delivery-panel-action { margin-top: .5rem; }
+    .station-node span,
+    .station-node small {
+        display: block;
+        color: var(--oc-cyan, #22d3ee);
+        font-family: 'Cascadia Code', Consolas, monospace;
+        font-size: .66rem;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+    .station-node strong { display: block; margin: .5rem 0 .15rem; color: #fff; font-size: .86rem; }
+    .station-node small { color: var(--oc-muted, #8ea4b8); }
+    .run-telemetry-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .75rem;
+        margin-bottom: 1rem;
+    }
+    .issue-brief {
+        margin-bottom: 1rem;
+        padding: 1rem;
+        border: 1px solid rgba(34,211,238,.18);
+        border-radius: 10px;
+        background:
+            linear-gradient(135deg, rgba(34,211,238,.08), transparent 42%),
+            rgba(3, 7, 18, .58);
+    }
+    .issue-brief-kicker {
+        color: var(--oc-amber, #facc15);
+        font-family: 'Cascadia Code', Consolas, monospace;
+        font-size: .68rem;
+        font-weight: 900;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+    }
+    .issue-brief h3 {
+        margin: .35rem 0 .55rem;
+        color: #fff;
+        font-size: clamp(1.05rem, 1.5vw, 1.45rem);
+        font-weight: 900;
+    }
+    .issue-brief h3 a { color: inherit; text-decoration: none; }
+    .issue-brief h3 a:hover { color: var(--oc-cyan, #22d3ee); }
+    .issue-brief p {
+        max-height: 14rem;
+        margin: 0;
+        overflow: auto;
+        color: #c9d8e6;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+    .agent-station-feed { display: grid; gap: .8rem; }
+    .agent-card {
+        border-color: rgba(34,211,238,.18);
+        background: linear-gradient(135deg, rgba(9,14,26,.94), rgba(5,9,18,.86));
+        box-shadow: 0 20px 70px rgba(0,0,0,.42), inset 0 0 0 1px rgba(255,255,255,.035);
+    }
+    .agent-card.state-active { border-color: var(--glow-color); box-shadow: 0 0 34px var(--glow), inset 0 0 0 1px rgba(255,255,255,.04); }
+    .agent-card.state-done { background: linear-gradient(135deg, rgba(9,30,25,.88), rgba(5,9,18,.9)); }
+    .agent-card.state-stopped { background: linear-gradient(135deg, rgba(60,38,8,.74), rgba(5,9,18,.9)); }
+    .agent-card.state-failed { background: linear-gradient(135deg, rgba(68,12,26,.72), rgba(5,9,18,.9)); }
+    .agent-content { color: #e6fbff; }
+    .agent-role-label,
+    .agent-tagline,
+    .agent-dur { color: var(--oc-muted, #8ea4b8); }
+    .agent-output { background: #030711; border-color: rgba(34,211,238,.14); }
+
+    @@media (max-width: 1100px) {
+        .station-strip { grid-template-columns: repeat(6, 10rem); }
+        .run-telemetry-grid { grid-template-columns: 1fr; }
+    }
+    @@media (max-width: 768px) {
+        .run-command-bar { gap: .75rem; }
+        .run-bar-actions { justify-content: flex-start; width: 100%; }
+        .run-bar-actions .btn { flex: 0 1 auto; }
+    }
+</style>
+}
+
+@section Scripts {
+<script src="~/lib/microsoft-signalr/signalr.min.js"></script>
+<script>
+(() => {
+    // ── Agent portrait images ────────────────────────────────────────────
+    const PORTRAIT = {
+        triage:    '/images/agents/triage.png',
+        plan:      '/images/agents/plan.png',
+        implement: '/images/agents/implement.png',
+        review:    '/images/agents/review.png',
+        docs:      '/images/agents/docs.png',
+        deliver:   '/images/agents/deliver.png',
+        pipeline:  '/images/agents/deliver.png'  // reuse deliver for pipeline/cyberpilot
+    };
+
+    // ── Agent definitions ──────────────────────────────────────────────
+    const AGENTS = {
+        'triage':        { mark:'CASE', img: PORTRAIT.triage,    display:'TRIAGE',        role:'Tech-noir detective',     tagline:'Evidence, duplicates, and case viability.',              cls:'DETECTIVE',      color:'#7c3aed', rgb:'124,58,237'  },
+        'plan':          { mark:'#',    img: PORTRAIT.plan,      display:'PLAN',          role:'Heist mastermind',         tagline:'Blueprints, sequences, and the perfect score.',          cls:'MASTERMIND',     color:'#2563eb', rgb:'37,99,235'   },
+        'implement':     { mark:'>',    img: PORTRAIT.implement, display:'IMPLEMENT',     role:'Speed-demon coder',        tagline:'Code hits the branch before you blink.',                 cls:'ENGINEER',       color:'#db2777', rgb:'219,39,119'  },
+        'review':        { mark:'!',    img: PORTRAIT.review,    display:'REVIEW',        role:'80s music critic',         tagline:'Two thumbs up — or a scathing teardown.',                cls:'CRITIC',         color:'#ea580c', rgb:'234,88,12'   },
+        'docs':          { mark:'i',    img: PORTRAIT.docs,      display:'DOCS',          role:'Documentation bestie \u2728', tagline:'Making docs clear, complete, and developer-friendly.',  cls:'BESTIE',         color:'#0d9488', rgb:'13,148,136'  },
+        'deliver':       { mark:'^',    img: PORTRAIT.deliver,   display:'DELIVER',       role:'NASA landing director',    tagline:'Touchdown confirmed. Payload on the surface of main.',   cls:'FLIGHT DIRECTOR', color:'#16a34a', rgb:'22,163,74'   },
+        'pipeline':      { mark:'AP',   img: PORTRAIT.pipeline,  display:'CYBERPILOT',     role:'Mission control',          tagline:'Run-level coordination and status updates.',             cls:'CONTROL',        color:'#0f766e', rgb:'15,118,110'   },
+    };
+
+    const COMPLETION_TEXT = {
+        triage:    'Case cleared',
+        plan:      'Blueprint delivered',
+        implement: 'Code shipped',
+        review:    'Review sealed',
+        docs:      'Docs published',
+        deliver:   'Mission landed',
+    };
+
+    const STATE_NOTES = {
+        done: stage => (COMPLETION_TEXT[stage] ?? 'Completed') + ' — cleared for the next stage.',
+        stopped: 'Stopped intentionally. This agent needs clearer input before continuing.',
+        failed: 'Failed during execution. Review the output for the blocking error.',
+        skipped: 'Skipped by pipeline rules or prior stage outcome.',
+    };
+
+    const feed      = document.getElementById('agent-feed');
+    let currentStage = null;
+    let cursorEl     = null;
+
+    // ── Round tracking for re-entry ────────────────────────────────────
+    const activeCardIds = {};   // stage → current card DOM id
+    const roundCounts   = {};   // stage → highest round seen
+
+    function getActiveCard(stage) {
+        const id = activeCardIds[stage] || `card-${stage}`;
+        return document.getElementById(id);
+    }
+
+    // ── Build a card DOM node ──────────────────────────────────────────
+    const STAGE_ORDER = ['triage','plan','implement','review','docs','deliver'];
+
+    function buildCard(stage, round) {
+        round = round || 1;
+        const a = AGENTS[stage];
+        if (!a) return null;
+
+        const stageIndex = STAGE_ORDER.indexOf(stage);
+        const isRight = stageIndex % 2 === 1;
+
+        const cardId = round > 1 ? `card-${stage}-${round}` : `card-${stage}`;
+        const displayName = round > 1 ? `${a.display} (Round ${round})` : a.display;
+
+        const card = document.createElement('div');
+        card.className   = `agent-card state-active ${isRight ? 'card-right' : 'card-left'}`;
+        card.id          = cardId;
+        card.dataset.stage = stage;
+        card.dataset.round = round;
+        card.style.setProperty('--glow-color', a.color);
+        card.style.setProperty('--glow',    `rgba(${a.rgb},.28)`);
+        card.style.setProperty('--glow-sm', `rgba(${a.rgb},.12)`);
+        card.style.setProperty('--agent-color', a.color);
+        card.style.setProperty('--agent-rgb', a.rgb);
+
+        card.innerHTML = `
+          <div class="agent-portrait"
+               style="background:linear-gradient(155deg,#0f172a 0%,${a.color} 100%)">
+            <div class="portrait-frame">
+              <div class="portrait-face" aria-hidden="true">
+                <img src="${a.img}" alt="${displayName}" />
+              </div>
+            </div>
+            <div class="portrait-nameplate">
+              <span class="portrait-cls">${a.cls}</span>
+              <span class="portrait-name">${displayName}</span>
+            </div>
+          </div>
+          <div class="agent-content">
+            <div class="agent-content-header">
+              <span class="agent-display-name">${displayName}</span>
+              <span class="agent-role-label">${a.role}</span>
+              <span class="badge text-bg-primary agent-status-badge d-flex align-items-center gap-1">
+                <span class="spinner-border" style="width:.6rem;height:.6rem;border-width:.15em" role="status"></span>
+                Running
+              </span>
+              <span class="agent-dur"></span>
+            </div>
+            <div class="agent-tagline">"${a.tagline}"</div>
+            <div class="agent-state-note" aria-live="polite"></div>
+            <div class="agent-output"></div>
+          </div>`;
+
+        return card;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    function inlineMarkdown(text) {
+        let safe = escapeHtml(text);
+        safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        safe = safe.replace(/`([^`]+)`/g, '<code class="prose-code">$1</code>');
+        return safe;
+    }
+
+    function labelize(key) {
+        return key.replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    function tryReadSummaryObject(text) {
+        // Strategy 1: Look for fenced JSON code blocks (```json ... ```)
+        const fenced = /```(?:json)?\s*\n(\{[\s\S]*?\})\s*\n```/i.exec(text);
+        if (fenced) {
+            try {
+                const obj = JSON.parse(fenced[1]);
+                if (obj && typeof obj === 'object' && obj.status) return obj;
+            } catch {}
+        }
+
+        // Strategy 2: Look for a standalone JSON paragraph (blank-line delimited)
+        const blocks = text.split(/\n\s*\n/);
+        for (let i = blocks.length - 1; i >= 0; i--) {
+            const block = blocks[i].trim();
+            if (block.startsWith('{') && block.endsWith('}')) {
+                try {
+                    const obj = JSON.parse(block);
+                    if (obj && typeof obj === 'object' && obj.status) return obj;
+                } catch {}
+            }
+        }
+
+        // Strategy 3: Original approach — first { to last }
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start < 0 || end <= start) return null;
+        try {
+            const obj = JSON.parse(text.slice(start, end + 1));
+            if (obj && typeof obj === 'object' && obj.status) return obj;
+        } catch {}
+
+        return null;
+    }
+
+    function renderValue(value) {
+        if (Array.isArray(value)) {
+            if (value.length === 0) return '<span class="text-muted">none</span>';
+            return `<div class="output-chip-row">${value.map(item => `<span class="output-chip">${escapeHtml(item)}</span>`).join('')}</div>`;
+        }
+
+        if (value && typeof value === 'object') {
+            return `<pre class="output-code">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
+        }
+
+        return `<span>${escapeHtml(value ?? 'none')}</span>`;
+    }
+
+    function renderSummary(stage, summary, raw) {
+        const status = String(summary.status ?? 'unknown').toLowerCase();
+        const completionLabel = COMPLETION_TEXT[stage] ?? 'Agent result';
+        const statusTitle = status === 'stop' ? 'Investigation halted' : status === 'duplicate' ? 'Duplicate located' : status === 'go' ? completionLabel : 'Agent result';
+        const fields = Object.entries(summary)
+            .filter(([key]) => key !== 'status')
+            .map(([key, value]) => `
+              <div class="output-field">
+                <span class="output-field-label">${escapeHtml(labelize(key))}</span>
+                ${renderValue(value)}
+              </div>`)
+            .join('');
+
+        return `
+          <div class="output-summary">
+            <div class="output-verdict status-${escapeHtml(status)}">
+              <strong>${escapeHtml(statusTitle)}</strong>
+              <span>${escapeHtml((AGENTS[stage]?.display ?? stage).toUpperCase())} returned ${escapeHtml(String(summary.status ?? 'UNKNOWN'))}</span>
+            </div>
+            <div class="output-field-grid">${fields}</div>
+            <details class="output-details">
+              <summary>Raw transcript</summary>
+              <pre class="output-raw">${escapeHtml(raw)}</pre>
+            </details>
+          </div>`;
+    }
+
+    function renderMarkdownLite(text) {
+        const lines = text.split(/\r?\n/);
+        let inList = false;
+        const html = [];
+
+        for (let index = 0; index < lines.length; index++) {
+            const line = lines[index];
+            const trimmed = line.trim();
+            if (!trimmed) {
+                if (inList) { html.push('</ul>'); inList = false; }
+                continue;
+            }
+
+            const heading = /^(#{2,4})\s+(.+)$/.exec(trimmed);
+            if (heading) {
+                if (inList) { html.push('</ul>'); inList = false; }
+                html.push(`<h3>${escapeHtml(heading[2])}</h3>`);
+                continue;
+            }
+
+            if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+                const tableLines = [];
+                while (index < lines.length) {
+                    const tableLine = lines[index].trim();
+                    if (!tableLine.startsWith('|') || !tableLine.endsWith('|')) break;
+                    tableLines.push(tableLine);
+                    index++;
+                }
+                index--;
+
+                if (inList) { html.push('</ul>'); inList = false; }
+                const rows = tableLines
+                    .filter(tableLine => !/^\|\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(tableLine))
+                    .map(tableLine => tableLine.slice(1, -1).split('|').map(cell => cell.trim()));
+                if (rows.length > 0) {
+                    const [header, ...body] = rows;
+                    html.push('<table class="output-table"><thead><tr>');
+                    html.push(header.map(cell => `<th>${escapeHtml(cell)}</th>`).join(''));
+                    html.push('</tr></thead><tbody>');
+                    html.push(body.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join(''));
+                    html.push('</tbody></table>');
+                }
+                continue;
+            }
+
+            const bullet = /^[-*]\s+(.+)$/.exec(trimmed);
+            if (bullet) {
+                if (!inList) { html.push('<ul>'); inList = true; }
+                html.push(`<li>${escapeHtml(bullet[1])}</li>`);
+                continue;
+            }
+
+            if (inList) { html.push('</ul>'); inList = false; }
+            html.push(`<p>${escapeHtml(trimmed)}</p>`);
+        }
+
+        if (inList) html.push('</ul>');
+        return `<div class="output-markdown">${html.join('')}</div>`;
+    }
+
+    function renderSmartProse(text) {
+        const paragraphs = text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+        if (paragraphs.length < 2) return null;
+
+        const THINKING = /^(Now I|I'll|Let me|I'm going to|I need to|I will|First,?\s+I|Next,?\s+I|I'm now|I should|Looking at|Checking|Starting|Moving on|I can see|I notice)/i;
+
+        // Group consecutive paragraphs by type (thinking vs content)
+        const groups = [];
+        let currentType = null;
+        let currentGroup = [];
+
+        for (const para of paragraphs) {
+            const type = THINKING.test(para) ? 'thinking' : 'content';
+            if (type !== currentType) {
+                if (currentGroup.length > 0) groups.push({ type: currentType, items: currentGroup });
+                currentType = type;
+                currentGroup = [para];
+            } else {
+                currentGroup.push(para);
+            }
+        }
+        if (currentGroup.length > 0) groups.push({ type: currentType, items: currentGroup });
+
+        // If everything is "thinking" or everything is "content", don't collapse anything
+        const hasThinking = groups.some(g => g.type === 'thinking');
+        const hasContent = groups.some(g => g.type === 'content');
+        if (!hasThinking && paragraphs.length < 4) return null;
+
+        const html = [];
+        const contentGroups = groups.filter(g => g.type === 'content');
+        const lastContentGroup = contentGroups[contentGroups.length - 1];
+
+        for (const group of groups) {
+            if (group.type === 'thinking') {
+                html.push(`<details class="prose-thinking"><summary>\u{1F4AD} Agent reasoning (${group.items.length})</summary>`);
+                html.push(group.items.map(p => `<p class="prose-thought">${inlineMarkdown(p)}</p>`).join(''));
+                html.push('</details>');
+            } else {
+                const isLastGroup = group === lastContentGroup;
+                if (group.items.length > 6) {
+                    // Show first 2, collapse middle, show last 2
+                    html.push(group.items.slice(0, 2).map(p => `<p class="prose-para">${inlineMarkdown(p)}</p>`).join(''));
+                    const middle = group.items.slice(2, -2);
+                    html.push(`<details class="prose-collapsed"><summary>${middle.length} more sections\u2026</summary>`);
+                    html.push(middle.map(p => `<p class="prose-para">${inlineMarkdown(p)}</p>`).join(''));
+                    html.push('</details>');
+                    html.push(group.items.slice(-2).map((p, i, arr) => {
+                        const cls = (isLastGroup && i === arr.length - 1) ? 'prose-para prose-conclusion' : 'prose-para';
+                        return `<p class="${cls}">${inlineMarkdown(p)}</p>`;
+                    }).join(''));
+                } else {
+                    group.items.forEach((p, i) => {
+                        const cls = (isLastGroup && i === group.items.length - 1) ? 'prose-para prose-conclusion' : 'prose-para';
+                        html.push(`<p class="${cls}">${inlineMarkdown(p)}</p>`);
+                    });
+                }
+            }
+        }
+
+        return `<div class="output-prose">${html.join('')}</div>`;
+    }
+
+    function renderOutput(out) {
+        const raw = out.dataset.rawOutput ?? '';
+        const summary = tryReadSummaryObject(raw);
+        if (!raw.trim()) {
+            out.innerHTML = '<span class="output-empty">Waiting for output...</span>';
+        } else if (summary) {
+            out.innerHTML = renderSummary(out.dataset.stage ?? '', summary, raw);
+        } else if (/^\s*#{2,4}\s+/m.test(raw) || /^\s*[-*]\s+/m.test(raw)) {
+            out.innerHTML = renderMarkdownLite(raw);
+        } else {
+            const prose = renderSmartProse(raw);
+            if (prose) {
+                out.innerHTML = prose;
+            } else {
+                out.innerHTML = `<pre class="output-raw">${escapeHtml(raw)}</pre>`;
+            }
+        }
+
+        if (cursorEl?.parentNode === out) out.appendChild(cursorEl);
+        out.scrollTop = out.scrollHeight;
+    }
+
+    function setOutput(stage, text) {
+        const card = getActiveCard(stage);
+        const out = card?.querySelector('.agent-output');
+        if (!out) return;
+        out.dataset.stage = stage;
+        out.dataset.rawOutput = text ?? '';
+        renderOutput(out);
+    }
+
+    // ── Ensure a card exists; create + append if not ───────────────────
+    function ensureCard(stage) {
+        // If there's already an active card for this stage, return it
+        const activeId = activeCardIds[stage];
+        if (activeId) {
+            const existing = document.getElementById(activeId);
+            if (existing && existing.classList.contains('state-active')) return existing;
+        }
+
+        // Check if any card exists for this stage (completed = re-entry)
+        const anyExisting = activeId
+            ? document.getElementById(activeId)
+            : document.getElementById(`card-${stage}`);
+
+        if (anyExisting) {
+            // Stage was seen before — create new round card
+            roundCounts[stage] = (roundCounts[stage] || 1) + 1;
+            const round = roundCounts[stage];
+            const card = buildCard(stage, round);
+            if (!card) return null;
+            feed.appendChild(card);
+            activeCardIds[stage] = card.id;
+            setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+            return card;
+        }
+
+        // First time — create round 1
+        roundCounts[stage] = 1;
+        const card = buildCard(stage, 1);
+        if (!card) return null;
+        feed.appendChild(card);
+        activeCardIds[stage] = card.id;
+        setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+        return card;
+    }
+
+    // ── Append text to a card's output box ────────────────────────────
+    function appendOutput(stage, text) {
+        const card = getActiveCard(stage);
+        const out = card?.querySelector('.agent-output');
+        if (!out) return;
+        if (cursorEl?.parentNode === out) out.removeChild(cursorEl);
+        out.dataset.stage = stage;
+        out.dataset.rawOutput = `${out.dataset.rawOutput ?? ''}${text}`;
+        if (!cursorEl) {
+            cursorEl = document.createElement('span');
+            cursorEl.className = 'terminal-cursor';
+        }
+        renderOutput(out);
+        out.appendChild(cursorEl);
+        out.scrollTop = out.scrollHeight;
+    }
+
+    function removeCursor() {
+        cursorEl?.parentNode?.removeChild(cursorEl);
+    }
+
+    // ── Map a stage status string → card state + badge HTML ───────────
+    function resolveState(statusLower, durSec) {
+        const dur = durSec > 0 ? ` · ${durSec}s` : '';
+        switch (statusLower) {
+            case 'go':
+                return { cls: 'state-done',    badge: `<span class="badge text-bg-success agent-status-badge">✓ Done${dur}</span>` };
+            case 'stop':
+                return { cls: 'state-stopped', badge: `<span class="badge text-bg-warning  agent-status-badge text-dark">⊘ Stopped${dur}</span>` };
+            case 'duplicate':
+                return { cls: 'state-done',    badge: `<span class="badge text-bg-info     agent-status-badge">⊘ Duplicate${dur}</span>` };
+            case 'invalid':
+            case 'failed':
+                return { cls: 'state-failed',  badge: `<span class="badge text-bg-danger   agent-status-badge">✗ Failed${dur}</span>` };
+            case 'skipped':
+                return { cls: 'state-skipped', badge: `<span class="badge text-bg-secondary agent-status-badge">⟩ Skipped</span>` };
+            default:
+                return { cls: 'state-done',    badge: `<span class="badge text-bg-success  agent-status-badge">✓ Done${dur}</span>` };
+        }
+    }
+
+    // ── Finalize a card (stage completed or recovered) ─────────────────
+    function finalizeCard(stage, statusLower, durSec) {
+        const card = getActiveCard(stage);
+        if (!card) return;
+        const { cls, badge } = resolveState(statusLower, durSec);
+        card.classList.remove('state-active');
+        card.classList.add(cls);
+        const badgeEl = card.querySelector('.agent-status-badge');
+        if (badgeEl) badgeEl.outerHTML = badge;
+        const durEl = card.querySelector('.agent-dur');
+        if (durEl) durEl.textContent = '';
+        const noteEl = card.querySelector('.agent-state-note');
+        if (noteEl) {
+            if (cls === 'state-stopped') noteEl.textContent = STATE_NOTES.stopped;
+            else if (cls === 'state-failed') noteEl.textContent = STATE_NOTES.failed;
+            else if (cls === 'state-skipped') noteEl.textContent = STATE_NOTES.skipped;
+            else noteEl.textContent = typeof STATE_NOTES.done === 'function' ? STATE_NOTES.done(stage) : STATE_NOTES.done;
+        }
+        removeCursor();
+    }
+
+    // ── Per-stage live timer ───────────────────────────────────────────
+    let timerHandle = null, timerStart = null, timerStage = null;
+
+    function startTimer(stage) {
+        stopTimer();
+        timerStage = stage; timerStart = Date.now();
+        timerHandle = setInterval(() => {
+            const card = getActiveCard(timerStage);
+            const dur = card?.querySelector('.agent-dur');
+            if (dur) dur.textContent = `${Math.round((Date.now() - timerStart) / 1000)}s`;
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerHandle);
+        timerHandle = timerStage = timerStart = null;
+    }
+
+    // ── Overall run state helpers ──────────────────────────────────────
+    const STATUS_CLASSES = { Completed:'text-bg-success', Failed:'text-bg-danger', Running:'text-bg-primary', Pausing:'text-bg-info awaiting-pulse', Paused:'text-bg-warning text-dark', Stopped:'text-bg-warning text-dark', Cancelled:'text-bg-warning' };
+    const badgeEl   = document.getElementById('run-status-badge');
+    const statusEl  = document.getElementById('run-status');
+    const stageEl   = document.getElementById('run-stage');
+    const cancelEl  = document.getElementById('cancel-section');
+    const spinnerEl = document.getElementById('run-spinner');
+    const elapsedEl = document.getElementById('run-elapsed');
+    let   elapsedTimer = null;
+
+    function applyRunStatus(status) {
+        if (badgeEl) badgeEl.className = 'badge fs-6 ' + (STATUS_CLASSES[status] ?? 'text-bg-secondary');
+        if (statusEl) statusEl.textContent = status === 'Pausing' ? '⏸ Pausing…' : status;
+        if (spinnerEl && status !== 'Running' && status !== 'Pausing') spinnerEl.remove();
+        // Hide pause button when pausing
+        const pauseForm = document.getElementById('pause-form');
+        if (status === 'Pausing' && pauseForm) {
+            pauseForm.style.display = 'none';
+        }
+    }
+
+    function finalizeRun(status) {
+        applyRunStatus(status);
+        cancelEl?.remove();
+        stopTimer();
+        removeCursor();
+        clearInterval(elapsedTimer);
+    }
+
+    @if (runIsActive)
+    {
+        <text>
+    const runStart = new Date('@(DateTime.SpecifyKind(Model.Run.CreatedAt, DateTimeKind.Utc).ToString("o"))');
+    elapsedTimer = setInterval(() => {
+        if (!elapsedEl || !Number.isFinite(runStart.getTime())) return;
+        const s = Math.max(0, Math.floor((Date.now() - runStart) / 1000));
+        const m = Math.floor(s / 60);
+        elapsedEl.textContent = m > 0 ? `${m}:${(s % 60).toString().padStart(2,'0')}` : `0:${(s % 60).toString().padStart(2,'0')}`;
+    }, 1000);
+        </text>
+    }
+
+    // ── Cyberpilot dispatch (inline in agent feed) ─────────────────────
+    function appendSpineNode(type, message) {
+        const node = document.createElement('div');
+        node.className = 'spine-dispatch';
+        node.innerHTML = `
+            <div class="spine-dispatch-inner">
+                <img src="/images/agents/cyberpilot.png" class="spine-dispatch-avatar" alt="AP" onerror="this.style.display='none'">
+                <span class="spine-dot dot-${escapeHtml(type)}"></span>
+                <span class="spine-dispatch-text">${escapeHtml(message)}</span>
+            </div>`;
+        feed.appendChild(node);
+    }
+
+    // ── Pre-populate from server-rendered data (merged timeline) ──────
+    const existingLogs = @Html.Raw(logsJson);
+    const existingDispatches = @Html.Raw(dispatchesJson);
+    const runIsActive  = @(runIsActive ? "true" : "false");
+
+    const timeline = [];
+    existingLogs.forEach(l => timeline.push({ kind: 'log', ...l }));
+    existingDispatches.forEach(d => timeline.push({ kind: 'dispatch', ...d }));
+    timeline.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    for (const entry of timeline) {
+        if (entry.kind === 'dispatch') {
+            appendSpineNode(entry.type, entry.message);
+            checkForHaltBanner(entry.type, entry.message);
+            continue;
+        }
+        const log = entry;
+        roundCounts[log.stage] = (roundCounts[log.stage] || 0) + 1;
+        const round = roundCounts[log.stage];
+
+        const card = buildCard(log.stage, round);
+        if (!card) continue;
+
+        activeCardIds[log.stage] = card.id;
+
+        const out = card.querySelector('.agent-output');
+        if (out) {
+            out.dataset.stage = log.stage;
+            out.dataset.rawOutput = log.output ?? '';
+            renderOutput(out);
+        }
+
+        const s = (log.status ?? '').toLowerCase();
+        feed.appendChild(card);
+
+        if (s === 'running' && runIsActive) {
+            currentStage = log.stage;
+            startTimer(log.stage);
+            if (out) out.scrollTop = out.scrollHeight;
+        } else if (s === 'running') {
+            finalizeCard(log.stage, 'failed', log.duration);
+        } else {
+            finalizeCard(log.stage, s, log.duration);
+        }
+    }
+
+    // ── Halt / retry-exhausted banner ─────────────────────────────────
+    function checkForHaltBanner(type, message) {
+        if (type === 'review_loop' && message.toLowerCase().includes('halting')) {
+            showHaltBanner('⚠️ Retry Limit Reached',
+                'Review requested changes on both attempts. Pipeline halted for human intervention — review the PR, address findings, and re-run.');
+        } else if (type === 'halt') {
+            showHaltBanner('🛑 Pipeline Halted', message);
+        }
+    }
+
+    function showHaltBanner(title, message) {
+        if (document.getElementById('halt-banner')) return;
+        const banner = document.createElement('div');
+        banner.id = 'halt-banner';
+        banner.className = 'halt-banner';
+        banner.innerHTML = `
+            <div class="halt-banner-content">
+                <div class="halt-banner-title">${escapeHtml(title)}</div>
+                <p class="halt-banner-message">${escapeHtml(message)}</p>
+            </div>`;
+        feed.parentNode.insertBefore(banner, feed);
+    }
+
+    // ── Station strip live updates ────────────────────────────────────
+    const STATION_STATE_MAP = { go: 'is-complete', stop: 'is-stopped', duplicate: 'is-complete', failed: 'is-failed', invalid: 'is-failed', running: 'is-running', skipped: 'is-skipped' };
+    function updateStation(stage, stateClass, statusText) {
+        const node = document.querySelector(`.station-node[data-stage="${stage}"]`);
+        if (!node) return;
+        node.classList.remove('is-queued', 'is-running', 'is-complete', 'is-stopped', 'is-failed', 'is-skipped');
+        node.classList.add(stateClass);
+        const small = node.querySelector('small');
+        if (small) small.textContent = statusText;
+    }
+
+    // ── Post-run button injection ─────────────────────────────────────
+    const runId = '@Model.Run.Id';
+    const isRemote = @(Model.Run.IsRemote ? "true" : "false");
+    function injectPostRunButtons() {
+        const bar = document.getElementById('run-bar-actions');
+        if (!bar || document.getElementById('post-run-buttons')) return;
+        const isPaused = statusEl && statusEl.textContent === 'Paused';
+        const wrapper = document.createElement('span');
+        wrapper.id = 'post-run-buttons';
+        wrapper.className = 'd-inline-flex gap-1';
+        wrapper.innerHTML = `
+            <form action="/Pipelines/${runId}/Continue" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-primary">${isPaused ? '▶ Resume' : 'Continue'}</button>
+            </form>
+            ${isRemote ? '' : `<form action="/Pipelines/${runId}/ResetMission" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-outline-danger">Reset</button>
+            </form>`}`;
+        bar.appendChild(wrapper);
+    }
+
+    // ── SignalR live updates ───────────────────────────────────────────
+    if (window.signalR) {
+        const conn = new signalR.HubConnectionBuilder()
+            .withUrl('/pipelineHub')
+            .withAutomaticReconnect()
+            .build();
+
+        conn.on('stageStarted', e => {
+            // Ensure run status reflects Running (catches missed runStarted event)
+            if (statusEl && (statusEl.textContent === 'Queued' || statusEl.textContent === '')) {
+                applyRunStatus('Running');
+            }
+            if (stageEl) stageEl.textContent = e.stage;
+
+            // Finalize ALL active cards (safety net for missed stageCompleted)
+            document.querySelectorAll('.agent-card.state-active').forEach(stale => {
+                const staleStage = stale.dataset.stage;
+                if (staleStage) {
+                    const { cls, badge } = resolveState('go', 0);
+                    stale.classList.remove('state-active');
+                    stale.classList.add(cls);
+                    const badgeEl = stale.querySelector('.agent-status-badge');
+                    if (badgeEl) badgeEl.outerHTML = badge;
+                    const noteEl = stale.querySelector('.agent-state-note');
+                    if (noteEl) noteEl.textContent = typeof STATE_NOTES.done === 'function' ? STATE_NOTES.done(staleStage) : STATE_NOTES.done;
+                    updateStation(staleStage, 'is-complete', 'go');
+                }
+            });
+
+            currentStage = e.stage;
+            const card = ensureCard(e.stage);
+            if (card) {
+                // ensureCard returns a fresh card in state-active for re-entries
+                // For first-time cards, it's also already state-active from buildCard
+                card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            startTimer(e.stage);
+            updateStation(e.stage, 'is-running', 'running');
+        });
+
+        conn.on('streamDelta', e => {
+            if (currentStage) appendOutput(currentStage, e.content);
+        });
+
+        conn.on('message', e => {
+            if (currentStage) appendOutput(currentStage, `[${e.level}] ${e.message}\n`);
+        });
+
+        conn.on('stageCompleted', e => {
+            const durSec = timerStart ? Math.round((Date.now() - timerStart) / 1000) : 0;
+            const statusLower = (e.status ?? '').toLowerCase();
+            finalizeCard(e.stage, statusLower, durSec);
+            updateStation(e.stage, STATION_STATE_MAP[statusLower] ?? 'is-complete', statusLower);
+            stopTimer();
+            currentStage = null;
+        });
+
+        conn.on('runStarted',   ()  => applyRunStatus('Running'));
+        conn.on('runCompleted', e   => {
+            finalizeRun(e.status);
+            injectPostRunButtons();
+            // Inject delivery panel if run completed with deliver skipped
+            if (e.status === 'Completed' && e.skipDeliver && !document.getElementById('delivery-panel')) {
+                const tpl = document.getElementById('delivery-panel-template');
+                if (tpl) {
+                    const clone = tpl.content.cloneNode(true);
+                    const feedEl = document.getElementById('agent-feed');
+                    if (feedEl) feedEl.parentNode.insertBefore(clone, feedEl);
+                }
+            }
+        });
+        conn.on('runPaused', e => {
+            finalizeRun('Paused');
+            // Remove pause button if still present
+            const pauseBtn = document.getElementById('pause-btn');
+            if (pauseBtn) pauseBtn.closest('form')?.remove();
+            injectPostRunButtons();
+        });
+        conn.on('runFailed',    e   => {
+            if (currentStage) {
+                appendOutput(currentStage, `\n! ${e.error}\n`);
+                finalizeCard(currentStage, 'failed', timerStart ? Math.round((Date.now() - timerStart) / 1000) : 0);
+                updateStation(currentStage, 'is-failed', 'failed');
+            }
+            finalizeRun('Failed');
+            injectPostRunButtons();
+        });
+
+        conn.on('prDiscovered', e => {
+            const bar = document.getElementById('run-bar-actions');
+            if (bar && e.prUrl && !document.getElementById('pr-link-live')) {
+                const link = document.createElement('a');
+                link.id = 'pr-link-live';
+                link.href = e.prUrl;
+                link.target = '_blank';
+                link.rel = 'noopener';
+                link.className = 'btn btn-sm btn-primary';
+                link.textContent = 'View PR';
+                bar.appendChild(link);
+            }
+        });
+
+        conn.on('branchReady', e => {
+            const el = document.getElementById('branch-value');
+            if (el && e.branchName) {
+                const code = document.createElement('code');
+                code.className = 'small';
+                code.id = 'branch-value';
+                code.textContent = e.branchName;
+                el.replaceWith(code);
+            }
+        });
+
+        conn.on('cyberpilotDispatch', e => {
+            appendSpineNode(e.type, e.message);
+            checkForHaltBanner(e.type, e.message);
+        });
+
+        conn.start()
+            .then(() => conn.invoke('JoinRun', '@Model.Run.Id'))
+            .catch(() => {});
+    }
+
+    // ── Button loading feedback ───────────────────────────────────────
+    document.querySelectorAll('#run-bar-actions form').forEach(form => {
+        form.addEventListener('submit', () => {
+            const btn = form.querySelector('button[type="submit"]');
+            if (!btn || btn.disabled) return;
+            btn.disabled = true;
+            const original = btn.innerHTML;
+            btn.dataset.originalText = original;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> Working...`;
+            setTimeout(() => { btn.disabled = false; btn.innerHTML = original; }, 12000);
+        });
+    });
+})();
+</script>
+}

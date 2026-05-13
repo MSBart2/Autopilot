@@ -1,0 +1,21 @@
+# Copilot Coding Agent Setup Steps
+# This workflow configures the environment for the GitHub Copilot coding agent.
+# It runs before Copilot begins working on an issue or PR.
+# See: https://gh.io/copilot-coding-agent-tips
+
+name: "Copilot Setup Steps"
+
+steps:
+  # Setup .NET 9 SDK for the project
+  - name: Setup .NET
+    uses: actions/setup-dotnet@v4
+    with:
+      dotnet-version: "9.0.x"
+
+  # Restore NuGet packages
+  - name: Restore dependencies
+    run: dotnet restore
+
+  # Build the project to ensure it compiles
+  - name: Build
+    run: dotnet build --no-restore --configuration Release

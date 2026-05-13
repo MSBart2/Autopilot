@@ -1,0 +1,31 @@
+@model Cyberpilot.Web.Models.PipelineGuideViewModel
+@{
+    ViewData["Title"] = $"{Model.Mode} Protocol";
+}
+
+<section class="guide-viewport">
+    <aside class="command-rail guide-rail">
+        <p class="eyebrow">AI-SDLC Protocol</p>
+        <h1>@Model.Title</h1>
+        <p class="guide-summary">@Model.Summary</p>
+        <div class="rail-actions">
+            <a class="btn btn-primary" asp-controller="Pipelines" asp-action="Issues">Open Dispatch</a>
+            <a class="btn btn-outline-light" asp-controller="Pipelines" asp-action="Index">Mission Lanes</a>
+        </div>
+        <div class="guide-chip-row">
+            <span class="telemetry-chip">@Model.Mode</span>
+            <span class="telemetry-chip">source: @Model.SourceFileName</span>
+        </div>
+        <nav class="guide-mode-nav" aria-label="Pipeline modes">
+            <a asp-action="Guide" asp-route-mode="local" class="btn btn-outline-primary">Local</a>
+            <a asp-action="Guide" asp-route-mode="cloud" class="btn btn-outline-primary">Cloud</a>
+            <a asp-action="Guide" asp-route-mode="sdk" class="btn btn-outline-primary">SDK</a>
+        </nav>
+    </aside>
+
+    <article class="guide-content-wrap">
+        <div class="guide-content markdown-body">
+            @Html.Raw(Model.HtmlContent)
+        </div>
+    </article>
+</section>

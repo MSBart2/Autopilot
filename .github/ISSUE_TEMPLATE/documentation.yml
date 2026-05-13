@@ -1,0 +1,35 @@
+name: "📖 Documentation"
+description: "Request updates or add new docs"
+labels: [documentation]
+title: "[DOCS] <short description>"
+body:
+  - type: markdown
+    attributes:
+      value: "Help improve our documentation."
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: "Document health checks"
+    validations:
+      required: true
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Files or sections to update
+      placeholder: "docs/architecture.md#health-checks"
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details / Outline
+      description: Key points to cover, examples, diagrams
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      placeholder: "Links, RFCs, ADRs"

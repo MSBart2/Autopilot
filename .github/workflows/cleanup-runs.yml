@@ -1,0 +1,67 @@
+name: Cleanup Workflow Runs
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # Daily at 6 AM UTC
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete old workflow runs (keep last 10 successful)
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const keepCount = 10;
+
+            // Get all workflow runs (paginated)
+            let allRuns = [];
+            let page = 1;
+            console.log('Fetching workflow runs...');
+            while (true) {
+              const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                owner, repo, per_page: 100, page
+              });
+              if (data.workflow_runs.length === 0) break;
+              allRuns.push(...data.workflow_runs);
+              console.log(`  Fetched page ${page}: ${allRuns.length}/${data.total_count} runs`);
+              page++;
+              if (allRuns.length >= data.total_count) break;
+            }
+            console.log(`Total runs found: ${allRuns.length}`);
+
+            // Identify the last N successful runs to keep
+            const successful = allRuns
+              .filter(r => r.conclusion === 'success')
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+              .slice(0, keepCount);
+            const keepIds = new Set(successful.map(r => r.id));
+
+            // Also keep this workflow's current run to avoid self-deletion
+            keepIds.add(context.runId);
+
+            // Delete everything else
+            const toDelete = allRuns.filter(r => !keepIds.has(r.id));
+            console.log(`Keeping: ${keepIds.size} | Deleting: ${toDelete.length}`);
+
+            let deleted = 0;
+            let failed = 0;
+            for (const run of toDelete) {
+              try {
+                await github.rest.actions.deleteWorkflowRun({ owner, repo, run_id: run.id });
+                deleted++;
+                if (deleted % 10 === 0) {
+                  console.log(`  Progress: ${deleted}/${toDelete.length} deleted`);
+                }
+              } catch (e) {
+                failed++;
+                console.log(`  ⚠️ Failed run ${run.id} (${run.name}): ${e.message}`);
+              }
+            }
+            console.log(`\nDone! Deleted: ${deleted} | Failed: ${failed} | Kept: ${keepIds.size}`);

@@ -1,0 +1,48 @@
+name: "✨ Feature request"
+description: "Suggest a feature or improvement"
+labels: [enhancement]
+title: "[FEAT] <short description>"
+body:
+  - type: markdown
+    attributes:
+      value: "Help us understand the value of your idea!"
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      placeholder: "Add Azure AD auth"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Opportunity
+      description: What problem are you solving? Who benefits?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the desired behavior, APIs, UI, configs
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: Backend
+        - label: Frontend / Views
+        - label: CI/CD
+        - label: Docs
+        - label: Security
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: "- Users can log in with Azure AD\n- Protected route returns 302 to /signin-oidc"

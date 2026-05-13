@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Cyberpilot.Web</RootNamespace>
+    <AssemblyName>Cyberpilot.Web</AssemblyName>
+    <!-- Exclude tests directory from default globbing to avoid enumerating ~96K files -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);..\tests\**;..\copilot-sdk\**;_worktrees\**</DefaultItemExcludes>
+    <!-- Documentation generated only in Release (perf: skip in Debug) -->
+    <GenerateDocumentationFile Condition="'$(Configuration)' == 'Release'">true</GenerateDocumentationFile>
+    <DocumentationFile Condition="'$(Configuration)' == 'Release'">bin\$(Configuration)\$(TargetFramework)\Cyberpilot.Web.xml</DocumentationFile>
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../VERSION').Trim())</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\copilot-sdk\Cyberpilot.Sdk.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Markdig" Version="0.38.0" />
+  </ItemGroup>
+
+</Project>

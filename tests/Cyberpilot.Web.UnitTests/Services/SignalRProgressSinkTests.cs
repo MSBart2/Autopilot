@@ -1,0 +1,127 @@
+using Cyberpilot.Persistence;
+using Cyberpilot.Pipeline;
+using Cyberpilot.Web.Hubs;
+using Cyberpilot.Web.Services;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+
+namespace Cyberpilot.Web.UnitTests.Services;
+
+public class SignalRProgressSinkTests : IDisposable
+{
+    private readonly SqliteConnection _connection;
+    private readonly CyberpilotDbContext _dbContext;
+    private readonly Mock<IHubContext<PipelineHub>> _hubContext;
+    private readonly PipelineRun _run;
+
+    public SignalRProgressSinkTests()
+    {
+        _connection = new SqliteConnection("DataSource=:memory:");
+        _connection.Open();
+        var options = new DbContextOptionsBuilder<CyberpilotDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+        _dbContext = new CyberpilotDbContext(options);
+        _dbContext.Database.EnsureCreated();
+
+        _run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m", Status = "Queued" };
+        _dbContext.PipelineRuns.Add(_run);
+        _dbContext.SaveChanges();
+
+        // Set up mock hub context
+        _hubContext = new Mock<IHubContext<PipelineHub>>();
+        var mockClients = new Mock<IHubClients>();
+        var mockGroupClient = new Mock<IClientProxy>();
+        _hubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(mockGroupClient.Object);
+        mockGroupClient
+            .Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+    }
+
+    public void Dispose()
+    {
+        _dbContext.Dispose();
+        _connection.Dispose();
+    }
+
+    [Fact]
+    public void OnStageStarted_CreatesStageLogAndUpdatesRun()
+    {
+        var sink = CreateSink();
+        var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
+
+        sink.OnStageStarted(stage, 42);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("triage", log.StageName);
+        Assert.Equal("Running", log.Status);
+
+        var updatedRun = _dbContext.PipelineRuns.Find(_run.Id)!;
+        Assert.Equal("triage", updatedRun.CurrentStage);
+    }
+
+    [Fact]
+    public void OnStageCompleted_SetsStatusAndCompletedAt()
+    {
+        var sink = CreateSink();
+        var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
+        sink.OnStageStarted(stage, 42);
+
+        sink.OnStageCompleted(stage, new StageResult("GO", "approved", true, null));
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("GO", log.Status);
+        Assert.NotNull(log.CompletedAt);
+    }
+
+    [Fact]
+    public void OnMessage_AppendsLineToLog()
+    {
+        var sink = CreateSink();
+        var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
+        sink.OnStageStarted(stage, 42);
+
+        sink.OnMessage("info", "Test message");
+
+        var log = _dbContext.PipelineStageLogs.First();
+        Assert.Contains("[info] Test message", log.Output);
+    }
+
+    [Fact]
+    public void OnStreamDelta_BuffersAndFlushesOnNewline()
+    {
+        var sink = CreateSink();
+        var stage = new StageDefinition("PLAN", "plan", "plan.agent.md", "sdk/planning");
+        sink.OnStageStarted(stage, 42);
+
+        sink.OnStreamDelta("part1");
+        sink.OnStreamDelta("part2\n");
+
+        var log = _dbContext.PipelineStageLogs.First();
+        Assert.Contains("part1part2", log.Output);
+    }
+
+    [Fact]
+    public void OnMessage_WithoutStageStarted_CreatesGenericLog()
+    {
+        var sink = CreateSink();
+        sink.OnMessage("warn", "No stage yet");
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("pipeline", log.StageName);
+    }
+
+    private SignalRProgressSink CreateSink()
+    {
+        return new SignalRProgressSink(
+            _run.Id,
+            42,
+            _dbContext,
+            _hubContext.Object,
+            NullLogger.Instance);
+    }
+}

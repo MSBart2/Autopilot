@@ -1,0 +1,29 @@
+/* Theme palette — CSS custom properties for light/dark modes */
+
+html[data-bs-theme="light"] {
+    --bg-color: #ffffff;
+    --text-color: #212529;
+    --surface-color: #f8f9fa;
+    --border-color: #dee2e6;
+    --link-color: #0d6efd;
+    --nav-bg: #ffffff;
+    --footer-bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --muted-text: #6c757d;
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+}
+
+html[data-bs-theme="dark"] {
+    --bg-color: #212529;
+    --text-color: #f8f9fa;
+    --surface-color: #2c3034;
+    --border-color: #495057;
+    --link-color: #6ea8fe;
+    --nav-bg: #343a40;
+    --footer-bg: #2c3034;
+    --card-bg: #343a40;
+    --muted-text: #adb5bd;
+    --input-bg: #2c3034;
+    --input-border: #495057;
+}

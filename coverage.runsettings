@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <Exclude>
+            [Cyberpilot.Sdk]Cyberpilot.Persistence.Migrations.*,
+            [Cyberpilot.Sdk]System.Text.RegularExpressions.Generated.*,
+            [Cyberpilot.Sdk]Cyberpilot.Copilot.CopilotStageRunner*,
+            [Cyberpilot.Sdk]Cyberpilot.Copilot.CopilotModelAvailabilityChecker*,
+            [Cyberpilot.Sdk]Cyberpilot.GitHub.GitHubCli,
+            [Cyberpilot.Sdk]Cyberpilot.GitHub.GitHubCli/*,
+            [Cyberpilot.Sdk]Cyberpilot.GitHub.GitHubApiIssueClient,
+            [Cyberpilot.Sdk]Cyberpilot.GitHub.GitHubApiIssueClient/*,
+            [Cyberpilot.Sdk]Cyberpilot.CyberpilotRunner,
+            [Cyberpilot.Sdk]Cyberpilot.CyberpilotRunner/*,
+            [Cyberpilot.Sdk]Cyberpilot.Git.BranchProvisioner/*,
+            [Cyberpilot.Web]AspNetCoreGeneratedDocument.*,
+            [Cyberpilot.Web]System.Text.RegularExpressions.Generated.*,
+            [Cyberpilot.Web]Program*,
+            [Cyberpilot.Web]Cyberpilot.Web.Services.WorktreeManager*,
+            [Cyberpilot.Web]Cyberpilot.Web.Services.CyberpilotPipelineService*
+          </Exclude>
+          <ExcludeByAttribute>ExcludeFromCodeCoverage,CompilerGenerated,GeneratedCode</ExcludeByAttribute>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

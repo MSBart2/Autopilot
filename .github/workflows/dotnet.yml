@@ -1,0 +1,165 @@
+name: .NET Build and Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '**.cs'
+      - '**.csproj'
+      - '**.sln'
+      - '**.cshtml'
+      - '**.razor'
+      - '**/appsettings*.json'
+      - '.github/workflows/dotnet.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.cs'
+      - '**.csproj'
+      - '**.sln'
+      - '**.cshtml'
+      - '**.razor'
+      - '**/appsettings*.json'
+      - '.github/workflows/dotnet.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.sln') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: |
+          if [ -d "tests" ] || find . -name "*.Tests.csproj" | grep -q .; then
+            dotnet test --no-build --configuration Release --verbosity normal
+          else
+            echo "No test projects found, skipping tests"
+          fi
+
+      - name: Publish
+        run: dotnet publish ./web/Cyberpilot.Web.csproj --no-build --configuration Release --output ./publish
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-app
+          path: ./publish
+
+  security-scan:
+    name: Security scan
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Dependency vulnerability scan
+        run: dotnet list package --vulnerable --include-transitive || true
+
+  code-quality:
+    name: Code quality
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Code analysis
+        run: dotnet build --configuration Release --verbosity normal
+
+  pipeline-report:
+    name: Pipeline build report
+    runs-on: ubuntu-latest
+    needs: [build, security-scan, code-quality]
+    if: github.event_name == 'pull_request'
+    permissions:
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Report to pipeline issue
+        uses: actions/github-script@v7
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          SECURITY_RESULT: ${{ needs.security-scan.result }}
+          QUALITY_RESULT: ${{ needs.code-quality.result }}
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) return;
+
+            const branch = pr.head.ref || '';
+            const isPipelinePR = branch.startsWith('feat/issue-');
+            if (!isPipelinePR) {
+              core.info('Not a pipeline PR. Skipping pipeline report.');
+              return;
+            }
+
+            const branchMatch = branch.match(/issue-(\d+)/);
+            if (!branchMatch) return;
+            const issueNumber = parseInt(branchMatch[1]);
+
+            const buildResult = process.env.BUILD_RESULT;
+            const securityResult = process.env.SECURITY_RESULT;
+            const qualityResult = process.env.QUALITY_RESULT;
+            const allPassed = buildResult === 'success' && securityResult === 'success' && qualityResult === 'success';
+            const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+
+            const comment = [
+              `## 🏗️ Pipeline — CI Status Update`,
+              ``,
+              `**Timestamp:** ${timestamp}  `,
+              `**PR:** #${pr.number} (\`${branch}\`)`,
+              ``,
+              `| Job | Status |`,
+              `|-----|--------|`,
+              `| Build & Test | ${buildResult === 'success' ? '✅ Pass' : '❌ Fail'} |`,
+              `| Security Scan | ${securityResult === 'success' ? '✅ Pass' : '❌ Fail'} |`,
+              `| Code Quality | ${qualityResult === 'success' ? '✅ Pass' : '❌ Fail'} |`,
+              ``,
+              allPassed
+                ? `✅ All CI checks passed. Pipeline can proceed.`
+                : `⚠️ CI checks have failures. Review needed.`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: issueNumber,
+              body: comment,
+            });

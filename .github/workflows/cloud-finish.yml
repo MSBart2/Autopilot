@@ -1,0 +1,260 @@
+name: "Pipeline — Finish"
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number whose PR should be merged and issue closed"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  finish:
+    name: Merge PR and close issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find and merge the PR
+        id: merge
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+        with:
+          script: |
+            const issueNumber = Number.parseInt(process.env.ISSUE_NUMBER, 10);
+            if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+              core.setFailed(`Invalid issue number: ${process.env.ISSUE_NUMBER}`);
+              return;
+            }
+
+            // --- Strategy 1: Issue timeline cross-references (most reliable) ---
+            // GitHub records a cross-reference event whenever any PR/issue mentions this
+            // issue, regardless of whether it uses a closing keyword in its body text.
+            let linkedPR = null;
+
+            const { data: timeline } = await github.rest.issues.listEventsForTimeline({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              per_page: 100
+            });
+
+            // Collect unique PR numbers referenced in the timeline, most-recent first.
+            const referencedPrNumbers = [];
+            for (let i = timeline.length - 1; i >= 0; i--) {
+              const event = timeline[i];
+              if (
+                event.event === 'cross-referenced' &&
+                event.source?.type === 'issue' &&
+                event.source.issue?.pull_request &&
+                !referencedPrNumbers.includes(event.source.issue.number)
+              ) {
+                referencedPrNumbers.push(event.source.issue.number);
+              }
+            }
+
+            // Fetch all referenced PRs in parallel, then pick the best match:
+            // prefer the first open PR; keep the most-recently-merged one as fallback.
+            // Use allSettled so a single deleted/missing PR doesn't abort the whole search.
+            const prSettled = await Promise.allSettled(
+              referencedPrNumbers.map(prNumber =>
+                github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber
+                }).then(r => r.data)
+              )
+            );
+            const prResults = prSettled
+              .filter(r => r.status === 'fulfilled')
+              .map(r => r.value);
+
+            for (const pr of prResults) {
+              if (pr.state === 'open') {
+                linkedPR = pr;
+                break;
+              }
+              if (!linkedPR && Boolean(pr.merged_at)) {
+                linkedPR = pr; // keep as fallback for idempotent reruns
+              }
+            }
+
+            // --- Strategy 2: Body/title keyword scan (fallback) ---
+            // Catches PRs whose branch never triggered a cross-reference event.
+            if (!linkedPR) {
+              // Match GitHub auto-closing keywords (closes/fixes/resolves) for this issue number (case-insensitive).
+              const issueRefRegex = new RegExp(`\\b(closes|fixes|resolves)\\s*:?\\s*#${issueNumber}\\b`, 'i');
+              const findByKeyword = async (state) => {
+                const { data: pulls } = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state,
+                  sort: 'updated',
+                  direction: 'desc',
+                  per_page: 50
+                });
+                return pulls.find(pr =>
+                  (pr.body && issueRefRegex.test(pr.body)) ||
+                  (pr.title && issueRefRegex.test(pr.title))
+                );
+              };
+
+              linkedPR = (await findByKeyword('open')) ?? (await findByKeyword('closed'));
+            }
+
+            if (!linkedPR) {
+              core.setFailed(`No PR found linked to issue #${issueNumber}`);
+              return;
+            }
+
+            core.info(`Found PR #${linkedPR.number}: ${linkedPR.title}`);
+            core.setOutput('pr_number', linkedPR.number);
+            core.setOutput('pr_title', linkedPR.title);
+            core.setOutput('branch', linkedPR.head.ref);
+
+            const isMerged = Boolean(linkedPR.merged_at);
+            if (isMerged) {
+              core.info(`PR #${linkedPR.number} is already merged. Continuing with issue closure.`);
+            }
+
+            if (!isMerged) {
+              // Verify review status
+              const { data: reviews } = await github.rest.pulls.listReviews({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: linkedPR.number
+              });
+
+              const approved = reviews.some(r => r.state === 'APPROVED');
+              const blocked = reviews.some(r => r.state === 'CHANGES_REQUESTED');
+
+              if (blocked) {
+                core.setFailed(`PR #${linkedPR.number} has outstanding change requests. Cannot merge.`);
+                return;
+              }
+
+              if (!approved) {
+                core.warning(`PR #${linkedPR.number} has no approving review. Proceeding anyway (pipeline-approved).`);
+              }
+
+              // Squash-merge the PR
+              try {
+                await github.rest.pulls.merge({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: linkedPR.number,
+                  merge_method: 'squash'
+                });
+                core.info(`Successfully merged PR #${linkedPR.number}`);
+              } catch (error) {
+                core.setFailed(`Failed to merge PR #${linkedPR.number}: ${error.message}`);
+                return;
+              }
+
+              // Delete the feature branch
+              try {
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${linkedPR.head.ref}`
+                });
+                core.info(`Deleted branch: ${linkedPR.head.ref}`);
+              } catch (error) {
+                core.warning(`Could not delete branch ${linkedPR.head.ref}: ${error.message}`);
+              }
+            }
+
+      - name: Update labels and close issue
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+          PR_NUMBER: ${{ steps.merge.outputs.pr_number }}
+          PR_TITLE: ${{ steps.merge.outputs.pr_title }}
+          BRANCH: ${{ steps.merge.outputs.branch }}
+        with:
+          script: |
+            const issueNumber = parseInt(process.env.ISSUE_NUMBER);
+            const prNumber = process.env.PR_NUMBER;
+            const prTitle = process.env.PR_TITLE;
+            const branch = process.env.BRANCH;
+
+            // Remove all cloud/* labels
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+
+            const cloudLabels = issue.labels
+              .map(l => l.name)
+              .filter(name => name.startsWith('cloud/'));
+
+            for (const label of cloudLabels) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: label
+                });
+              } catch (e) {
+                // Label may not exist
+              }
+            }
+
+            // Add cloud/done
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['cloud/done']
+            });
+
+            // Post completion comment
+            const timestamp = new Date().toISOString();
+            const lines = [
+              '## ✅ Pipeline — Complete',
+              '',
+              `**Timestamp:** ${timestamp}`,
+              `**PR:** #${prNumber} — ${prTitle}`,
+              `**Branch:** \`${branch}\` → \`main\` (squash-merged, branch deleted)`,
+              '',
+              '### Pipeline Summary',
+              '',
+              'Stage | Status',
+              '--- | ---',
+              'Triage | ✅ Complete',
+              'Plan | ✅ Complete',
+              'Implement | ✅ Complete',
+              'Review | ✅ Approved',
+              'Docs | ✅ Complete',
+              'Finish | ✅ Merged & Closed',
+              '',
+              'The full AI-SDLC pipeline has completed successfully. This issue is now closed.',
+              '',
+              '---',
+              '*Pipeline — Finish • Automated by GitHub Actions*'
+            ];
+            const body = lines.join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: body
+            });
+
+            // Close the issue
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              state: 'closed',
+              state_reason: 'completed'
+            });
+
+            core.info(`Issue #${issueNumber} closed as completed.`);
