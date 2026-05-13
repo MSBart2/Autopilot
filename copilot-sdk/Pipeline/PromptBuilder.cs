@@ -16,6 +16,7 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 			? "none"
 			: string.Join(", ", stageDefinition.Contract.RequiredArtifacts.Select(artifact => $"`{artifact}`"));
 		var artifactExample = BuildArtifactExample(stageDefinition.Contract.RequiredArtifacts);
+		var reportingGuidance = BuildReportingGuidance(stage.Name);
 
 		return $$"""
 			You are running as the Cyberpilot SDK cyberpilot controller.
@@ -65,12 +66,32 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 			Use these status values when applicable: GO, STOP, DUPLICATE.
 			Use these review decision values when applicable: approved, changes_requested, comment.
 			When status is STOP or the result needs human correction, populate `required_actions` with concrete next steps.
+			{{reportingGuidance}}
 
 			<stage-agent-prompt>
 			{{stagePrompt}}
 			</stage-agent-prompt>
 			""";
 	}
+
+		private static string BuildReportingGuidance(string stageName)
+		{
+			if (!stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase))
+			{
+				return string.Empty;
+			}
+
+			return """
+
+				## Landing Report Evidence
+
+				When you post the final landing report, include a compact evidence and policy summary:
+				- Link to the merged pull request or relevant PR evidence.
+				- Mention the validation, documentation, and delivery artifacts that support the landing decision.
+				- Summarize policy signals, gate outcomes, approvals, and any required actions that were resolved.
+				- Keep raw transcripts out of the report; cite concise evidence links or summaries instead.
+				""";
+		}
 
 	private static string BuildArtifactExample(IReadOnlyList<string> requiredArtifacts)
 	{

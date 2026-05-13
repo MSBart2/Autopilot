@@ -164,6 +164,16 @@ public sealed class PipelineDefinitionTests
         Assert.Null(error);
     }
 
+    [Fact]
+    public void BuiltInPipelineDefinitions_ListsDefaultDefinition()
+    {
+        var found = BuiltInPipelineDefinitions.TryGet(PipelineDefinitionDefaults.DefinitionName, out var definition);
+
+        Assert.True(found);
+        Assert.Same(DefaultPipelineDefinitionProvider.Definition, definition);
+        Assert.Contains(PipelineDefinitionDefaults.DefinitionName, BuiltInPipelineDefinitions.AvailableNames);
+    }
+
     [Theory]
     [InlineData("lenient", "Lenient")]
     [InlineData("standard", "Standard")]

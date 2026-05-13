@@ -86,6 +86,48 @@ public sealed class PipelineEngineTests
         Assert.Contains(progressSink.Dispatches, dispatch => dispatch.Type == DispatchType.Gate && dispatch.Message.Contains("policy-ready", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task ExecuteAsync_SkipDeliver_DoesNotRequireDeliverStage()
+    {
+        var options = new CyberpilotOptions(42, Directory.GetCurrentDirectory(), "owner/repo", "test-model", true, false, false, false, TimeSpan.FromMinutes(10), true, false, null, null, false);
+        var context = new PipelineExecutionContext(options, DefinitionWithoutDeliver());
+        var labels = new RecordingLabelService();
+        var progressSink = new RecordingProgressSink();
+        var console = new PipelineConsoleWriter(TextWriter.Null);
+        var stageRunner = new RecordingStageRunner();
+        var stageExecutor = new StageExecutor(new RecordingPromptBuilder(), stageRunner, new DefaultStageArtifactValidator(), progressSink, console);
+        var branchCoordinator = new PipelineBranchCoordinator(options, new RecordingIssueClient(), new RecordingBranchProvisioner(), progressSink, console);
+        var engine = new PipelineEngine(context, labels, branchCoordinator, stageExecutor, new PipelineGateRunner(new Dictionary<string, IPipelineGate>()), progressSink, console);
+
+        var exitCode = await engine.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(["triage", "plan", "implement", "review", "docs"], stageRunner.StageNames);
+        Assert.DoesNotContain("sdk/delivering", labels.StageLabels);
+        Assert.Contains(progressSink.Dispatches, dispatch => dispatch.Type == DispatchType.Skip);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_MissingRequiredDeliverStage_HaltsCleanly()
+    {
+        var options = new CyberpilotOptions(42, Directory.GetCurrentDirectory(), "owner/repo", "test-model", false, false, false, false, TimeSpan.FromMinutes(10), true, false, null, null, false);
+        var context = new PipelineExecutionContext(options, DefinitionWithoutDeliver());
+        var labels = new RecordingLabelService();
+        var progressSink = new RecordingProgressSink();
+        var console = new PipelineConsoleWriter(TextWriter.Null);
+        var stageRunner = new RecordingStageRunner();
+        var stageExecutor = new StageExecutor(new RecordingPromptBuilder(), stageRunner, new DefaultStageArtifactValidator(), progressSink, console);
+        var branchCoordinator = new PipelineBranchCoordinator(options, new RecordingIssueClient(), new RecordingBranchProvisioner(), progressSink, console);
+        var engine = new PipelineEngine(context, labels, branchCoordinator, stageExecutor, new PipelineGateRunner(new Dictionary<string, IPipelineGate>()), progressSink, console);
+
+        var exitCode = await engine.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(20, exitCode);
+        Assert.Equal(["triage", "plan", "implement", "review", "docs"], stageRunner.StageNames);
+        Assert.Contains("sdk/failed", labels.StageLabels);
+        Assert.Contains(progressSink.Dispatches, dispatch => dispatch.Type == DispatchType.Halt && dispatch.Message.Contains("missing required stage 'deliver'", StringComparison.Ordinal));
+    }
+
     private static PipelineDefinition DefinitionWithTriageGate()
     {
         var stages = DefaultPipelineDefinitionProvider.Definition.Stages
@@ -95,6 +137,19 @@ public sealed class PipelineEngineTests
             .ToArray();
 
         return DefaultPipelineDefinitionProvider.Definition with { Stages = stages };
+    }
+
+    private static PipelineDefinition DefinitionWithoutDeliver()
+    {
+        return DefaultPipelineDefinitionProvider.Definition with
+        {
+            Stages = DefaultPipelineDefinitionProvider.Definition.Stages
+                .Where(stage => stage.Stage.Name != "deliver")
+                .ToArray(),
+            Transitions = DefaultPipelineDefinitionProvider.Definition.Transitions
+                .Where(transition => transition.ToStage != "deliver")
+                .ToArray(),
+        };
     }
 
     private sealed class StaticGate(PipelineGateResult result) : IPipelineGate
@@ -110,10 +165,12 @@ public sealed class PipelineEngineTests
     private sealed class RecordingStageRunner : IStageRunner
     {
         public int Calls { get; private set; }
+        public List<string> StageNames { get; } = [];
 
         public Task<StageResult> RunAsync(StageDefinition stage, string prompt, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
             Calls++;
+            StageNames.Add(stage.Name);
             return Task.FromResult(new StageResult("GO", "approved", true, null));
         }
     }

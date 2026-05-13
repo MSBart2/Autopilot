@@ -63,6 +63,27 @@ public sealed class PromptBuilderTests
         Assert.Contains("When status is STOP", prompt);
     }
 
+    [Fact]
+    public async Task BuildAsync_ForDeliverStage_IncludesLandingReportEvidenceGuidance()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "deliver.agent.md"), "deliver instructions");
+        var builder = new PromptBuilder(targetRepo.Path, agentRepo.Path, 42);
+
+        var prompt = await builder.BuildAsync(
+            Stage("LAND", "deliver", "deliver.agent.md", "sdk/delivering", ["landing-report"]),
+            "merge the approved PR and post the landing report",
+            StandardPolicy());
+
+        Assert.Contains("## Landing Report Evidence", prompt);
+        Assert.Contains("include a compact evidence and policy summary", prompt);
+        Assert.Contains("Link to the merged pull request or relevant PR evidence", prompt);
+        Assert.Contains("Summarize policy signals, gate outcomes, approvals", prompt);
+    }
+
     private static PolicyProfile StandardPolicy() => new("standard", PolicyStrictness.Standard);
 
     private static PipelineStageDefinition Stage(string displayName, string name, string promptFile, string label, IReadOnlyList<string> requiredArtifacts)

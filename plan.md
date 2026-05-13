@@ -566,3 +566,33 @@ Added a compact Run Room policy summary:
 - The Policy panel reuses persisted evidence rather than adding new storage or duplicating persistence paths.
 - Added web view-model tests proving policy filtering preserves the full evidence ledger.
 - Validated with `dotnet build .\Cyberpilot.sln`, web unit tests, and web integration tests.
+
+### Forty-Fifth Slice Status
+
+Updated deliver-stage landing report guidance:
+
+- `PromptBuilder` now adds deliver-only guidance requiring the final landing report to include compact evidence and policy summaries.
+- The generated deliver prompt asks for PR evidence links, validation/documentation/delivery artifact summaries, policy signals, gate outcomes, approvals, and resolved actions.
+- Non-deliver stage prompts remain unchanged.
+- Added SDK prompt-builder tests for the deliver landing report guidance.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web integration tests.
+
+### Forty-Sixth Slice Status
+
+Started Step 10 with a built-in definition registry foundation:
+
+- Added `BuiltInPipelineDefinitions` as the SDK registry for code-first pipeline definitions.
+- Updated `PipelineDefinitionSelector` to resolve definitions through the registry instead of hardcoding the default definition check.
+- Preserved current runtime behavior: only `cyberpilot-default` is registered and selectable until the engine can safely route process variants.
+- Added SDK tests proving the registry exposes the default definition and selector behavior still works.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web integration tests.
+
+### Forty-Seventh Slice Status
+
+Prepared the engine for process variants with lazy stage resolution:
+
+- `PipelineEngine` no longer resolves all six default stages before routing starts.
+- Named stages are resolved only when their path is active, which lets inactive terminal stages be absent from future definitions.
+- Delivery still fails cleanly if the `deliver` stage is required but missing.
+- Added SDK engine tests for definitions without `deliver` in both `--skip-deliver` and required-delivery paths.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web integration tests.

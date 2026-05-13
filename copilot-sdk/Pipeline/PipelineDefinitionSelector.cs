@@ -8,15 +8,15 @@ internal static class PipelineDefinitionSelector
     {
         definition = null;
 
-        if (!options.PipelineDefinitionName.Equals(PipelineDefinitionDefaults.DefinitionName, StringComparison.OrdinalIgnoreCase))
+        if (!BuiltInPipelineDefinitions.TryGet(options.PipelineDefinitionName, out var selectedDefinition))
         {
-            error = $"Unsupported pipeline definition '{options.PipelineDefinitionName}'. Available definition: {PipelineDefinitionDefaults.DefinitionName}.";
+            error = $"Unsupported pipeline definition '{options.PipelineDefinitionName}'. Available definitions: {BuiltInPipelineDefinitions.AvailableNames}.";
             return false;
         }
 
-        if (!options.PipelineDefinitionVersion.Equals(PipelineDefinitionDefaults.DefinitionVersion, StringComparison.OrdinalIgnoreCase))
+        if (!options.PipelineDefinitionVersion.Equals(selectedDefinition!.Version.Value, StringComparison.OrdinalIgnoreCase))
         {
-            error = $"Unsupported pipeline definition version '{options.PipelineDefinitionVersion}' for {options.PipelineDefinitionName}. Available version: {PipelineDefinitionDefaults.DefinitionVersion}.";
+            error = $"Unsupported pipeline definition version '{options.PipelineDefinitionVersion}' for {options.PipelineDefinitionName}. Available version: {selectedDefinition.Version.Value}.";
             return false;
         }
 
@@ -26,7 +26,7 @@ internal static class PipelineDefinitionSelector
             return false;
         }
 
-        definition = DefaultPipelineDefinitionProvider.Definition with { PolicyProfile = policyProfile };
+        definition = selectedDefinition with { PolicyProfile = policyProfile };
         var validationErrors = PipelineDefinitionValidator.Validate(definition);
         if (validationErrors.Count > 0)
         {
