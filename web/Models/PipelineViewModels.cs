@@ -195,6 +195,16 @@ public sealed class PipelineConfiguredIssueLoadRequest
     public string Repository { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Captures an operator decision note for a pipeline approval request.
+/// </summary>
+public sealed class PipelineApprovalDecisionRequest
+{
+    /// <summary>Gets or sets the optional decision reason supplied by the operator.</summary>
+    [StringLength(1000)]
+    public string? Reason { get; set; }
+}
+
 
 /// <summary>
 /// Displays one pipeline run and its logs.

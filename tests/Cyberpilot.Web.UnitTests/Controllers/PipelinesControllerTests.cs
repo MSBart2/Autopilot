@@ -838,6 +838,141 @@ public class PipelinesControllerTests
         Assert.NotNull(queue.LastRequest);
     }
 
+    [Fact]
+    public async Task ApproveApproval_PendingApproval_RecordsDecision()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Paused" };
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "plan",
+            Timing = "AfterStage",
+            Reason = "Plan approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "implement",
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(approval);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ApproveApproval(run.Id, approval.Id, new PipelineApprovalDecisionRequest { Reason = "  ship it  " }));
+
+        Assert.Equal("Details", result.ActionName);
+        var updated = await db.PipelineApprovals.FirstAsync(item => item.Id == approval.Id);
+        Assert.Equal("Approved", updated.Status);
+        Assert.Equal("operator", updated.DecidedBy);
+        Assert.Equal("ship it", updated.DecisionReason);
+        Assert.NotNull(updated.DecidedAt);
+        Assert.NotNull(controller.TempData["PipelineNotice"]);
+    }
+
+    [Fact]
+    public async Task RejectApproval_PendingApproval_RecordsDecision()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Paused" };
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "review",
+            Timing = "AfterStage",
+            Reason = "Review approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "docs",
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(approval);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RejectApproval(run.Id, approval.Id, new PipelineApprovalDecisionRequest { Reason = "needs work" }));
+
+        Assert.Equal("Details", result.ActionName);
+        var updated = await db.PipelineApprovals.FirstAsync(item => item.Id == approval.Id);
+        Assert.Equal("Rejected", updated.Status);
+        Assert.Equal("needs work", updated.DecisionReason);
+        Assert.NotNull(updated.DecidedAt);
+    }
+
+    [Fact]
+    public async Task ApproveApproval_DeliveredRun_DoesNotAlterApproval()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Completed", SkipDeliver = false };
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "deliver",
+            Timing = "BeforeStage",
+            Reason = "Delivery approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "deliver",
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(approval);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ApproveApproval(run.Id, approval.Id, new PipelineApprovalDecisionRequest()));
+
+        Assert.Equal("Details", result.ActionName);
+        var unchanged = await db.PipelineApprovals.FirstAsync(item => item.Id == approval.Id);
+        Assert.Equal("Pending", unchanged.Status);
+        Assert.Null(unchanged.DecidedAt);
+        Assert.NotNull(controller.TempData["PipelineError"]);
+        Assert.Contains("Delivered", controller.TempData["PipelineError"]!.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ApproveApproval_DecidedApproval_DoesNotAlterDecision()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var decidedAt = DateTime.UtcNow.AddMinutes(-5);
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Paused" };
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "plan",
+            Timing = "AfterStage",
+            Reason = "Plan approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "implement",
+            Status = "Rejected",
+            DecidedBy = "alice",
+            DecisionReason = "nope",
+            DecidedAt = decidedAt,
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(approval);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ApproveApproval(run.Id, approval.Id, new PipelineApprovalDecisionRequest { Reason = "changed" }));
+
+        Assert.Equal("Details", result.ActionName);
+        var unchanged = await db.PipelineApprovals.FirstAsync(item => item.Id == approval.Id);
+        Assert.Equal("Rejected", unchanged.Status);
+        Assert.Equal("alice", unchanged.DecidedBy);
+        Assert.Equal("nope", unchanged.DecisionReason);
+        Assert.Equal(decidedAt, unchanged.DecidedAt);
+        Assert.NotNull(controller.TempData["PipelineError"]);
+    }
+
+    [Fact]
+    public async Task ApproveApproval_MissingApproval_ReturnsNotFound()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6", Status = "Paused" };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = await controller.ApproveApproval(run.Id, "missing", new PipelineApprovalDecisionRequest());
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
     private sealed class TestTempDataProvider : ITempDataProvider
     {
         public IDictionary<string, object?> LoadTempData(HttpContext context) => new Dictionary<string, object?>();

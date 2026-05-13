@@ -709,6 +709,79 @@ public class PipelinesController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    /// <summary>
+    /// Approves a pending human approval request for a pipeline run.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <param name="approvalId">The approval identifier.</param>
+    /// <param name="request">The optional decision note.</param>
+    /// <returns>A redirect to the run details page.</returns>
+    [HttpPost("{id}/Approvals/{approvalId}/Approve")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApproveApproval(string id, string approvalId, PipelineApprovalDecisionRequest request)
+    {
+        return await DecideApprovalAsync(id, approvalId, request, "Approved");
+    }
+
+    /// <summary>
+    /// Rejects a pending human approval request for a pipeline run.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <param name="approvalId">The approval identifier.</param>
+    /// <param name="request">The optional decision note.</param>
+    /// <returns>A redirect to the run details page.</returns>
+    [HttpPost("{id}/Approvals/{approvalId}/Reject")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RejectApproval(string id, string approvalId, PipelineApprovalDecisionRequest request)
+    {
+        return await DecideApprovalAsync(id, approvalId, request, "Rejected");
+    }
+
+    private async Task<IActionResult> DecideApprovalAsync(string id, string approvalId, PipelineApprovalDecisionRequest request, string decision)
+    {
+        var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
+        if (run is null)
+        {
+            return NotFound();
+        }
+
+        var approval = await _dbContext.PipelineApprovals.FirstOrDefaultAsync(item => item.Id == approvalId && item.RunId == id);
+        if (approval is null)
+        {
+            return NotFound();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            TempData["PipelineError"] = "Approval decision note is too long.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (run.Status == "Completed" && !run.SkipDeliver)
+        {
+            TempData["PipelineError"] = "Delivered runs cannot be altered.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (!approval.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["PipelineError"] = "This approval request has already been decided.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        approval.Status = decision;
+        approval.DecidedBy = User.Identity?.Name ?? "operator";
+        approval.DecisionReason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+        approval.DecidedAt = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+
+        TempData["PipelineNotice"] = decision == "Approved"
+            ? "Approval recorded. Resume controls will be available once approval resume is enabled."
+            : "Approval rejection recorded. Review the reason before continuing this run.";
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
 
 
 

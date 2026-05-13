@@ -415,3 +415,14 @@ Rendered persisted approval requests in the Run Room details page:
 - Added responsive approval-panel styling that fits the existing operational Run Room layout.
 - Kept approve/reject actions out of this slice until endpoints are wired.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Thirty-First Slice Status
+
+Added guarded approve/reject endpoints for pending pipeline approvals:
+
+- Added `PipelineApprovalDecisionRequest` for optional operator decision notes.
+- Added `ApproveApproval` and `RejectApproval` POST endpoints with CSRF protection.
+- Guarded delivered runs from approval mutation and prevented duplicate decisions on resolved approvals.
+- Recorded decision status, actor, reason, and timestamp on pending approvals.
+- Added controller tests for approve, reject, delivered-run guard, duplicate-decision guard, and missing approvals.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
