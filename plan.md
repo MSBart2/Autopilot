@@ -513,3 +513,35 @@ Added approval events to the evidence ledger:
 - The Run Room Evidence panel labels approval request and decision entries clearly.
 - Added SDK persistence/sink tests plus web controller, SignalR sink, and view-model tests for approval evidence.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Fortieth Slice Status
+
+Added branch and pull request references to the evidence ledger:
+
+- `PipelineEvidence` now creates ledger rows for prepared branches and pull request URLs.
+- SDK history and web SignalR progress sinks persist duplicate-safe branch evidence from `OnBranchReady`.
+- Web background runs persist duplicate-safe pull request evidence when the SDK returns a PR URL.
+- The Run Room Evidence panel labels branch and pull request entries clearly.
+- Added SDK persistence/sink tests plus web SignalR sink, worker, and view-model tests for branch/PR evidence.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Forty-First Slice Status
+
+Added stage usage metrics to the evidence ledger:
+
+- Stage completions now create `usage-metrics` evidence rows when token telemetry or non-zero estimated cost exists.
+- Usage evidence summarizes input tokens, output tokens, and estimated USD cost without creating noisy rows for zero-cost/no-token completions.
+- The Run Room Evidence panel labels usage entries clearly.
+- Added SDK helper/sink tests plus web SignalR sink and view-model tests for usage evidence.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Forty-Second Slice Status
+
+Added delivery outcomes to the evidence ledger:
+
+- `PipelineEvidence` now maps terminal delivery dispatches into `delivery-outcome` rows for skip-deliver, delivery complete, and issue closed events.
+- SDK history and web SignalR progress sinks persist delivery outcome evidence through their existing dispatch paths.
+- Ordinary routing dispatches remain transcript-only and do not create evidence noise.
+- The Run Room Evidence panel labels delivery outcome rows clearly.
+- Added SDK helper/sink tests plus web SignalR sink and view-model tests for delivery evidence.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.

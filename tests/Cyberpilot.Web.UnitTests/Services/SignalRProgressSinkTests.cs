@@ -66,6 +66,20 @@ public class SignalRProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnBranchReady_PersistsBranchEvidence()
+    {
+        var sink = CreateSink();
+
+        sink.OnBranchReady("cyberpilot/issue-42-test");
+        sink.OnBranchReady("cyberpilot/issue-42-test");
+
+        var evidence = _dbContext.PipelineEvidence.Single();
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("branch-reference", evidence.Kind);
+        Assert.Equal("cyberpilot/issue-42-test", evidence.Name);
+    }
+
+    [Fact]
     public void OnStageCompleted_SetsStatusAndCompletedAt()
     {
         var sink = CreateSink();
@@ -171,6 +185,13 @@ public class SignalRProgressSinkTests : IDisposable
         Assert.Equal(2_000_000, log.InputTokens);
         Assert.Equal(1_000_000, log.OutputTokens);
         Assert.Equal(12.0m, log.EstimatedCostUsd); // 4.00 in + 8.00 out = $12.00
+
+        var evidence = _dbContext.PipelineEvidence.Single(row => row.Kind == "usage-metrics");
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("triage", evidence.StageName);
+        Assert.Contains("2,000,000 input tokens", evidence.Summary);
+        Assert.Contains("1,000,000 output tokens", evidence.Summary);
+        Assert.Contains("$12.0000", evidence.Summary);
     }
 
     [Fact]
@@ -233,6 +254,27 @@ public class SignalRProgressSinkTests : IDisposable
             It.Is<object?[]>(arguments =>
                 arguments.Length == 1
                 && (string?)arguments[0]!.GetType().GetProperty("approvalId")!.GetValue(arguments[0]) == "approval-signalr-1"),
+            It.IsAny<CancellationToken>()));
+    }
+
+    [Fact]
+    public void OnDispatch_WithSkipDeliver_PersistsDeliveryEvidenceAndNotifiesClients()
+    {
+        var sink = CreateSink();
+
+        sink.OnDispatch(DispatchType.Skip, "Skip-deliver enabled — pipeline complete, PR ready for manual merge");
+
+        var evidence = _dbContext.PipelineEvidence.Single();
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("deliver", evidence.StageName);
+        Assert.Equal("delivery-outcome", evidence.Kind);
+        Assert.Equal("delivery-skipped", evidence.Name);
+
+        _groupClient.Verify(client => client.SendCoreAsync(
+            "cyberpilotDispatch",
+            It.Is<object?[]>(arguments =>
+                arguments.Length == 1
+                && (string?)arguments[0]!.GetType().GetProperty("type")!.GetValue(arguments[0]) == DispatchType.Skip),
             It.IsAny<CancellationToken>()));
     }
 

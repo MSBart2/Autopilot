@@ -92,6 +92,25 @@ public class PipelineRunDetailsViewModelTests
             new PipelineEvidence
             {
                 RunId = run.Id,
+                StageName = "implement",
+                Kind = "pull-request-reference",
+                Name = "pull-request",
+                Summary = "Pull request ready.",
+                Uri = "https://github.com/owner/repo/pull/1",
+                CreatedAt = DateTime.Parse("2026-05-13T09:30:00Z").ToUniversalTime(),
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "deliver",
+                Kind = "delivery-outcome",
+                Name = "delivery-complete",
+                Summary = "Delivery complete — PR merged, branch cleaned up, landing report posted",
+                CreatedAt = DateTime.Parse("2026-05-13T11:00:00Z").ToUniversalTime(),
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
                 StageName = "review",
                 Kind = "required-action",
                 Name = "required-action-1",
@@ -106,6 +125,15 @@ public class PipelineRunDetailsViewModelTests
                 Name = "approval-plan",
                 Summary = "Approval requested for maintainer: Plan approval required.",
                 CreatedAt = DateTime.Parse("2026-05-13T08:00:00Z").ToUniversalTime(),
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "plan",
+                Kind = "usage-metrics",
+                Name = "usage",
+                Summary = "Usage: 10 input tokens, 5 output tokens, estimated cost $0.0001.",
+                CreatedAt = DateTime.Parse("2026-05-13T09:15:00Z").ToUniversalTime(),
             },
             new PipelineEvidence
             {
@@ -140,10 +168,29 @@ public class PipelineRunDetailsViewModelTests
             },
             item =>
             {
+                Assert.Equal("Plan", item.StageLabel);
+                Assert.Equal("Usage", item.KindLabel);
+                Assert.Equal("usage", item.Name);
+            },
+            item =>
+            {
+                Assert.Equal("Implement", item.StageLabel);
+                Assert.Equal("Pull Request", item.KindLabel);
+                Assert.Equal("pull-request", item.Name);
+                Assert.True(item.HasUri);
+            },
+            item =>
+            {
                 Assert.Equal("Review", item.StageLabel);
                 Assert.Equal("Action", item.KindLabel);
                 Assert.Equal("Fix failing tests.", item.Summary);
                 Assert.False(item.HasUri);
+            },
+            item =>
+            {
+                Assert.Equal("Deliver", item.StageLabel);
+                Assert.Equal("Delivery", item.KindLabel);
+                Assert.Equal("delivery-complete", item.Name);
             });
     }
 

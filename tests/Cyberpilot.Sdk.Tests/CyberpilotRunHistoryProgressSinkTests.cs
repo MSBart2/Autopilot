@@ -51,6 +51,21 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnBranchReady_PersistsBranchEvidence()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
+
+        sink.OnBranchReady("cyberpilot/issue-1-test");
+        sink.OnBranchReady("cyberpilot/issue-1-test");
+
+        var evidence = _dbContext.PipelineEvidence.Single();
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("branch-reference", evidence.Kind);
+        Assert.Equal("cyberpilot/issue-1-test", evidence.Name);
+        Assert.Equal("git", evidence.Source);
+    }
+
+    [Fact]
     public void OnStageCompleted_UpdatesStageLogStatus()
     {
         var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
@@ -109,6 +124,25 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
         Assert.Contains(rows, row => row.Kind == "stage-artifact" && row.Name == "pull-request");
         Assert.Contains(rows, row => row.Kind == "policy-rationale" && row.Summary == "Policy requires passing tests.");
         Assert.Contains(rows, row => row.Kind == "required-action" && row.Summary == "Fix failing tests.");
+    }
+
+    [Fact]
+    public void OnStageCompleted_WithTokens_PersistsUsageMetricsEvidence()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "gpt-4.1", _dbContext);
+        var stage = new StageDefinition("PLAN", "plan", "plan.agent.md", "sdk/plan");
+        sink.OnStageStarted(stage, 1);
+
+        sink.OnStageCompleted(stage, new StageResult("GO", "approved", true, null, InputTokens: 2_000_000, OutputTokens: 1_000_000));
+
+        var evidence = _dbContext.PipelineEvidence.Single(row => row.Kind == "usage-metrics");
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("plan", evidence.StageName);
+        Assert.Equal("usage", evidence.Name);
+        Assert.Equal("telemetry", evidence.Source);
+        Assert.Contains("2,000,000 input tokens", evidence.Summary);
+        Assert.Contains("1,000,000 output tokens", evidence.Summary);
+        Assert.Contains("$12.0000", evidence.Summary);
     }
 
     [Fact]
@@ -208,5 +242,22 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
         Assert.Equal("approval-request", evidence.Kind);
         Assert.Equal("approval-history-1", evidence.Name);
         Assert.Contains("Plan approval required", evidence.Summary);
+    }
+
+    [Fact]
+    public void OnDispatch_WithDeliveryOutcome_PersistsDeliveryEvidence()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
+
+        sink.OnDispatch(DispatchType.Routing, "Delivery complete — PR merged, branch cleaned up, landing report posted");
+        sink.OnDispatch(DispatchType.Routing, "Review approved — dispatching to Docs stage");
+
+        var evidence = _dbContext.PipelineEvidence.Single();
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("deliver", evidence.StageName);
+        Assert.Equal("delivery-outcome", evidence.Kind);
+        Assert.Equal("delivery-complete", evidence.Name);
+        Assert.Equal("dispatch", evidence.Source);
+        Assert.Equal(2, _dbContext.PipelineDispatches.Count());
     }
 }

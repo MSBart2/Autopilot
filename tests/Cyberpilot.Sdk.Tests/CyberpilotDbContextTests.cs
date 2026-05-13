@@ -338,6 +338,93 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public void PipelineEvidence_FromBranchReady_CreatesBranchReferenceRow()
+    {
+        var evidence = PipelineEvidence.FromBranchReady("run-1", "cyberpilot/issue-42-test");
+
+        Assert.Equal("run-1", evidence.RunId);
+        Assert.Equal("branch", evidence.StageName);
+        Assert.Equal("branch-reference", evidence.Kind);
+        Assert.Equal("cyberpilot/issue-42-test", evidence.Name);
+        Assert.Equal("Branch ready: cyberpilot/issue-42-test", evidence.Summary);
+        Assert.Equal("git", evidence.Source);
+    }
+
+    [Fact]
+    public void PipelineEvidence_FromPullRequest_CreatesPullRequestReferenceRow()
+    {
+        var evidence = PipelineEvidence.FromPullRequest("run-1", "https://github.com/owner/repo/pull/1");
+
+        Assert.Equal("run-1", evidence.RunId);
+        Assert.Equal("implement", evidence.StageName);
+        Assert.Equal("pull-request-reference", evidence.Kind);
+        Assert.Equal("pull-request", evidence.Name);
+        Assert.Equal("https://github.com/owner/repo/pull/1", evidence.Uri);
+        Assert.Equal("text/uri-list", evidence.MediaType);
+        Assert.Equal("github", evidence.Source);
+    }
+
+    [Fact]
+    public void PipelineEvidence_FromUsageMetrics_CreatesUsageMetricsRow()
+    {
+        var log = new PipelineStageLog
+        {
+            RunId = "run-1",
+            StageName = "review",
+            Status = "GO",
+            InputTokens = 12_345,
+            OutputTokens = 678,
+            EstimatedCostUsd = 0.1234m,
+        };
+
+        var evidence = PipelineEvidence.FromUsageMetrics("run-1", "review", log);
+
+        Assert.NotNull(evidence);
+        Assert.Equal("run-1", evidence.RunId);
+        Assert.Equal("review", evidence.StageName);
+        Assert.Equal("usage-metrics", evidence.Kind);
+        Assert.Equal("usage", evidence.Name);
+        Assert.Equal("Usage: 12,345 input tokens, 678 output tokens, estimated cost $0.1234.", evidence.Summary);
+        Assert.Equal("text/plain", evidence.MediaType);
+        Assert.Equal("telemetry", evidence.Source);
+    }
+
+    [Fact]
+    public void PipelineEvidence_FromUsageMetrics_WithoutTelemetry_ReturnsNull()
+    {
+        var log = new PipelineStageLog { RunId = "run-1", StageName = "review", Status = "GO" };
+
+        var evidence = PipelineEvidence.FromUsageMetrics("run-1", "review", log);
+
+        Assert.Null(evidence);
+    }
+
+    [Theory]
+    [InlineData(DispatchType.Skip, "Skip-deliver enabled — pipeline complete, PR ready for manual merge", "delivery-skipped")]
+    [InlineData(DispatchType.Routing, "Delivery complete — PR merged, branch cleaned up, landing report posted", "delivery-complete")]
+    [InlineData(DispatchType.IssueClosed, "Issue #42 closed — mission complete", "issue-closed")]
+    public void PipelineEvidence_FromDeliveryDispatch_CreatesTerminalDeliveryRows(string type, string message, string expectedName)
+    {
+        var evidence = PipelineEvidence.FromDeliveryDispatch("run-1", type, message);
+
+        Assert.NotNull(evidence);
+        Assert.Equal("run-1", evidence.RunId);
+        Assert.Equal("deliver", evidence.StageName);
+        Assert.Equal("delivery-outcome", evidence.Kind);
+        Assert.Equal(expectedName, evidence.Name);
+        Assert.Equal(message, evidence.Summary);
+        Assert.Equal("dispatch", evidence.Source);
+    }
+
+    [Fact]
+    public void PipelineEvidence_FromDeliveryDispatch_WithNonTerminalRouting_ReturnsNull()
+    {
+        var evidence = PipelineEvidence.FromDeliveryDispatch("run-1", DispatchType.Routing, "Plan cleared — dispatching to implementation");
+
+        Assert.Null(evidence);
+    }
+
+    [Fact]
     public async Task PipelineApproval_FromPendingRequest_CanBeAddedAndRetrieved()
     {
         var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };

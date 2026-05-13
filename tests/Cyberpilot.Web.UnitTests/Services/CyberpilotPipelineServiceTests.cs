@@ -153,6 +153,38 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
         await service.StopAsync(CancellationToken.None);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_CompletedRunWithPrUrl_PersistsPullRequestEvidence()
+    {
+        var queue = new CyberpilotRunQueue();
+        var runner = new BlockingRunner(expectedConcurrentStarts: 1)
+        {
+            Result = new CyberpilotRunResult(0, "deliver", "Completed", "cyberpilot/issue-1-test", "https://github.com/owner/repo/pull/1", null, []),
+        };
+        using var provider = CreateProvider(queue, runner);
+        await SeedRunAsync(provider, "run-1", "owner/repo-one");
+        var service = CreateService(provider, queue);
+
+        await service.StartAsync(CancellationToken.None);
+        await queue.EnqueueAsync(CreateRequest("run-1", "owner/repo-one", "C:\\Repos\\One"));
+        await runner.WaitForExpectedStartsAsync();
+        runner.ReleaseAll();
+
+        await WaitForRunStatusAsync(provider, "run-1", "Completed");
+
+        using (var scope = provider.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<CyberpilotDbContext>();
+            var evidence = await dbContext.PipelineEvidence.SingleAsync(item => item.Kind == "pull-request-reference");
+            Assert.Equal("run-1", evidence.RunId);
+            Assert.Equal("implement", evidence.StageName);
+            Assert.Equal("https://github.com/owner/repo/pull/1", evidence.Uri);
+            Assert.Equal("github", evidence.Source);
+        }
+
+        await service.StopAsync(CancellationToken.None);
+    }
+
     private static CyberpilotPipelineService CreateService(ServiceProvider provider, ICyberpilotRunQueue queue)
     {
         var hubContext = provider.GetRequiredService<IHubContext<PipelineHub>>();
@@ -235,6 +267,28 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
         await dbContext.SaveChangesAsync();
     }
 
+    private static async Task WaitForRunStatusAsync(ServiceProvider provider, string runId, string expectedStatus)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (!timeout.IsCancellationRequested)
+        {
+            using var scope = provider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<CyberpilotDbContext>();
+            var status = await dbContext.PipelineRuns
+                .Where(run => run.Id == runId)
+                .Select(run => run.Status)
+                .FirstOrDefaultAsync(timeout.Token);
+            if (status == expectedStatus)
+            {
+                return;
+            }
+
+            await Task.Delay(25, timeout.Token);
+        }
+
+        throw new TimeoutException($"Run {runId} did not reach status {expectedStatus}.");
+    }
+
     private sealed class BlockingRunner(int expectedConcurrentStarts) : ICyberpilotRunner
     {
         private readonly TaskCompletionSource expectedStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -242,6 +296,8 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
         private int started;
 
         public ConcurrentQueue<CyberpilotRunRequest> Requests { get; } = [];
+
+        public CyberpilotRunResult Result { get; init; } = new(0, "deliver", "Completed", null, null, null, []);
 
         public Task<CyberpilotRunResult> RunAsync(CyberpilotRunRequest request, CancellationToken cancellationToken = default)
             => RunAsync(request, new TextWriterProgressSink(TextWriter.Null, TextWriter.Null), cancellationToken);
@@ -256,7 +312,7 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
             }
 
             await release.Task.WaitAsync(cancellationToken);
-            return new CyberpilotRunResult(0, "deliver", "Completed", null, null, null, []);
+            return Result;
         }
 
         public Task WaitForExpectedStartsAsync() => expectedStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));

@@ -152,6 +152,8 @@ public sealed class CyberpilotPipelineService(
             run.PrUrl = result.PrUrl;
             run.CompletedAt = DateTime.UtcNow;
 
+            AddPullRequestEvidence(dbContext, run.Id, result.PrUrl);
+
             // For paused runs, set CurrentStage to the NEXT stage so resume starts correctly
             if (result.Status == "Paused" && NextStage(result.FinalStage) is string nextStage)
             {
@@ -280,6 +282,24 @@ public sealed class CyberpilotPipelineService(
             run.PipelineDefinitionVersion,
             run.PolicyProfileName,
             run.ContractVersion);
+    }
+
+    private static void AddPullRequestEvidence(CyberpilotDbContext dbContext, string runId, string? prUrl)
+    {
+        if (string.IsNullOrWhiteSpace(prUrl))
+        {
+            return;
+        }
+
+        var trimmedUrl = prUrl.Trim();
+        var exists = dbContext.PipelineEvidence.Any(evidence =>
+            evidence.RunId == runId
+            && evidence.Kind == "pull-request-reference"
+            && evidence.Uri == trimmedUrl);
+        if (!exists)
+        {
+            dbContext.PipelineEvidence.Add(PipelineEvidence.FromPullRequest(runId, trimmedUrl));
+        }
     }
 
     private bool TryGetConfiguredRepository(string repository, out RuntimeConfiguredRepository configuredRepository)

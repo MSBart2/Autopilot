@@ -111,6 +111,7 @@ public sealed class SignalRProgressSink(
         if (run is not null)
         {
             run.BranchName = branchName;
+            AddBranchEvidence(branchName);
             dbContext.SaveChanges();
         }
 
@@ -164,6 +165,7 @@ public sealed class SignalRProgressSink(
     /// <inheritdoc />
     public void OnDispatch(string type, string message)
     {
+        AddDeliveryEvidence(type, message);
         var dispatch = new Cyberpilot.Persistence.PipelineDispatch
         {
             RunId = runId,
@@ -173,6 +175,27 @@ public sealed class SignalRProgressSink(
         dbContext.PipelineDispatches.Add(dispatch);
         dbContext.SaveChanges();
         hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("cyberpilotDispatch", new { runId, type, message, timestamp = dispatch.CreatedAt.ToString("o") }).GetAwaiter().GetResult();
+    }
+
+    private void AddDeliveryEvidence(string type, string message)
+    {
+        var evidence = PipelineEvidence.FromDeliveryDispatch(runId, type, message);
+        if (evidence is null)
+        {
+            return;
+        }
+
+        dbContext.PipelineEvidence.Add(evidence);
+    }
+
+    private void AddBranchEvidence(string branchName)
+    {
+        if (dbContext.PipelineEvidence.Any(evidence => evidence.RunId == runId && evidence.Kind == "branch-reference" && evidence.Name == branchName))
+        {
+            return;
+        }
+
+        dbContext.PipelineEvidence.Add(PipelineEvidence.FromBranchReady(runId, branchName));
     }
 
     /// <summary>

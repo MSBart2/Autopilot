@@ -360,6 +360,10 @@ public sealed record PipelineEvidenceViewModel(
         "required-action" => "Action",
         "approval-request" => "Approval",
         "approval-decision" => "Decision",
+        "branch-reference" => "Branch",
+        "pull-request-reference" => "Pull Request",
+        "usage-metrics" => "Usage",
+        "delivery-outcome" => "Delivery",
         _ => string.IsNullOrWhiteSpace(Kind) ? "Evidence" : Kind,
     };
 

@@ -66,6 +66,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
         if (run is not null)
         {
             run.BranchName = branchName;
+            AddBranchEvidence(branchName);
             dbContext.SaveChanges();
         }
     }
@@ -101,6 +102,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
     /// <inheritdoc />
     public void OnDispatch(string type, string message)
     {
+        AddDeliveryEvidence(type, message);
         dbContext.PipelineDispatches.Add(new PipelineDispatch
         {
             RunId = runId,
@@ -108,6 +110,27 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
             Message = message,
         });
         dbContext.SaveChanges();
+    }
+
+    private void AddDeliveryEvidence(string type, string message)
+    {
+        var evidence = PipelineEvidence.FromDeliveryDispatch(runId, type, message);
+        if (evidence is null)
+        {
+            return;
+        }
+
+        dbContext.PipelineEvidence.Add(evidence);
+    }
+
+    private void AddBranchEvidence(string branchName)
+    {
+        if (dbContext.PipelineEvidence.Any(evidence => evidence.RunId == runId && evidence.Kind == "branch-reference" && evidence.Name == branchName))
+        {
+            return;
+        }
+
+        dbContext.PipelineEvidence.Add(PipelineEvidence.FromBranchReady(runId, branchName));
     }
 
     private void AppendLine(string line)
