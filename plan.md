@@ -229,4 +229,11 @@ Persisted serialized stage results from progress sinks:
 
 ### Thirteenth Slice Status
 
-In progress: capturing operator retry reasons for web retry/rework attempts.
+Captured operator retry reasons for web retry/rework attempts:
+
+- Added queue plumbing so RetryStage preserves the operator-provided reason and Rework from Review records a fixed review-feedback reason.
+- Persisted retry reasons on the matching stage log through the SignalR progress sink.
+- Included retry reasons in live `stageStarted` events and historical Run Room log data.
+- Displayed retry reasons on Run Room stage cards without changing the transcript layout.
+- Added controller and SignalR sink tests for retry reason queueing, persistence, and live event payloads.
+- Validated with `dotnet build .\Cyberpilot.sln` and web unit tests.

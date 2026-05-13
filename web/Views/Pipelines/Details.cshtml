@@ -45,6 +45,7 @@
         outputTokens = l.OutputTokens,
         estimatedCostUsd = l.EstimatedCostUsd,
         retryCount = l.RetryCount,
+        retryReason = l.RetryReason,
     }));
     var dispatchesJson = JsonSerializer.Serialize((Model.Dispatches ?? []).Select(d => new
     {
@@ -824,6 +825,26 @@
         background: rgba(51,65,85,.38);
         border: 1px dashed rgba(148,163,184,.35);
     }
+    .agent-retry-reason {
+        display: flex;
+        flex-direction: column;
+        gap: .2rem;
+        margin: -.15rem 0 .55rem;
+        padding: .5rem .6rem;
+        border-radius: 7px;
+        color: #fef3c7;
+        background: rgba(120,53,15,.32);
+        border: 1px solid rgba(251,191,36,.36);
+        font-size: .78rem;
+        line-height: 1.35;
+    }
+    .agent-retry-reason-label {
+        color: #fde68a;
+        font-size: .68rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
 
     /* ── Output terminal ──────────────────────────────────── */
     .agent-output {
@@ -1247,7 +1268,7 @@
     // ── Build a card DOM node ──────────────────────────────────────────
     const STAGE_ORDER = ['triage','plan','implement','review','docs','deliver'];
 
-    function buildCard(stage, round, retryCount) {
+    function buildCard(stage, round, retryCount, retryReason) {
         round = round || 1;
         const a = AGENTS[stage];
         if (!a) return null;
@@ -1294,6 +1315,7 @@
               <span class="agent-dur"></span>
             </div>
             <div class="agent-tagline">"${a.tagline}"</div>
+                        ${retryReason ? `<div class="agent-retry-reason"><span class="agent-retry-reason-label">Retry reason</span><span>${escapeHtml(retryReason)}</span></div>` : ''}
             <div class="agent-state-note" aria-live="polite"></div>
             <div class="agent-output"></div>
           </div>`;
@@ -1549,7 +1571,7 @@
     }
 
     // ── Ensure a card exists; create + append if not ───────────────────
-    function ensureCard(stage) {
+    function ensureCard(stage, retryReason) {
         // If there's already an active card for this stage, return it
         const activeId = activeCardIds[stage];
         if (activeId) {
@@ -1566,7 +1588,7 @@
             // Stage was seen before — create new round card
             roundCounts[stage] = (roundCounts[stage] || 1) + 1;
             const round = roundCounts[stage];
-            const card = buildCard(stage, round);
+            const card = buildCard(stage, round, null, retryReason);
             if (!card) return null;
             feed.appendChild(card);
             activeCardIds[stage] = card.id;
@@ -1576,7 +1598,7 @@
 
         // First time — create round 1
         roundCounts[stage] = 1;
-        const card = buildCard(stage, 1);
+        const card = buildCard(stage, 1, null, retryReason);
         if (!card) return null;
         feed.appendChild(card);
         activeCardIds[stage] = card.id;
@@ -1800,7 +1822,7 @@
         roundCounts[log.stage] = (roundCounts[log.stage] || 0) + 1;
         const round = roundCounts[log.stage];
 
-        const card = buildCard(log.stage, round, log.retryCount);
+        const card = buildCard(log.stage, round, log.retryCount, log.retryReason);
         if (!card) continue;
 
         activeCardIds[log.stage] = card.id;
@@ -1967,7 +1989,7 @@
             });
 
             currentStage = e.stage;
-            const card = ensureCard(e.stage);
+            const card = ensureCard(e.stage, e.retryReason);
             if (card) {
                 // ensureCard returns a fresh card in state-active for re-entries
                 // For first-time cards, it's also already state-active from buildCard

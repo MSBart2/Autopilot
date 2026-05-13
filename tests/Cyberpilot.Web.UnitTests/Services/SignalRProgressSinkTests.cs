@@ -15,6 +15,7 @@ public class SignalRProgressSinkTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly CyberpilotDbContext _dbContext;
     private readonly Mock<IHubContext<PipelineHub>> _hubContext;
+    private readonly Mock<IClientProxy> _groupClient;
     private readonly PipelineRun _run;
 
     public SignalRProgressSinkTests()
@@ -34,10 +35,10 @@ public class SignalRProgressSinkTests : IDisposable
         // Set up mock hub context
         _hubContext = new Mock<IHubContext<PipelineHub>>();
         var mockClients = new Mock<IHubClients>();
-        var mockGroupClient = new Mock<IClientProxy>();
+        _groupClient = new Mock<IClientProxy>();
         _hubContext.Setup(h => h.Clients).Returns(mockClients.Object);
-        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(mockGroupClient.Object);
-        mockGroupClient
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(_groupClient.Object);
+        _groupClient
             .Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
     }
@@ -152,6 +153,13 @@ public class SignalRProgressSinkTests : IDisposable
 
         var log = _dbContext.PipelineStageLogs.Single();
         Assert.Equal("Need to address review findings.", log.RetryReason);
+
+        _groupClient.Verify(client => client.SendCoreAsync(
+            "stageStarted",
+            It.Is<object?[]>(arguments =>
+                arguments.Length == 1
+                && (string?)arguments[0]!.GetType().GetProperty("retryReason")!.GetValue(arguments[0]) == "Need to address review findings."),
+            It.IsAny<CancellationToken>()));
     }
 
     private SignalRProgressSink CreateSink(string model = "")

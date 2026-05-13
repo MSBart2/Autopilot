@@ -41,11 +41,13 @@ public sealed class SignalRProgressSink(
             RetryCount = retryCount,
         };
 
+        var stageRetryReason = string.Empty;
         if (!retryReasonApplied
             && !string.IsNullOrWhiteSpace(retryReason)
             && stage.Name.Equals(retryStageName, StringComparison.OrdinalIgnoreCase))
         {
-            currentLog.RetryReason = retryReason.Trim();
+            stageRetryReason = retryReason.Trim();
+            currentLog.RetryReason = stageRetryReason;
             retryReasonApplied = true;
         }
 
@@ -60,7 +62,13 @@ public sealed class SignalRProgressSink(
         }
 
         dbContext.SaveChanges();
-        hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("stageStarted", new { runId, issueNumber, stage = stage.Name }).GetAwaiter().GetResult();
+        hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("stageStarted", new
+        {
+            runId,
+            issueNumber,
+            stage = stage.Name,
+            retryReason = string.IsNullOrWhiteSpace(stageRetryReason) ? null : stageRetryReason,
+        }).GetAwaiter().GetResult();
     }
 
     /// <inheritdoc />
