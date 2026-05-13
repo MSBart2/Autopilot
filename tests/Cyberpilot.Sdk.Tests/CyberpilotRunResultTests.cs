@@ -33,7 +33,7 @@ public sealed class CyberpilotRunResultTests
     }
 
     [Fact]
-    public void FromExitCode_StageResultsIsEmpty()
+    public void FromExitCode_StageResultsDefaultsToEmpty()
     {
         var result = CyberpilotRunResult.FromExitCode(0, "deliver", "completed");
 
@@ -41,10 +41,12 @@ public sealed class CyberpilotRunResultTests
     }
 
     [Fact]
-    public void FromExitCode_PrUrlIsAlwaysNull()
+    public void FromExitCode_SetsPrUrlAndStageResults()
     {
-        var result = CyberpilotRunResult.FromExitCode(0, "deliver", "completed", branchName: "main", error: "e");
+        var stageResults = new[] { new Cyberpilot.Pipeline.StageResult("GO", "approved", true, null) };
+        var result = CyberpilotRunResult.FromExitCode(0, "deliver", "completed", branchName: "main", prUrl: "https://github.com/example/repo/pull/1", error: "e", stageResults: stageResults);
 
-        Assert.Null(result.PrUrl);
+        Assert.Equal("https://github.com/example/repo/pull/1", result.PrUrl);
+        Assert.Equal(stageResults, result.StageResults);
     }
 }

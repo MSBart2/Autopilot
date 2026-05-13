@@ -197,6 +197,93 @@ public sealed class SdkCyberpilotRunnerTests
         Assert.Equal(4, exitCode);
     }
 
+    [Fact]
+    public async Task RunAsync_ExistingPullRequest_FastForwardsToReview()
+    {
+        var issueClient = new FakeIssueClient
+        {
+            ExistingPullRequest = new GitHubPullRequestInfo(17, "https://github.com/example/repo/pull/17", "sdk/issue-122-test", "OPEN")
+        };
+        var stageRunner = new RecordingStageRunner(_ => new StageResult("GO", "approved", true, null));
+        var output = new StringWriter();
+        var options = CreateOptions(122, true) with { SkipDeliver = true };
+        var runner = new SdkCyberpilotRunner(options, issueClient, new FakeLabelService(), new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("https://github.com/example/repo/pull/17", runner.PrUrl);
+        Assert.Equal("sdk/issue-122-test", runner.BranchName);
+        Assert.Equal<string>(["review", "docs"], stageRunner.StageNames);
+    }
+
+    [Fact]
+    public async Task RunAsync_StartStageDocs_RunsOnlyDocsBeforeSkipDeliver()
+    {
+        var stageRunner = new RecordingStageRunner(_ => new StageResult("GO", "approved", true, null));
+        var output = new StringWriter();
+        var options = CreateOptions(122, true) with { StartStage = "docs", SkipDeliver = true };
+        var runner = new SdkCyberpilotRunner(options, new FakeIssueClient(), new FakeLabelService(), new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal<string>(["docs"], stageRunner.StageNames);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldPauseAfterPlan_ReturnsExit3()
+    {
+        var stageRunner = new RecordingStageRunner(_ => new StageResult("GO", "approved", true, null));
+        var output = new StringWriter();
+        var pauseChecks = 0;
+        var options = CreateOptions(122, true) with
+        {
+            ShouldPauseAsync = _ => Task.FromResult(++pauseChecks == 2)
+        };
+        var runner = new SdkCyberpilotRunner(options, new FakeIssueClient(), new FakeLabelService(), new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(3, exitCode);
+        Assert.Equal<string>(["triage", "plan"], stageRunner.StageNames);
+        Assert.Contains("paused after plan", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RunAsync_ReviewRequestsChanges_ReworksAndReviewsAgain()
+    {
+        var reviewCalls = 0;
+        var implementCalls = 0;
+        var stageRunner = new RecordingStageRunner(stage =>
+        {
+            if (stage.Name == "review")
+            {
+                reviewCalls++;
+                return reviewCalls == 1
+                    ? new StageResult("GO", "changes_requested", true, null)
+                    : new StageResult("GO", "approved", true, null);
+            }
+
+            if (stage.Name == "implement")
+            {
+                implementCalls++;
+            }
+
+            return new StageResult("GO", "approved", true, null);
+        });
+        var output = new StringWriter();
+        var options = CreateOptions(122, true) with { SkipDeliver = true };
+        var runner = new SdkCyberpilotRunner(options, new FakeIssueClient(), new FakeLabelService(), new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(2, reviewCalls);
+        Assert.Equal(2, implementCalls);
+        Assert.Equal<string>(["triage", "plan", "implement", "review", "implement", "review", "docs"], stageRunner.StageNames);
+    }
+
     private static SdkCyberpilotRunner CreateRunner(
         FakeIssueClient issueClient,
         FakeLabelService labels,
@@ -217,6 +304,7 @@ public sealed class SdkCyberpilotRunnerTests
     private sealed class FakeIssueClient : IGitHubIssueClient
     {
         public string IssueState { get; init; } = "OPEN";
+        public GitHubPullRequestInfo? ExistingPullRequest { get; init; }
         public int StateCalls { get; private set; }
 
         public Task AddIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default) => Task.CompletedTask;
@@ -237,7 +325,7 @@ public sealed class SdkCyberpilotRunnerTests
         public Task RemoveIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CreateOrUpdateLabelAsync(string label, string color, string description, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<GitHubPullRequestInfo?>(null);
+        public Task<GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult(ExistingPullRequest);
     }
 
     private sealed class FakeBranchProvisioner : IBranchProvisioner
@@ -308,6 +396,17 @@ public sealed class SdkCyberpilotRunnerTests
     {
         public Task<StageResult> RunAsync(StageDefinition stage, string prompt, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
+            return Task.FromResult(resultFactory(stage));
+        }
+    }
+
+    private sealed class RecordingStageRunner(Func<StageDefinition, StageResult> resultFactory) : IStageRunner
+    {
+        public List<string> StageNames { get; } = [];
+
+        public Task<StageResult> RunAsync(StageDefinition stage, string prompt, TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            StageNames.Add(stage.Name);
             return Task.FromResult(resultFactory(stage));
         }
     }

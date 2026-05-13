@@ -14,7 +14,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, CyberpilotDbC
     /// <inheritdoc />
     public void OnStageStarted(StageDefinition stage, int issueNumber)
     {
-        FlushBufferAsync().GetAwaiter().GetResult();
+        FlushBuffer();
         currentLog = new PipelineStageLog
         {
             RunId = runId,
@@ -37,7 +37,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, CyberpilotDbC
     /// <inheritdoc />
     public void OnStageCompleted(StageDefinition stage, StageResult result)
     {
-        FlushBufferAsync().GetAwaiter().GetResult();
+        FlushBuffer();
         if (currentLog is not null)
         {
             currentLog.Status = result.Status;
@@ -70,7 +70,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, CyberpilotDbC
         buffer.Append(content);
         if (buffer.Length > 4096 || content.Contains('\n', StringComparison.Ordinal))
         {
-            FlushBufferAsync().GetAwaiter().GetResult();
+            FlushBuffer();
         }
     }
 
@@ -98,7 +98,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, CyberpilotDbC
         dbContext.SaveChanges();
     }
 
-    private async Task FlushBufferAsync()
+    private void FlushBuffer()
     {
         if (buffer.Length == 0)
         {
@@ -113,6 +113,6 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, CyberpilotDbC
 
         currentLog.Output = string.Concat(currentLog.Output, buffer.ToString());
         buffer.Clear();
-        await dbContext.SaveChangesAsync();
+        dbContext.SaveChanges();
     }
 }

@@ -30,6 +30,9 @@
     var issueBody = Model.Issue?.Body?.Trim() ?? string.Empty;
     var runIsActive = Model.Run.Status is "Queued" or "Running" or "Pausing";
     var isDelivered = Model.Run.Status == "Completed" && !Model.Run.SkipDeliver;
+    var stopDiagnostic = Model.StopDiagnostic;
+    var canContinue = Model.CanContinue;
+    var canReworkFromReview = Model.CanReworkFromReview;
     var logsJson    = JsonSerializer.Serialize(Model.Logs.Select(l => new
     {
         stage    = l.StageName,
@@ -98,12 +101,21 @@
                 <button type="submit" class="btn btn-sm btn-success" title="Copilot agent working — resume when PR is ready">▶ Resume Review</button>
             </form>
         }
-        @if (!isActive && !isAwaitingCopilot)
+        @if (!isActive && !isAwaitingCopilot && canContinue)
         {
+            @if (canReworkFromReview)
+            {
+                <form asp-action="ReworkFromReview" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-sm btn-success" title="Send review findings back to implementation on the existing PR branch">
+                        Rework from Review
+                    </button>
+                </form>
+            }
             <form asp-action="Continue" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
                 @Html.AntiForgeryToken()
                 <button type="submit" class="btn btn-sm btn-primary">
-                    @(Model.Run.Status == "Paused" ? "▶ Resume" : "Continue")
+                    @(Model.Run.Status == "Paused" ? "▶ Resume" : canReworkFromReview ? "Retry Review" : "Continue")
                 </button>
             </form>
         }
@@ -159,6 +171,30 @@
             <div class="alert alert-danger d-flex gap-2" role="alert">
                 <span class="flex-shrink-0">!</span>
                 <div><strong>Diagnostic:</strong> @Model.Run.Error</div>
+            </div>
+        }
+
+        @if (stopDiagnostic is not null)
+        {
+            <div class="alert alert-@stopDiagnostic.Severity stop-diagnostic" role="alert" id="stop-diagnostic">
+                <div class="stop-diagnostic-header">
+                    <strong>@stopDiagnostic.Title</strong>
+                    <span>Action required before this run can continue.</span>
+                </div>
+                <p class="stop-diagnostic-reason">@stopDiagnostic.Reason</p>
+                <div class="stop-diagnostic-actions">
+                    <span class="stop-diagnostic-label">Corrective actions</span>
+                    <ul>
+                        @foreach (var action in stopDiagnostic.CorrectiveActions)
+                        {
+                            <li>@action</li>
+                        }
+                    </ul>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(stopDiagnostic.Evidence))
+                {
+                    <small class="stop-diagnostic-evidence">@stopDiagnostic.Evidence</small>
+                }
             </div>
         }
 
@@ -318,6 +354,51 @@
     }
     .halt-banner-title { font-weight: 700; color: #f87171; font-size: 1rem; margin-bottom: .25rem; }
     .halt-banner-message { color: #94a3b8; margin: 0; font-size: .85rem; line-height: 1.45; }
+    .halt-banner-actions {
+        margin: .7rem 0 0;
+        padding-left: 1.1rem;
+        color: #cbd5e1;
+        font-size: .82rem;
+        line-height: 1.45;
+    }
+    .halt-banner-actions li + li { margin-top: .25rem; }
+    .stop-diagnostic {
+        border-radius: 8px;
+        border-width: 1px;
+        box-shadow: var(--shadow-sm);
+    }
+    .stop-diagnostic-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: .5rem;
+        margin-bottom: .45rem;
+    }
+    .stop-diagnostic-header strong { font-size: 1rem; text-transform: uppercase; letter-spacing: .03em; }
+    .stop-diagnostic-header span { font-size: .82rem; opacity: .82; }
+    .stop-diagnostic-reason { margin: 0 0 .7rem; line-height: 1.45; }
+    .stop-diagnostic-actions {
+        padding: .7rem .85rem;
+        border-radius: 7px;
+        background: rgba(255,255,255,.45);
+        border: 1px solid rgba(0,0,0,.08);
+    }
+    .stop-diagnostic-label {
+        display: block;
+        margin-bottom: .35rem;
+        font-size: .68rem;
+        font-weight: 800;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        opacity: .78;
+    }
+    .stop-diagnostic-actions ul { margin: 0; padding-left: 1.1rem; }
+    .stop-diagnostic-actions li + li { margin-top: .25rem; }
+    .stop-diagnostic-evidence {
+        display: block;
+        margin-top: .65rem;
+        opacity: .78;
+    }
     @@keyframes halt-pulse {
         0%, 100% { border-color: rgba(220,53,69,.35); box-shadow: 0 0 0 0 rgba(220,53,69,0); }
         50% { border-color: rgba(220,53,69,.6); box-shadow: 0 0 12px rgba(220,53,69,.12); }
@@ -1493,12 +1574,16 @@
     const cancelEl  = document.getElementById('cancel-section');
     const spinnerEl = document.getElementById('run-spinner');
     const elapsedEl = document.getElementById('run-elapsed');
+    const HALT_BANNER_STATUSES = new Set(['Queued', 'Running', 'Pausing', 'Paused', 'Failed', 'Stopped', 'Cancelled']);
     let   elapsedTimer = null;
+    let   currentRunStatus = '@Model.Run.Status';
 
     function applyRunStatus(status) {
+        currentRunStatus = status;
         if (badgeEl) badgeEl.className = 'badge fs-6 ' + (STATUS_CLASSES[status] ?? 'text-bg-secondary');
         if (statusEl) statusEl.textContent = status === 'Pausing' ? '⏸ Pausing…' : status;
         if (spinnerEl && status !== 'Running' && status !== 'Pausing') spinnerEl.remove();
+        if (!HALT_BANNER_STATUSES.has(status)) removeHaltBanner();
         // Hide pause button when pausing
         const pauseForm = document.getElementById('pause-form');
         if (status === 'Pausing' && pauseForm) {
@@ -1587,24 +1672,68 @@
     }
 
     // ── Halt / retry-exhausted banner ─────────────────────────────────
+    function inferCorrectiveActions(message) {
+        const text = String(message ?? '').toLowerCase();
+        if (text.includes('approve-all')) {
+            return [
+                'Enable approval for trusted dashboard runs in Cyberpilot configuration.',
+                'Continue or restart the run after approval is enabled.'
+            ];
+        }
+        if (text.includes('model unavailable')) {
+            return [
+                'Select a model that is available to the current Copilot account.',
+                'Start a new run with the available model.'
+            ];
+        }
+        if (text.includes('review') || text.includes('changes_requested') || text.includes('max retries')) {
+            return [
+                'Open the linked PR and the latest Review card output to identify the blocking findings.',
+                'Address the requested changes on the existing branch.',
+                'Use Rework from Review to send those findings back to implementation, then Cyberpilot will return to review.'
+            ];
+        }
+        if (text.includes('json') || text.includes('invalid')) {
+            return [
+                'Check the agent transcript for the final response shape.',
+                'Rerun the stage after the agent can return the required fenced JSON result block.'
+            ];
+        }
+        return [
+            'Read the stopped stage output for the blocking condition.',
+            'Correct the issue, branch, PR, or stage handoff artifact called out by that output.',
+            'Use Continue to retry from the stopped stage, or Reset to rerun from a clean issue state.'
+        ];
+    }
+
     function checkForHaltBanner(type, message) {
+        if (!HALT_BANNER_STATUSES.has(currentRunStatus)) return;
         if (type === 'review_loop' && message.toLowerCase().includes('halting')) {
             showHaltBanner('⚠️ Retry Limit Reached',
-                'Review requested changes on both attempts. Pipeline halted for human intervention — review the PR, address findings, and re-run.');
+                'Review requested changes on both attempts. Pipeline halted for human intervention — review the PR, address findings, and re-run.',
+                inferCorrectiveActions(message));
         } else if (type === 'halt') {
-            showHaltBanner('🛑 Pipeline Halted', message);
+            showHaltBanner('🛑 Pipeline Halted', message, inferCorrectiveActions(message));
         }
     }
 
-    function showHaltBanner(title, message) {
+    function removeHaltBanner() {
+        document.getElementById('halt-banner')?.remove();
+    }
+
+    function showHaltBanner(title, message, actions) {
         if (document.getElementById('halt-banner')) return;
         const banner = document.createElement('div');
         banner.id = 'halt-banner';
         banner.className = 'halt-banner';
+        const actionItems = (actions ?? [])
+            .map(action => `<li>${escapeHtml(action)}</li>`)
+            .join('');
         banner.innerHTML = `
             <div class="halt-banner-content">
                 <div class="halt-banner-title">${escapeHtml(title)}</div>
                 <p class="halt-banner-message">${escapeHtml(message)}</p>
+                ${actionItems ? `<ul class="halt-banner-actions">${actionItems}</ul>` : ''}
             </div>`;
         feed.parentNode.insertBefore(banner, feed);
     }
@@ -1623,17 +1752,28 @@
     // ── Post-run button injection ─────────────────────────────────────
     const runId = '@Model.Run.Id';
     const isRemote = @(Model.Run.IsRemote ? "true" : "false");
+    const serverCanReworkFromReview = @(canReworkFromReview ? "true" : "false");
+    let lastCompletedStage = null;
+    let lastCompletedStatus = null;
     function injectPostRunButtons() {
         const bar = document.getElementById('run-bar-actions');
         if (!bar || document.getElementById('post-run-buttons')) return;
-        const isPaused = statusEl && statusEl.textContent === 'Paused';
+        const currentStatus = statusEl?.textContent?.trim() ?? '';
+        if (!['Paused', 'Failed', 'Stopped', 'Cancelled'].includes(currentStatus)) return;
+        const isPaused = currentStatus === 'Paused';
+        const shouldShowRework = serverCanReworkFromReview
+            || (lastCompletedStage === 'review' && ['stop', 'failed', 'invalid'].includes(lastCompletedStatus));
         const wrapper = document.createElement('span');
         wrapper.id = 'post-run-buttons';
         wrapper.className = 'd-inline-flex gap-1';
         wrapper.innerHTML = `
+            ${shouldShowRework ? `<form action="/Pipelines/${runId}/ReworkFromReview" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-success" title="Send review findings back to implementation on the existing PR branch">Rework from Review</button>
+            </form>` : ''}
             <form action="/Pipelines/${runId}/Continue" method="post" class="d-inline">
                 @Html.AntiForgeryToken()
-                <button type="submit" class="btn btn-sm btn-primary">${isPaused ? '▶ Resume' : 'Continue'}</button>
+                <button type="submit" class="btn btn-sm btn-primary">${isPaused ? '▶ Resume' : shouldShowRework ? 'Retry Review' : 'Continue'}</button>
             </form>
             ${isRemote ? '' : `<form action="/Pipelines/${runId}/ResetMission" method="post" class="d-inline">
                 @Html.AntiForgeryToken()
@@ -1693,6 +1833,8 @@
         conn.on('stageCompleted', e => {
             const durSec = timerStart ? Math.round((Date.now() - timerStart) / 1000) : 0;
             const statusLower = (e.status ?? '').toLowerCase();
+            lastCompletedStage = e.stage;
+            lastCompletedStatus = statusLower;
             finalizeCard(e.stage, statusLower, durSec);
             updateStation(e.stage, STATION_STATE_MAP[statusLower] ?? 'is-complete', statusLower);
             stopTimer();
@@ -1722,6 +1864,8 @@
         });
         conn.on('runFailed',    e   => {
             if (currentStage) {
+                lastCompletedStage = currentStage;
+                lastCompletedStatus = 'failed';
                 appendOutput(currentStage, `\n! ${e.error}\n`);
                 finalizeCard(currentStage, 'failed', timerStart ? Math.round((Date.now() - timerStart) / 1000) : 0);
                 updateStation(currentStage, 'is-failed', 'failed');

@@ -382,6 +382,30 @@ public class PipelinesControllerTests
     }
 
     [Fact]
+    public async Task Continue_CompletedRun_DoesNotRequeue()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Completed",
+            CurrentStage = "review",
+            CompletedAt = DateTime.UtcNow,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Continue(run.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.Equal("Completed", (await db.PipelineRuns.FirstAsync(item => item.Id == run.Id)).Status);
+        Assert.Equal("This run cannot be continued from its current status.", controller.TempData["PipelineError"]);
+    }
+
+    [Fact]
     public async Task Continue_ConfiguredRepository_UsesConfiguredRootAndToken()
     {
         var options = new CyberpilotWebOptions
@@ -402,6 +426,103 @@ public class PipelinesControllerTests
         Assert.NotNull(queue.LastRequest);
         Assert.Equal(Path.GetFullPath("C:\\Repos\\Repo"), queue.LastRequest.RepoRoot);
         Assert.Equal("configured-token", queue.LastRequest.GitHubToken);
+    }
+
+    [Fact]
+    public async Task ReworkFromReview_StoppedReviewRun_RequeuesFromImplement()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Failed",
+            CurrentStage = "review",
+            BranchName = "cyberpilot/issue-7",
+            PrUrl = "https://github.com/owner/repo/pull/10",
+            CompletedAt = DateTime.UtcNow,
+            Error = "Review did not approve the changes.",
+            SkipDeliver = true,
+            StageTimeoutMinutes = 10,
+            AllowMissingDocs = true,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ReworkFromReview(run.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("Queued", updated.Status);
+        Assert.Equal("implement", updated.CurrentStage);
+        Assert.Equal("cyberpilot/issue-7", updated.BranchName);
+        Assert.Equal("https://github.com/owner/repo/pull/10", updated.PrUrl);
+        Assert.Null(updated.CompletedAt);
+        Assert.Null(updated.Error);
+        Assert.NotNull(queue.LastRequest);
+        Assert.Equal(run.Id, queue.LastRequest.RunId);
+        Assert.Equal("implement", queue.LastRequest.StartStage);
+        Assert.True(queue.LastRequest.SkipDeliver);
+        Assert.True(queue.LastRequest.AllowMissingDocs);
+        Assert.Equal("Review feedback routed back to implementation. Cyberpilot will update the existing PR branch, then return to review.", controller.TempData["PipelineNotice"]);
+    }
+
+    [Fact]
+    public async Task ReworkFromReview_LatestBlockedReviewLog_RequeuesFromImplement()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Stopped",
+            CurrentStage = "pipeline",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineStageLogs.Add(new PipelineStageLog
+        {
+            RunId = run.Id,
+            StageName = "review",
+            Status = "STOP",
+            CompletedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        await controller.ReworkFromReview(run.Id);
+
+        var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("implement", updated.CurrentStage);
+        Assert.NotNull(queue.LastRequest);
+        Assert.Equal("implement", queue.LastRequest.StartStage);
+    }
+
+    [Fact]
+    public async Task ReworkFromReview_NonReviewRun_DoesNotRequeue()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Failed",
+            CurrentStage = "plan",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.ReworkFromReview(run.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.Equal("plan", (await db.PipelineRuns.FirstAsync(item => item.Id == run.Id)).CurrentStage);
+        Assert.Equal("Rework from Review is only available for stopped or failed review runs.", controller.TempData["PipelineError"]);
     }
 
     [Fact]

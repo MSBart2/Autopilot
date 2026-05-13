@@ -1,12 +1,12 @@
 # `.github/instructions/` — Path-Specific Copilot Instructions
 
-This folder contains **path-specific custom instruction files** that GitHub Copilot applies automatically when working on files matching a specified glob pattern. Unlike the repository-wide `copilot-instructions.md` in `.github/`, these files target specific parts of the codebase and activate only when relevant files are in context.
+This folder contains **path-specific custom instruction files** that GitHub Copilot applies automatically when working on files matching a specified glob pattern. Unlike the repository-wide `AGENTS.md` in the repo root, these files target specific parts of the codebase and activate only when relevant files are in context.
 
 ## How Copilot Discovers and Activates These Files
 
 Copilot scans `.github/instructions/` for any file ending in `.instructions.md`. Each file declares an `applyTo` glob in its YAML frontmatter. When Copilot is working on a file whose path matches the glob, the instructions in that file are automatically prepended to the request — no manual selection required.
 
-If **both** a path-specific instructions file and the repository-wide `copilot-instructions.md` apply, Copilot uses **both** simultaneously.
+If **both** a path-specific instructions file and the repository-wide `AGENTS.md` apply, Copilot uses **both** simultaneously.
 
 **Activation contexts:**
 

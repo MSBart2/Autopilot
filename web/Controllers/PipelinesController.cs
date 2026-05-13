@@ -348,6 +348,12 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
+        if (run.Status is not ("Failed" or "Stopped" or "Paused" or "Cancelled"))
+        {
+            TempData["PipelineError"] = "This run cannot be continued from its current status.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
             item.Id != run.Id
             && item.Repository == run.Repository
@@ -375,6 +381,65 @@ public class PipelinesController : Controller
 
         await EnqueueRunAsync(run, repoRoot, token);
 
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    /// <summary>
+    /// Sends a blocked review run back to implementation so review feedback can be addressed on the existing PR branch.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <returns>A redirect to the run details page.</returns>
+    [HttpPost("{id}/ReworkFromReview")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReworkFromReview(string id)
+    {
+        var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
+        if (run is null)
+        {
+            return NotFound();
+        }
+
+        if (run.Status is "Queued" or "Running" or "Pausing")
+        {
+            TempData["PipelineError"] = "This run is already active.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (!await IsReviewReworkCandidateAsync(run))
+        {
+            TempData["PipelineError"] = "Rework from Review is only available for stopped or failed review runs.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
+            item.Id != run.Id
+            && item.Repository == run.Repository
+            && item.IssueNumber == run.IssueNumber
+            && (item.Status == "Queued" || item.Status == "Running" || item.Status == "Pausing"));
+        if (hasActiveRun)
+        {
+            TempData["PipelineError"] = $"{run.Repository} issue #{run.IssueNumber} already has an active Cyberpilot run.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var repoRoot = ResolveRepoRoot(_options.RepoRoot);
+        string? token = null;
+        if (TryGetConfiguredRepository(run.Repository, out var configuredRepository))
+        {
+            repoRoot = configuredRepository.RepoRoot;
+            token = configuredRepository.Token;
+        }
+
+        run.Status = "Queued";
+        run.CompletedAt = null;
+        run.Error = null;
+        run.CurrentStage = "implement";
+        run.TriggeredBy = User.Identity?.Name ?? run.TriggeredBy;
+        await _dbContext.SaveChangesAsync();
+
+        await EnqueueRunAsync(run, repoRoot, token);
+
+        TempData["PipelineNotice"] = "Review feedback routed back to implementation. Cyberpilot will update the existing PR branch, then return to review.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -809,6 +874,27 @@ public class PipelinesController : Controller
             TimeSpan.FromMinutes(run.StageTimeoutMinutes),
             run.AllowMissingDocs,
             run.CurrentStage));
+    }
+
+    private async Task<bool> IsReviewReworkCandidateAsync(PipelineRun run)
+    {
+        if (run.IsRemote || run.Status is not ("Failed" or "Stopped"))
+        {
+            return false;
+        }
+
+        if (run.CurrentStage?.Equals("review", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return true;
+        }
+
+        var latestBlockedStage = await _dbContext.PipelineStageLogs
+            .Where(log => log.RunId == run.Id && (log.Status == "STOP" || log.Status == "INVALID" || log.Status == "failed"))
+            .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
+            .Select(log => log.StageName)
+            .FirstOrDefaultAsync();
+
+        return latestBlockedStage?.Equals("review", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private IReadOnlyList<ConfiguredRepositoryViewModel> GetConfiguredRepositoryChoices()

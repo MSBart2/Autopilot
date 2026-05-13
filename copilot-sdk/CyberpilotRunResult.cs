@@ -21,10 +21,19 @@ public sealed record CyberpilotRunResult(
     /// <param name="finalStage">The last stage reached by the pipeline.</param>
     /// <param name="status">The normalized pipeline status.</param>
     /// <param name="branchName">The stable issue branch name, when one was provisioned.</param>
+    /// <param name="prUrl">The pull request URL, when known.</param>
     /// <param name="error">The error message, when the pipeline failed.</param>
+    /// <param name="stageResults">The parsed stage results collected during the run.</param>
     /// <returns>A typed run result.</returns>
-    public static CyberpilotRunResult FromExitCode(int exitCode, string finalStage, string status, string? branchName = null, string? error = null)
+    public static CyberpilotRunResult FromExitCode(
+        int exitCode,
+        string finalStage,
+        string status,
+        string? branchName = null,
+        string? prUrl = null,
+        string? error = null,
+        IReadOnlyList<StageResult>? stageResults = null)
     {
-        return new CyberpilotRunResult(exitCode, finalStage, status, branchName, null, error, []);
+        return new CyberpilotRunResult(exitCode, finalStage, status, branchName, prUrl, error, stageResults ?? []);
     }
 }

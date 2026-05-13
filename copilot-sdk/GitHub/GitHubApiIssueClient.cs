@@ -51,13 +51,7 @@ public sealed class GitHubApiIssueClient : IGitHubIssueClient
         await EnsureSuccessAsync(response);
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-        return document.RootElement.EnumerateArray()
-            .Select(item => new GitHubIssueComment(
-                item.TryGetProperty("id", out var id) ? id.GetInt64() : 0,
-                item.TryGetProperty("body", out var body) ? body.GetString() ?? string.Empty : string.Empty,
-                item.TryGetProperty("user", out var user) && user.TryGetProperty("login", out var login) ? login.GetString() ?? string.Empty : string.Empty))
-            .Where(comment => comment.Id > 0)
-            .ToArray();
+        return GitHubIssueCommentJson.ParseMany(document.RootElement);
     }
 
     /// <inheritdoc />
@@ -155,9 +149,7 @@ public sealed class GitHubApiIssueClient : IGitHubIssueClient
         {
             var headRef = pr.TryGetProperty("head", out var head) && head.TryGetProperty("ref", out var refProp)
                 ? refProp.GetString() ?? "" : "";
-            if (headRef.Contains($"-{issueNumber}-", StringComparison.OrdinalIgnoreCase)
-                || headRef.Contains($"issue-{issueNumber}", StringComparison.OrdinalIgnoreCase)
-                || headRef.EndsWith($"-{issueNumber}", StringComparison.OrdinalIgnoreCase))
+            if (GitHubPullRequestMatcher.IsIssueBranch(headRef, issueNumber))
             {
                 var number = pr.TryGetProperty("number", out var n) ? n.GetInt32() : 0;
                 var url = pr.TryGetProperty("html_url", out var u) ? u.GetString() ?? "" : "";

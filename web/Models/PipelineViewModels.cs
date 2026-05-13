@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Cyberpilot.GitHub;
 using Cyberpilot.Persistence;
 
@@ -206,6 +208,275 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
     /// <summary>Initializes a details view model without labels.</summary>
     public PipelineRunDetailsViewModel(PipelineRun run, IReadOnlyList<PipelineStageLog> logs)
         : this(run, logs, []) { }
+
+    /// <summary>Gets the best available explanation and recovery guidance for a terminal stopped run.</summary>
+    public PipelineStopDiagnostic? StopDiagnostic => PipelineStopDiagnostic.Create(Run, Logs, Dispatches ?? []);
+
+    /// <summary>Gets whether this terminal run can be requeued from its current stage.</summary>
+    public bool CanContinue => Run.Status is "Failed" or "Stopped" or "Paused" or "Cancelled";
+
+    /// <summary>Gets whether the run can be sent back to implementation after a blocked review.</summary>
+    public bool CanReworkFromReview => !Run.IsRemote
+        && Run.Status is "Failed" or "Stopped"
+        && IsReviewStage(Run.CurrentStage ?? Logs
+            .Where(log => PipelineStopDiagnostic.IsBlockedStatus(log.Status))
+            .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
+            .FirstOrDefault()?.StageName);
+
+    private static bool IsReviewStage(string? stageName)
+        => stageName?.Equals("review", StringComparison.OrdinalIgnoreCase) == true;
+}
+
+/// <summary>
+/// Explains why a pipeline stopped or failed and what the operator can do next.
+/// </summary>
+/// <param name="Severity">The Bootstrap alert severity to use for the diagnostic.</param>
+/// <param name="Title">The short diagnostic title.</param>
+/// <param name="Reason">The best available stoppage reason.</param>
+/// <param name="CorrectiveActions">Recommended corrective actions for the operator.</param>
+/// <param name="Evidence">Optional supporting evidence from the run log or dispatch stream.</param>
+public sealed record PipelineStopDiagnostic(
+    string Severity,
+    string Title,
+    string Reason,
+    IReadOnlyList<string> CorrectiveActions,
+    string? Evidence)
+{
+    private static readonly Regex FencedJsonRegex = new("```json\\s*(?<json>\\{.*?\\})\\s*```", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Builds a diagnostic from existing run, stage-log, and dispatch data.
+    /// </summary>
+    /// <param name="run">The pipeline run to diagnose.</param>
+    /// <param name="logs">Stage logs recorded for the run.</param>
+    /// <param name="dispatches">Orchestrator dispatch events recorded for the run.</param>
+    /// <returns>A diagnostic for terminal blocked runs; otherwise <see langword="null" />.</returns>
+    public static PipelineStopDiagnostic? Create(PipelineRun run, IReadOnlyList<PipelineStageLog> logs, IReadOnlyList<PipelineDispatch> dispatches)
+    {
+        if (run.Status is not ("Failed" or "Stopped"))
+        {
+            return null;
+        }
+
+        var blockedLog = logs
+            .Where(log => IsBlockedStatus(log.Status))
+            .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
+            .FirstOrDefault();
+        var summary = TryReadSummary(blockedLog?.Output);
+        var haltDispatch = dispatches
+            .Where(IsDiagnosticDispatch)
+            .OrderByDescending(dispatch => dispatch.CreatedAt)
+            .FirstOrDefault();
+
+        var reason = FirstNonEmpty(
+            run.Error,
+            ReadSummaryText(summary, "error", "stop_reason", "reason", "summary"),
+            haltDispatch?.Message,
+            blockedLog is null ? null : $"{DisplayStage(blockedLog.StageName)} returned {blockedLog.Status}.",
+            run.Status == "Stopped" ? "The pipeline stopped before it could safely continue." : "The pipeline failed before completion.")!;
+
+        var stageName = blockedLog?.StageName ?? run.CurrentStage;
+        var actions = BuildCorrectiveActions(reason, stageName, summary);
+        var evidence = BuildEvidence(haltDispatch, blockedLog, summary);
+
+        return new PipelineStopDiagnostic(
+            run.Status == "Failed" ? "danger" : "warning",
+            BuildTitle(run.Status, stageName),
+            reason,
+            actions,
+            evidence);
+    }
+
+    internal static bool IsBlockedStatus(string? status)
+        => status?.Equals("STOP", StringComparison.OrdinalIgnoreCase) == true
+        || status?.Equals("INVALID", StringComparison.OrdinalIgnoreCase) == true
+        || status?.Equals("failed", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool IsDiagnosticDispatch(PipelineDispatch dispatch)
+        => dispatch.Type.Equals("halt", StringComparison.OrdinalIgnoreCase)
+        || dispatch.Message.Contains("halting", StringComparison.OrdinalIgnoreCase)
+        || dispatch.Message.Contains("max retries exhausted", StringComparison.OrdinalIgnoreCase)
+        || dispatch.Message.Contains("returned '", StringComparison.OrdinalIgnoreCase);
+
+    private static Dictionary<string, JsonElement>? TryReadSummary(string? output)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return null;
+        }
+
+        var matches = FencedJsonRegex.Matches(output);
+        if (matches.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(matches[^1].Groups["json"].Value);
+            return document.RootElement.EnumerateObject().ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadSummaryText(Dictionary<string, JsonElement>? summary, params string[] keys)
+    {
+        if (summary is null)
+        {
+            return null;
+        }
+
+        foreach (var key in keys)
+        {
+            if (!summary.TryGetValue(key, out var value))
+            {
+                continue;
+            }
+
+            var text = value.ValueKind switch
+            {
+                JsonValueKind.String => value.GetString(),
+                JsonValueKind.Array => string.Join("; ", value.EnumerateArray().Select(ToDisplayText).Where(item => !string.IsNullOrWhiteSpace(item))),
+                JsonValueKind.Object => value.ToString(),
+                _ => value.ToString(),
+            };
+
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string> ReadSummaryList(Dictionary<string, JsonElement>? summary, params string[] keys)
+    {
+        if (summary is null)
+        {
+            return [];
+        }
+
+        foreach (var key in keys)
+        {
+            if (!summary.TryGetValue(key, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.Array)
+            {
+                return value.EnumerateArray()
+                    .Select(ToDisplayText)
+                    .Where(item => !string.IsNullOrWhiteSpace(item))
+                    .Select(item => item!)
+                    .ToArray();
+            }
+
+            var text = ToDisplayText(value);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return [text];
+            }
+        }
+
+        return [];
+    }
+
+    private static string? ToDisplayText(JsonElement value)
+        => value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+
+    private static IReadOnlyList<string> BuildCorrectiveActions(string reason, string? stageName, Dictionary<string, JsonElement>? summary)
+    {
+        var structuredActions = ReadSummaryList(summary, "corrective_actions", "required_actions", "next_steps", "action_items");
+        if (structuredActions.Count > 0)
+        {
+            return structuredActions;
+        }
+
+        if (reason.Contains("approve-all", StringComparison.OrdinalIgnoreCase))
+        {
+            return [
+                "Enable approval for trusted dashboard runs in Cyberpilot configuration.",
+                "Continue or restart the run after approval is enabled."
+            ];
+        }
+
+        if (reason.Contains("model unavailable", StringComparison.OrdinalIgnoreCase))
+        {
+            return [
+                "Select a model that is available to the current Copilot account.",
+                "Start a new run with the available model."
+            ];
+        }
+
+        if (reason.Contains("No fenced JSON result block", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("Malformed JSON", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("missing required property", StringComparison.OrdinalIgnoreCase))
+        {
+            return [
+                "Check the agent transcript for the final response shape.",
+                "Update the agent prompt or rerun the stage so it ends with the required fenced JSON result block."
+            ];
+        }
+
+        if (string.Equals(stageName, "review", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("Review", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("changes_requested", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("max retries", StringComparison.OrdinalIgnoreCase))
+        {
+            return [
+                "Open the linked PR and the latest Review card output to identify the blocking findings.",
+                "Address the requested changes on the existing branch.",
+                "Use Rework from Review to send those findings back to implementation, then Cyberpilot will return to review."
+            ];
+        }
+
+        if (string.Equals(stageName, "triage", StringComparison.OrdinalIgnoreCase))
+        {
+            return [
+                "Clarify the GitHub issue until triage can produce a GO or DUPLICATE decision.",
+                "Use Continue or reset the mission after updating the issue."
+            ];
+        }
+
+        return [
+            "Read the stopped stage output for the blocking condition.",
+            "Correct the issue, branch, PR, or stage handoff artifact called out by that output.",
+            "Use Continue to retry from the stopped stage, or Reset to rerun from a clean issue state."
+        ];
+    }
+
+    private static string? BuildEvidence(PipelineDispatch? dispatch, PipelineStageLog? log, Dictionary<string, JsonElement>? summary)
+    {
+        var status = ReadSummaryText(summary, "status", "decision");
+        if (!string.IsNullOrWhiteSpace(status) && log is not null)
+        {
+            return $"{DisplayStage(log.StageName)} result: {status}.";
+        }
+
+        if (dispatch is not null)
+        {
+            return $"Dispatch: {dispatch.Message}";
+        }
+
+        return log is null ? null : $"{DisplayStage(log.StageName)} status: {log.Status}.";
+    }
+
+    private static string BuildTitle(string status, string? stageName)
+    {
+        var stage = string.IsNullOrWhiteSpace(stageName) ? "pipeline" : DisplayStage(stageName);
+        return status == "Failed" ? $"{stage} failed" : $"{stage} stopped";
+    }
+
+    private static string DisplayStage(string stageName)
+        => char.ToUpperInvariant(stageName[0]) + stageName[1..];
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 }
 
 /// <summary>

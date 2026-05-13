@@ -1,3 +1,5 @@
+using Cyberpilot.Pipeline;
+
 namespace Cyberpilot.GitHub;
 
 internal interface ISdkLabelService
@@ -14,17 +16,7 @@ internal sealed class SdkLabelService(IGitHubIssueClient issueClient, TextWriter
     private const string StageLabelPrefix = "sdk/";
 
     public static IReadOnlyList<string> RequiredLabels { get; } =
-    [
-        "sdk",
-        "sdk/triage",
-        "sdk/planning",
-        "sdk/implementing",
-        "sdk/review",
-        "sdk/docs",
-        "sdk/delivering",
-        "sdk/done",
-        "sdk/failed",
-    ];
+        [ProvenanceLabel, .. StageCatalog.All.Select(stage => stage.Label), "sdk/done", "sdk/failed"];
 
     public async Task EnsureProvenanceAsync(int issueNumber, CancellationToken cancellationToken = default)
     {

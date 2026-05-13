@@ -61,7 +61,15 @@ public sealed class StageCatalogTests
     [Fact]
     public void AllStages_HaveUniqueNames()
     {
-        var stages = new[] { StageCatalog.Triage, StageCatalog.Plan, StageCatalog.Implement, StageCatalog.Review, StageCatalog.Docs, StageCatalog.Deliver };
+        var stages = StageCatalog.All;
         Assert.Equal(6, stages.Select(s => s.Name).Distinct().Count());
+    }
+
+    [Fact]
+    public void AllStages_AreInPipelineOrder()
+    {
+        var stageNames = StageCatalog.All.Select(stage => stage.Name).ToArray();
+
+        Assert.Equal<string>(["triage", "plan", "implement", "review", "docs", "deliver"], stageNames);
     }
 }

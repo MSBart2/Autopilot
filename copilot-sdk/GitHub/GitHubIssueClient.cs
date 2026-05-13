@@ -100,7 +100,7 @@ internal sealed class GitHubIssueClient(IGitHubCli cli) : IGitHubIssueClient
     public async Task<IReadOnlyList<GitHubIssueComment>> ListIssueCommentsAsync(int issueNumber, CancellationToken cancellationToken = default)
     {
         var result = await cli.RunAsync(["api", $"repos/:owner/:repo/issues/{issueNumber}/comments", "--paginate"], cancellationToken: cancellationToken);
-        return ParseComments(result);
+        return GitHubIssueCommentJson.ParseMany(result);
     }
 
     public async Task DeleteIssueCommentAsync(long commentId, CancellationToken cancellationToken = default)
@@ -155,10 +155,7 @@ internal sealed class GitHubIssueClient(IGitHubCli cli) : IGitHubIssueClient
         foreach (var pr in doc.RootElement.EnumerateArray())
         {
             var headRef = pr.TryGetProperty("headRefName", out var h) ? h.GetString() ?? "" : "";
-            // Match PRs whose branch name contains the issue number pattern
-            if (headRef.Contains($"-{issueNumber}-", StringComparison.OrdinalIgnoreCase)
-                || headRef.Contains($"issue-{issueNumber}", StringComparison.OrdinalIgnoreCase)
-                || headRef.EndsWith($"-{issueNumber}", StringComparison.OrdinalIgnoreCase))
+            if (GitHubPullRequestMatcher.IsIssueBranch(headRef, issueNumber))
             {
                 var number = pr.TryGetProperty("number", out var n) ? n.GetInt32() : 0;
                 var url = pr.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
@@ -173,22 +170,5 @@ internal sealed class GitHubIssueClient(IGitHubCli cli) : IGitHubIssueClient
     public async Task CreateOrUpdateLabelAsync(string label, string color, string description, CancellationToken cancellationToken = default)
     {
         await cli.RunAsync(["label", "create", label, "--color", color, "--description", description, "--force"], cancellationToken: cancellationToken);
-    }
-
-    private static IReadOnlyList<GitHubIssueComment> ParseComments(string json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return [];
-        }
-
-        using var document = JsonDocument.Parse(json);
-        return document.RootElement.EnumerateArray()
-            .Select(item => new GitHubIssueComment(
-                item.TryGetProperty("id", out var id) ? id.GetInt64() : 0,
-                item.TryGetProperty("body", out var body) ? body.GetString() ?? string.Empty : string.Empty,
-                item.TryGetProperty("user", out var user) && user.TryGetProperty("login", out var login) ? login.GetString() ?? string.Empty : string.Empty))
-            .Where(comment => comment.Id > 0)
-            .ToArray();
     }
 }

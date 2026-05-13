@@ -11,6 +11,25 @@ namespace Cyberpilot;
 /// </summary>
 public sealed class CyberpilotRunner : ICyberpilotRunner
 {
+    private readonly Func<HttpClient> createHttpClient;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CyberpilotRunner" /> class.
+    /// </summary>
+    public CyberpilotRunner()
+        : this(static () => new HttpClient())
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CyberpilotRunner" /> class.
+    /// </summary>
+    /// <param name="createHttpClient">Creates HTTP clients for GitHub REST API-backed runs.</param>
+    public CyberpilotRunner(Func<HttpClient> createHttpClient)
+    {
+        this.createHttpClient = createHttpClient ?? throw new ArgumentNullException(nameof(createHttpClient));
+    }
+
     /// <inheritdoc />
     public Task<CyberpilotRunResult> RunAsync(CyberpilotRunRequest request, CancellationToken cancellationToken = default)
     {
@@ -57,15 +76,15 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
             3 => "Paused",
             _ => "Failed",
         };
-        return CyberpilotRunResult.FromExitCode(exitCode, runner.FinalStage, status, runner.BranchName);
+        return CyberpilotRunResult.FromExitCode(exitCode, runner.FinalStage, status, runner.BranchName, runner.PrUrl, stageResults: runner.StageResults);
     }
 
-    private static IGitHubIssueClient CreateIssueClient(CyberpilotRunRequest request)
+    private IGitHubIssueClient CreateIssueClient(CyberpilotRunRequest request)
     {
         var token = request.GitHubToken ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN") ?? Environment.GetEnvironmentVariable("GH_TOKEN");
         if (!string.IsNullOrWhiteSpace(token) && !string.IsNullOrWhiteSpace(request.Repository))
         {
-            return new GitHubApiIssueClient(new HttpClient(), request.Repository, token);
+            return new GitHubApiIssueClient(createHttpClient(), request.Repository, token);
         }
 
         return new GitHubIssueClient(new GitHubCli(request.RepoRoot, request.Repository));
