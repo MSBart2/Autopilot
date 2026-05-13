@@ -240,6 +240,9 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
     /// <summary>Gets whether this run has a pending human approval request.</summary>
     public bool HasPendingApprovals => ApprovalItems.Any(approval => approval.IsPending);
 
+    /// <summary>Gets whether this run has a rejected human approval request.</summary>
+    public bool HasRejectedApprovals => ApprovalItems.Any(approval => approval.IsRejected);
+
     /// <summary>Gets the total input tokens across all stage logs.</summary>
     public int TotalInputTokens => Logs.Sum(l => l.InputTokens ?? 0);
 
@@ -252,7 +255,7 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
         : null;
 
     /// <summary>Gets whether this terminal run can be requeued from its current stage.</summary>
-    public bool CanContinue => Run.Status is "Failed" or "Stopped" or "Paused" or "Cancelled" && !HasPendingApprovals;
+    public bool CanContinue => Run.Status is "Failed" or "Stopped" or "Paused" or "Cancelled" && !HasPendingApprovals && !HasRejectedApprovals;
 
     /// <summary>Gets whether the run can be sent back to implementation after a blocked review.</summary>
     public bool CanReworkFromReview => !Run.IsRemote
@@ -335,6 +338,9 @@ public sealed record PipelineApprovalViewModel(
 
     /// <summary>Gets whether this approval has been approved.</summary>
     public bool IsApproved => Status.Equals("Approved", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Gets whether this approval has been rejected.</summary>
+    public bool IsRejected => Status.Equals("Rejected", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Gets a compact display label for the approval stage and timing.</summary>
     public string StageTimingLabel => $"{DisplayStage(StageName)} · {DisplayTiming(Timing)}";

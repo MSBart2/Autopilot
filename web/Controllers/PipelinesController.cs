@@ -373,6 +373,14 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
+        var hasRejectedApproval = await _dbContext.PipelineApprovals.AnyAsync(approval =>
+            approval.RunId == run.Id && approval.Status == nameof(ApprovalStatus.Rejected));
+        if (hasRejectedApproval)
+        {
+            TempData["PipelineError"] = "Rejected approvals must be addressed with a targeted retry or rework before this run can continue.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
             item.Id != run.Id
             && item.Repository == run.Repository
@@ -865,11 +873,22 @@ public class PipelinesController : Controller
         approval.DecidedBy = User.Identity?.Name ?? "operator";
         approval.DecisionReason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
         approval.DecidedAt = DateTime.UtcNow;
+
+        if (decision == nameof(ApprovalStatus.Rejected))
+        {
+            run.Status = "Stopped";
+            run.CurrentStage = approval.StageName;
+            run.CompletedAt = DateTime.UtcNow;
+            run.Error = string.IsNullOrWhiteSpace(approval.DecisionReason)
+                ? $"Approval '{approval.Id}' was rejected after {approval.StageName}."
+                : $"Approval '{approval.Id}' was rejected after {approval.StageName}: {approval.DecisionReason}";
+        }
+
         await _dbContext.SaveChangesAsync();
 
-        TempData["PipelineNotice"] = decision == "Approved"
+        TempData["PipelineNotice"] = decision == nameof(ApprovalStatus.Approved)
             ? "Approval recorded. Use Resume from the approval card to continue this run."
-            : "Approval rejection recorded. Review the reason before continuing this run.";
+            : "Approval rejection recorded. Address the rejection with a targeted retry or rework before continuing.";
 
         return RedirectToAction(nameof(Details), new { id });
     }

@@ -930,6 +930,51 @@ public class PipelinesControllerTests
         Assert.Equal("Rejected", updated.Status);
         Assert.Equal("needs work", updated.DecisionReason);
         Assert.NotNull(updated.DecidedAt);
+
+        var updatedRun = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("Stopped", updatedRun.Status);
+        Assert.Equal("review", updatedRun.CurrentStage);
+        Assert.Contains("needs work", updatedRun.Error);
+    }
+
+    [Fact]
+    public async Task Continue_RejectedApproval_DoesNotRequeue()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Stopped",
+            CurrentStage = "review",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        db.PipelineApprovals.Add(new PipelineApproval
+        {
+            Id = "approval-continue-rejected",
+            RunId = run.Id,
+            IssueNumber = run.IssueNumber,
+            StageName = "review",
+            Timing = "AfterStage",
+            Reason = "Review approval required.",
+            RequestedRole = "operator",
+            ResumeStageName = "docs",
+            Status = "Rejected",
+            DecidedBy = "operator",
+            DecisionReason = "needs changes",
+            DecidedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Continue(run.Id));
+
+        Assert.Equal("Details", result.ActionName);
+        Assert.Null(queue.LastRequest);
+        Assert.Equal("Stopped", (await db.PipelineRuns.FirstAsync(item => item.Id == run.Id)).Status);
+        Assert.Equal("Rejected approvals must be addressed with a targeted retry or rework before this run can continue.", controller.TempData["PipelineError"]);
     }
 
     [Fact]

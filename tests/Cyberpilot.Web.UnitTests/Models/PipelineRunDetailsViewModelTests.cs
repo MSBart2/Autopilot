@@ -84,6 +84,28 @@ public class PipelineRunDetailsViewModelTests
     }
 
     [Fact]
+    public void CanContinue_WithRejectedApproval_ReturnsFalse()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m", Status = "Stopped" };
+        var approval = new PipelineApproval
+        {
+            RunId = run.Id,
+            StageName = "review",
+            Timing = "AfterStage",
+            Reason = "Review approval required.",
+            RequestedRole = "maintainer",
+            ResumeStageName = "docs",
+            Status = "Rejected",
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, [], [], Approvals: [approval]);
+
+        Assert.True(vm.HasRejectedApprovals);
+        Assert.False(vm.CanContinue);
+        Assert.True(vm.ApprovalItems.Single().IsRejected);
+    }
+
+    [Fact]
     public void Constructor_WithoutLabels_DefaultsToEmpty()
     {
         var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };

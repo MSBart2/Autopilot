@@ -471,3 +471,13 @@ Completed web-triggered structured pause approvals:
 - Blocked the normal `Continue` route and hidden Continue affordance while approvals are pending, so approvals cannot be bypassed.
 - Added web service/controller tests for structured pause decision wiring and pending approval Continue guards.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and full solution tests.
+
+### Thirty-Sixth Slice Status
+
+Completed rejected approval handling:
+
+- Rejected approval decisions now move the run to `Stopped`, set the current stage to the approval stage, and write a diagnostic error that includes the rejection reason when provided.
+- The normal `Continue` route now blocks runs with rejected approvals so a rejected gate cannot be bypassed accidentally.
+- `PipelineRunDetailsViewModel` now tracks rejected approvals and hides Continue when any are present.
+- Added controller and view-model tests for rejection status, diagnostics, and Continue blocking.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
