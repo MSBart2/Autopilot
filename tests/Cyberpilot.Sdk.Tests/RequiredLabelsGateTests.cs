@@ -47,7 +47,7 @@ public sealed class RequiredLabelsGateTests
     [Fact]
     public void BuiltInPipelineGates_Create_RegistersRequiredLabelsGate()
     {
-        var gates = BuiltInPipelineGates.Create(new RecordingModelChecker(), new RecordingLabelService());
+        var gates = BuiltInPipelineGates.Create(new RecordingModelChecker(), new RecordingLabelService(), new RecordingIssueClient());
 
         Assert.True(gates.ContainsKey(BuiltInPipelineGates.RequiredLabels));
         Assert.IsType<RequiredLabelsGate>(gates[BuiltInPipelineGates.RequiredLabels]);
@@ -96,5 +96,22 @@ public sealed class RequiredLabelsGateTests
     {
         public Task<Cyberpilot.Copilot.ModelAvailabilityResult> CheckAsync(string model, string repoRoot, CancellationToken cancellationToken = default) =>
             Task.FromResult(Cyberpilot.Copilot.ModelAvailabilityResult.Available);
+    }
+
+    private sealed class RecordingIssueClient : IGitHubIssueClient
+    {
+        public Task AddIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CommentAsync(int issueNumber, string body, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<GitHubIssueComment>> ListIssueCommentsAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<GitHubIssueComment>>([]);
+        public Task DeleteIssueCommentAsync(long commentId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<GitHubIssueSummary?> GetIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<GitHubIssueSummary?>(null);
+        public Task<IReadOnlyList<string>> GetIssueLabelsAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<string> GetIssueStateAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult("OPEN");
+        public Task<IReadOnlySet<string>> GetRepositoryLabelsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
+        public Task<IReadOnlyList<GitHubIssueSummary>> ListOpenIssuesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<GitHubIssueSummary>>([]);
+        public Task<GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<GitHubPullRequestInfo?>(null);
+        public Task RemoveIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CreateOrUpdateLabelAsync(string label, string color, string description, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

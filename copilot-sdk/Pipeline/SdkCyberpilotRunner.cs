@@ -85,7 +85,7 @@ internal sealed class SdkCyberpilotRunner(
         await labels.EnsureProvenanceAsync(options.IssueNumber, cancellationToken);
         progressSink.OnDispatch(DispatchType.Preflight, $"Labels ready — launching pipeline for issue #{options.IssueNumber}");
 
-        var engine = new PipelineEngine(pipelineContext, labels, branchCoordinator, stageExecutor, new PipelineGateRunner(BuiltInPipelineGates.Create(modelChecker, labels)), progressSink, console);
+        var engine = new PipelineEngine(pipelineContext, labels, branchCoordinator, stageExecutor, new PipelineGateRunner(BuiltInPipelineGates.Create(modelChecker, labels, issueClient)), progressSink, console);
         return await engine.ExecuteAsync(cancellationToken);
     }
 

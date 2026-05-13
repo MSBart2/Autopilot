@@ -313,3 +313,14 @@ Added a deterministic gate for required SDK labels:
 - Preserved current default behavior because no default stages declare gates yet.
 - Added pass/fail/create-missing tests and built-in registration coverage.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Twenty-First Slice Status
+
+Added a deterministic gate for linked pull request presence:
+
+- Added `PullRequestPresenceGate` backed by `IGitHubIssueClient.FindPullRequestForIssueAsync`.
+- Registered the `pull-request-present` gate in `BuiltInPipelineGates`.
+- Returned retryable corrective actions when no linked PR exists or the linked PR is not open.
+- Preserved current default behavior because no default stages declare gates yet.
+- Added pass/fail/closed-PR tests and built-in registration coverage.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
