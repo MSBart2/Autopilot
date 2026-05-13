@@ -405,3 +405,13 @@ Surfaced persisted approvals in pipeline details view models:
 - Added pending-first approval ordering and `HasPendingApprovals` on `PipelineRunDetailsViewModel`.
 - Added model and controller tests proving details pages carry pending approvals.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Thirtieth Slice Status
+
+Rendered persisted approval requests in the Run Room details page:
+
+- Added a compact read-only Approvals panel to the Run Room details view.
+- Displayed pending/resolved approval state, stage timing, reason, requested role, resume stage, request time, and decision metadata.
+- Added responsive approval-panel styling that fits the existing operational Run Room layout.
+- Kept approve/reject actions out of this slice until endpoints are wired.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.

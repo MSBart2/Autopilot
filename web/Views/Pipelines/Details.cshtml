@@ -272,6 +272,68 @@
             </div>
         }
 
+        @if (Model.ApprovalItems.Any())
+        {
+            <section class="approval-panel" aria-labelledby="approval-panel-title">
+                <div class="approval-panel-header">
+                    <div>
+                        <p class="eyebrow">Human gates</p>
+                        <h3 id="approval-panel-title">Approvals</h3>
+                    </div>
+                    @if (Model.HasPendingApprovals)
+                    {
+                        <span class="approval-count pending">Pending</span>
+                    }
+                    else
+                    {
+                        <span class="approval-count resolved">Resolved</span>
+                    }
+                </div>
+                <div class="approval-list">
+                    @foreach (var approval in Model.ApprovalItems)
+                    {
+                        <article class="approval-item @(approval.IsPending ? "approval-pending" : "approval-resolved")">
+                            <div class="approval-item-main">
+                                <div class="approval-item-title-row">
+                                    <h4>@approval.StageTimingLabel</h4>
+                                    <span class="approval-status">@approval.Status</span>
+                                </div>
+                                <p>@approval.Reason</p>
+                                <dl class="approval-meta">
+                                    <div>
+                                        <dt>Role</dt>
+                                        <dd>@approval.RequestedRole</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Resume</dt>
+                                        <dd>@approval.ResumeStageName</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Requested</dt>
+                                        <dd>@approval.CreatedAt.ToLocalTime().ToString("g")</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                            @if (!approval.IsPending)
+                            {
+                                <div class="approval-decision">
+                                    <span>Decided by @approval.DecidedBy</span>
+                                    @if (approval.DecidedAt.HasValue)
+                                    {
+                                        <small>@approval.DecidedAt.Value.ToLocalTime().ToString("g")</small>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(approval.DecisionReason))
+                                    {
+                                        <p>@approval.DecisionReason</p>
+                                    }
+                                </div>
+                            }
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+
         @if (Model.Run.Status == "Completed" && Model.Run.SkipDeliver)
         {
             <div class="delivery-panel" id="delivery-panel">
@@ -472,6 +534,114 @@
         display: block;
         margin-top: .65rem;
         opacity: .78;
+    }
+    .approval-panel {
+        margin-bottom: 1rem;
+        border: 1px solid rgba(34, 211, 238, .22);
+        border-radius: 8px;
+        background: rgba(255,255,255,.92);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+    }
+    .approval-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .85rem 1rem;
+        border-bottom: 1px solid rgba(148, 163, 184, .2);
+        background: linear-gradient(135deg, rgba(34,211,238,.08), rgba(244,114,182,.04));
+    }
+    .approval-panel-header h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .approval-count {
+        display: inline-flex;
+        align-items: center;
+        min-height: 1.55rem;
+        padding: .15rem .55rem;
+        border-radius: 999px;
+        font-size: .7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+    }
+    .approval-count.pending {
+        color: #7c2d12;
+        background: rgba(251, 191, 36, .24);
+        border: 1px solid rgba(245, 158, 11, .35);
+    }
+    .approval-count.resolved {
+        color: #065f46;
+        background: rgba(52, 211, 153, .18);
+        border: 1px solid rgba(16, 185, 129, .3);
+    }
+    .approval-list { display: grid; gap: .65rem; padding: .8rem; }
+    .approval-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: .85rem;
+        padding: .8rem;
+        border: 1px solid rgba(148, 163, 184, .24);
+        border-left-width: 4px;
+        border-radius: 8px;
+        background: rgba(248, 250, 252, .88);
+    }
+    .approval-item.approval-pending { border-left-color: #f59e0b; }
+    .approval-item.approval-resolved { border-left-color: #10b981; }
+    .approval-item-title-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .5rem;
+        margin-bottom: .3rem;
+    }
+    .approval-item h4 { margin: 0; font-size: .9rem; font-weight: 800; }
+    .approval-item p { margin: 0; color: #475569; line-height: 1.45; }
+    .approval-status {
+        padding: .1rem .45rem;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, .08);
+        color: #334155;
+        font-size: .66rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .07em;
+    }
+    .approval-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .7rem 1rem;
+        margin: .65rem 0 0;
+    }
+    .approval-meta div { min-width: 5.5rem; }
+    .approval-meta dt {
+        color: #64748b;
+        font-size: .64rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+    }
+    .approval-meta dd { margin: 0; color: #0f172a; font-size: .82rem; }
+    .approval-decision {
+        min-width: 12rem;
+        padding: .55rem .65rem;
+        border-radius: 7px;
+        background: rgba(16, 185, 129, .09);
+        border: 1px solid rgba(16, 185, 129, .2);
+        color: #065f46;
+        font-size: .78rem;
+    }
+    .approval-decision span { display: block; font-weight: 800; }
+    .approval-decision small { display: block; color: #047857; margin-top: .1rem; }
+    .approval-decision p { margin-top: .45rem; color: #065f46; }
+    @@media (max-width: 720px) {
+        .approval-item { grid-template-columns: 1fr; }
+        .approval-decision { min-width: 0; }
     }
     @@keyframes halt-pulse {
         0%, 100% { border-color: rgba(220,53,69,.35); box-shadow: 0 0 0 0 rgba(220,53,69,0); }

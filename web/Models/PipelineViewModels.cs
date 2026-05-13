@@ -204,7 +204,6 @@ public sealed class PipelineConfiguredIssueLoadRequest
 /// <param name="Labels">GitHub issue labels (best-effort, may be empty).</param>
 /// <param name="Issue">GitHub issue details for the run, when available.</param>
 /// <param name="Dispatches">Orchestrator dispatch events for the spine.</param>
-/// <param name="Dispatches">Orchestrator dispatch events for the spine.</param>
 /// <param name="Approvals">Human approval requests for the run.</param>
 public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<PipelineStageLog> Logs, IReadOnlyList<string> Labels, GitHubIssueSummary? Issue = null, IReadOnlyList<PipelineDispatch>? Dispatches = null, IReadOnlyList<PipelineApproval>? Approvals = null)
 {
