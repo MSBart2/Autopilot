@@ -595,6 +595,7 @@ public sealed class SdkCyberpilotRunnerTests
         public void OnStageStarted(StageDefinition stage, int issueNumber) { }
         public void OnStageCompleted(StageDefinition stage, StageResult result) { }
         public void OnBranchReady(string branchName) { }
+        public void OnApprovalRequested(ApprovalGateRequest request) { }
         public void OnMessage(string level, string message) { }
         public void OnStreamDelta(string content) { }
         public void OnDispatch(string type, string message) => Dispatches.Add((type, message));

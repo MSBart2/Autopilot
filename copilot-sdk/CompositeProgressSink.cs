@@ -35,6 +35,15 @@ public sealed class CompositeProgressSink(params ICyberpilotProgressSink[] sinks
     }
 
     /// <inheritdoc />
+    public void OnApprovalRequested(ApprovalGateRequest request)
+    {
+        foreach (var sink in sinks)
+        {
+            sink.OnApprovalRequested(request);
+        }
+    }
+
+    /// <inheritdoc />
     public void OnMessage(string level, string message)
     {
         foreach (var sink in sinks)

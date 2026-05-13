@@ -149,4 +149,28 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
         Assert.Equal(500_000, log.OutputTokens);
         Assert.Equal(10.5m, log.EstimatedCostUsd); // 3.00 in + 7.50 out = $10.50
     }
+
+    [Fact]
+    public void OnApprovalRequested_PersistsApprovalRequest()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
+        var request = new ApprovalGateRequest(
+            "approval-history-1",
+            _run.IssueNumber,
+            "plan",
+            GateTiming.AfterStage,
+            "Plan approval required before implementation.",
+            "maintainer",
+            "implement",
+            DateTimeOffset.Parse("2026-05-13T10:00:00Z"));
+
+        sink.OnApprovalRequested(request);
+
+        var approval = _dbContext.PipelineApprovals.Single();
+        Assert.Equal(_run.Id, approval.RunId);
+        Assert.Equal("approval-history-1", approval.Id);
+        Assert.Equal("Pending", approval.Status);
+        Assert.Equal("maintainer", approval.RequestedRole);
+        Assert.Equal("implement", approval.ResumeStageName);
+    }
 }

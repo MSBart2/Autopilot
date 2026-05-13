@@ -248,6 +248,11 @@ internal sealed class PipelineEngine(
             var message = decision.ApprovalRequest is null
                 ? decision.Reason
                 : $"{decision.Reason} Approval '{decision.ApprovalRequest.Id}' requested for role '{decision.ApprovalRequest.RequestedRole}'.";
+            if (decision.ApprovalRequest is not null)
+            {
+                progressSink.OnApprovalRequested(decision.ApprovalRequest);
+            }
+
             progressSink.OnDispatch(DispatchType.Approval, message);
             console.WriteStep(message);
             return 3;

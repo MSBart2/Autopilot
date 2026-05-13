@@ -33,6 +33,12 @@ public sealed class TextWriterProgressSink(TextWriter output, TextWriter error) 
     }
 
     /// <inheritdoc />
+    public void OnApprovalRequested(ApprovalGateRequest request)
+    {
+        output.WriteLine($"[approval] {request.Id} requested for {request.RequestedRole}: {request.Reason}");
+    }
+
+    /// <inheritdoc />
     public void OnMessage(string level, string message)
     {
         var writer = level.Equals("fail", StringComparison.OrdinalIgnoreCase) ? error : output;

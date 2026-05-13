@@ -22,9 +22,15 @@ internal sealed record StageTransition(string FromStage, string ToStage, string 
 
 internal sealed record PolicyProfile(string Name, PolicyStrictness Strictness);
 
-internal enum GateTiming
+/// <summary>
+/// Describes when a pipeline gate runs relative to a stage.
+/// </summary>
+public enum GateTiming
 {
+    /// <summary>The gate runs before the stage executes.</summary>
     BeforeStage,
+
+    /// <summary>The gate runs after the stage executes.</summary>
     AfterStage,
 }
 

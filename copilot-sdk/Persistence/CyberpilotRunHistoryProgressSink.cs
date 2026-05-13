@@ -70,6 +70,16 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
     }
 
     /// <inheritdoc />
+    public void OnApprovalRequested(ApprovalGateRequest request)
+    {
+        if (dbContext.PipelineApprovals.Find(request.Id) is null)
+        {
+            dbContext.PipelineApprovals.Add(PipelineApproval.FromRequest(runId, request));
+            dbContext.SaveChanges();
+        }
+    }
+
+    /// <inheritdoc />
     public void OnMessage(string level, string message)
     {
         AppendLine($"[{level}] {message}");

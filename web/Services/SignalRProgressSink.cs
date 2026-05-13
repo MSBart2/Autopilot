@@ -117,6 +117,29 @@ public sealed class SignalRProgressSink(
     }
 
     /// <inheritdoc />
+    public void OnApprovalRequested(ApprovalGateRequest request)
+    {
+        if (dbContext.PipelineApprovals.Find(request.Id) is null)
+        {
+            dbContext.PipelineApprovals.Add(PipelineApproval.FromRequest(runId, request));
+            dbContext.SaveChanges();
+        }
+
+        hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("approvalRequested", new
+        {
+            runId,
+            approvalId = request.Id,
+            issueNumber = request.IssueNumber,
+            stage = request.StageName,
+            timing = request.Timing.ToString(),
+            reason = request.Reason,
+            requestedRole = request.RequestedRole,
+            resumeStage = request.ResumeStageName,
+            createdAt = request.CreatedAt.ToString("o"),
+        }).GetAwaiter().GetResult();
+    }
+
+    /// <inheritdoc />
     public void OnMessage(string level, string message)
     {
         logger.LogInformation("Cyberpilot {Level}: {Message}", level, message);

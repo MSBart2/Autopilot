@@ -176,6 +176,36 @@ public class SignalRProgressSinkTests : IDisposable
             It.IsAny<CancellationToken>()));
     }
 
+    [Fact]
+    public void OnApprovalRequested_PersistsApprovalAndNotifiesClients()
+    {
+        var sink = CreateSink();
+        var request = new ApprovalGateRequest(
+            "approval-signalr-1",
+            42,
+            "review",
+            GateTiming.AfterStage,
+            "Review approval required before delivery.",
+            "maintainer",
+            "docs",
+            DateTimeOffset.Parse("2026-05-13T10:00:00Z"));
+
+        sink.OnApprovalRequested(request);
+
+        var approval = _dbContext.PipelineApprovals.Single();
+        Assert.Equal(_run.Id, approval.RunId);
+        Assert.Equal("approval-signalr-1", approval.Id);
+        Assert.Equal("review", approval.StageName);
+        Assert.Equal("Pending", approval.Status);
+
+        _groupClient.Verify(client => client.SendCoreAsync(
+            "approvalRequested",
+            It.Is<object?[]>(arguments =>
+                arguments.Length == 1
+                && (string?)arguments[0]!.GetType().GetProperty("approvalId")!.GetValue(arguments[0]) == "approval-signalr-1"),
+            It.IsAny<CancellationToken>()));
+    }
+
     private SignalRProgressSink CreateSink(string model = "")
     {
         return new SignalRProgressSink(

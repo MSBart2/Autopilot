@@ -90,9 +90,26 @@ public sealed class CompositeProgressSinkTests
         composite.OnStageStarted(TestStage, 1);
         composite.OnStageCompleted(TestStage, TestResult);
         composite.OnBranchReady("branch");
+        composite.OnApprovalRequested(TestApprovalRequest());
         composite.OnMessage("info", "msg");
         composite.OnStreamDelta("delta");
         composite.OnDispatch("routing", "Test → GO");
+    }
+
+    [Fact]
+    public void OnApprovalRequested_DelegatesToAllSinks()
+    {
+        var sink1 = new RecordingSink();
+        var sink2 = new RecordingSink();
+        var composite = new CompositeProgressSink(sink1, sink2);
+        var request = TestApprovalRequest();
+
+        composite.OnApprovalRequested(request);
+
+        Assert.Single(sink1.ApprovalRequestedCalls);
+        Assert.Single(sink2.ApprovalRequestedCalls);
+        Assert.Same(request, sink1.ApprovalRequestedCalls[0]);
+        Assert.Same(request, sink2.ApprovalRequestedCalls[0]);
     }
 
     [Fact]
@@ -115,6 +132,7 @@ public sealed class CompositeProgressSinkTests
         public List<(StageDefinition Stage, int IssueNumber)> StageStartedCalls { get; } = [];
         public List<(StageDefinition Stage, StageResult Result)> StageCompletedCalls { get; } = [];
         public List<string> BranchReadyCalls { get; } = [];
+        public List<ApprovalGateRequest> ApprovalRequestedCalls { get; } = [];
         public List<(string Level, string Message)> MessageCalls { get; } = [];
         public List<string> StreamDeltaCalls { get; } = [];
         public List<(string Type, string Message)> DispatchCalls { get; } = [];
@@ -128,6 +146,9 @@ public sealed class CompositeProgressSinkTests
         public void OnBranchReady(string branchName) =>
             BranchReadyCalls.Add(branchName);
 
+        public void OnApprovalRequested(ApprovalGateRequest request) =>
+            ApprovalRequestedCalls.Add(request);
+
         public void OnMessage(string level, string message) =>
             MessageCalls.Add((level, message));
 
@@ -137,4 +158,14 @@ public sealed class CompositeProgressSinkTests
         public void OnDispatch(string type, string message) =>
             DispatchCalls.Add((type, message));
     }
+
+    private static ApprovalGateRequest TestApprovalRequest() => new(
+        "approval-1",
+        42,
+        "plan",
+        GateTiming.AfterStage,
+        "Plan approval required.",
+        "maintainer",
+        "implement",
+        DateTimeOffset.Parse("2026-05-13T10:00:00Z"));
 }

@@ -8,6 +8,50 @@ namespace Cyberpilot.Sdk.Tests;
 public sealed class PipelineEngineTests
 {
     [Fact]
+    public async Task ExecuteAsync_StructuredPauseWithApprovalRequest_NotifiesProgressSink()
+    {
+        var approvalRequest = new ApprovalGateRequest(
+            "approval-engine-1",
+            42,
+            "triage",
+            GateTiming.AfterStage,
+            "Triage approval required before planning.",
+            "maintainer",
+            "plan",
+            DateTimeOffset.Parse("2026-05-13T10:00:00Z"));
+        var options = new CyberpilotOptions(
+            42,
+            Directory.GetCurrentDirectory(),
+            "owner/repo",
+            "test-model",
+            false,
+            false,
+            false,
+            false,
+            TimeSpan.FromMinutes(10),
+            true,
+            false,
+            null,
+            null,
+            false,
+            ShouldPauseDecisionAsync: (_, _) => Task.FromResult(PipelinePauseDecision.Pause("Approval required.", approvalRequest)));
+        var context = new PipelineExecutionContext(options, DefaultPipelineDefinitionProvider.Definition);
+        var labels = new RecordingLabelService();
+        var progressSink = new RecordingProgressSink();
+        var console = new PipelineConsoleWriter(TextWriter.Null);
+        var stageRunner = new RecordingStageRunner();
+        var stageExecutor = new StageExecutor(new RecordingPromptBuilder(), stageRunner, new DefaultStageArtifactValidator(), progressSink, console);
+        var branchCoordinator = new PipelineBranchCoordinator(options, new RecordingIssueClient(), new RecordingBranchProvisioner(), progressSink, console);
+        var engine = new PipelineEngine(context, labels, branchCoordinator, stageExecutor, new PipelineGateRunner(new Dictionary<string, IPipelineGate>()), progressSink, console);
+
+        var exitCode = await engine.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(3, exitCode);
+        Assert.Single(progressSink.ApprovalRequests, approvalRequest);
+        Assert.Contains(progressSink.Dispatches, dispatch => dispatch.Type == DispatchType.Approval && dispatch.Message.Contains("approval-engine-1", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_BlockingGateFailure_RecordsStructuredEvidenceAndActions()
     {
         var options = new CyberpilotOptions(42, Directory.GetCurrentDirectory(), "owner/repo", "test-model", false, false, false, false, TimeSpan.FromMinutes(10), true, false, null, null, false);
@@ -92,10 +136,12 @@ public sealed class PipelineEngineTests
     private sealed class RecordingProgressSink : ICyberpilotProgressSink
     {
         public List<(string Type, string Message)> Dispatches { get; } = [];
+        public List<ApprovalGateRequest> ApprovalRequests { get; } = [];
 
         public void OnStageStarted(StageDefinition stage, int issueNumber) { }
         public void OnStageCompleted(StageDefinition stage, StageResult result) { }
         public void OnBranchReady(string branchName) { }
+        public void OnApprovalRequested(ApprovalGateRequest request) => ApprovalRequests.Add(request);
         public void OnMessage(string level, string message) { }
         public void OnStreamDelta(string content) { }
         public void OnDispatch(string type, string message) => Dispatches.Add((type, message));

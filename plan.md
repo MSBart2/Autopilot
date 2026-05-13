@@ -447,3 +447,15 @@ Added approved-approval resume from the Run Room:
 - Passed an approval-specific retry reason into the queued web run request.
 - Added controller tests for successful approval resume plus pending, delivered, and active-run guard paths.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Thirty-Fourth Slice Status
+
+Completed approval-request progress sink persistence:
+
+- Added `ICyberpilotProgressSink.OnApprovalRequested` so structured approval requests are first-class progress events.
+- Promoted approval request primitives needed by the public sink contract.
+- The pipeline engine now emits approval requests when `ShouldPauseDecisionAsync` returns a structured approval pause.
+- `CyberpilotRunHistoryProgressSink` and `SignalRProgressSink` persist pending `PipelineApproval` rows, with SignalR also notifying clients via `approvalRequested`.
+- `CompositeProgressSink` forwards approval requests and `TextWriterProgressSink` reports them in CLI output.
+- Added SDK/web tests for sink persistence, composite forwarding, and engine-level approval request emission.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.

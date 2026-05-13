@@ -28,6 +28,12 @@ public interface ICyberpilotProgressSink
     void OnBranchReady(string branchName);
 
     /// <summary>
+    /// Records that a human approval request has been created.
+    /// </summary>
+    /// <param name="request">The approval request.</param>
+    void OnApprovalRequested(ApprovalGateRequest request);
+
+    /// <summary>
     /// Records a structured pipeline message.
     /// </summary>
     /// <param name="level">The message level.</param>

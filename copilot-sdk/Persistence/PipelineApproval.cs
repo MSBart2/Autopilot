@@ -8,7 +8,13 @@ namespace Cyberpilot.Persistence;
 /// </summary>
 public sealed class PipelineApproval
 {
-    internal static PipelineApproval FromRequest(string runId, ApprovalGateRequest request)
+    /// <summary>
+    /// Creates a persisted approval row from an SDK approval request.
+    /// </summary>
+    /// <param name="runId">The owning run identifier.</param>
+    /// <param name="request">The approval request.</param>
+    /// <returns>The persisted approval row.</returns>
+    public static PipelineApproval FromRequest(string runId, ApprovalGateRequest request)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(request);
