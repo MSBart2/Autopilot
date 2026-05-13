@@ -226,3 +226,7 @@ Persisted serialized stage results from progress sinks:
 - Updated web SignalR progress sink to store the same structured metadata while preserving existing live events.
 - Added SDK and web sink tests proving structured result metadata is persisted.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Thirteenth Slice Status
+
+In progress: capturing operator retry reasons for web retry/rework attempts.

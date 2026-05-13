@@ -17,6 +17,7 @@ namespace Cyberpilot.Web.Services;
 /// <param name="PipelineDefinitionVersion">The pipeline definition version selected for this run.</param>
 /// <param name="PolicyProfileName">The policy profile selected for this run.</param>
 /// <param name="ContractVersion">The stage result contract version selected for this run.</param>
+/// <param name="RetryReason">The operator-provided retry reason for the next matching start stage.</param>
 public sealed record WebPipelineRunRequest(
     string RunId,
     int IssueNumber,
@@ -32,4 +33,5 @@ public sealed record WebPipelineRunRequest(
     string? PipelineDefinitionName = null,
     string? PipelineDefinitionVersion = null,
     string? PolicyProfileName = null,
-    string? ContractVersion = null);
+    string? ContractVersion = null,
+    string? RetryReason = null);

@@ -384,7 +384,7 @@ public class PipelinesController : Controller
         run.TriggeredBy = User.Identity?.Name ?? run.TriggeredBy;
         await _dbContext.SaveChangesAsync();
 
-        await EnqueueRunAsync(run, repoRoot, token);
+        await EnqueueRunAsync(run, repoRoot, token, "Review feedback routed back to implementation.");
 
         return RedirectToAction(nameof(Details), new { id });
     }
@@ -442,7 +442,7 @@ public class PipelinesController : Controller
         run.TriggeredBy = User.Identity?.Name ?? run.TriggeredBy;
         await _dbContext.SaveChangesAsync();
 
-        await EnqueueRunAsync(run, repoRoot, token);
+        await EnqueueRunAsync(run, repoRoot, token, request.RetryReason?.Trim());
 
         TempData["PipelineNotice"] = "Review feedback routed back to implementation. Cyberpilot will update the existing PR branch, then return to review.";
         return RedirectToAction(nameof(Details), new { id });
@@ -955,7 +955,7 @@ public class PipelinesController : Controller
         return (process.ExitCode, captureOutput ? output : string.Empty, error);
     }
 
-    private ValueTask EnqueueRunAsync(PipelineRun run, string repoRoot, string? token)
+    private ValueTask EnqueueRunAsync(PipelineRun run, string repoRoot, string? token, string? retryReason = null)
     {
         return _queue.EnqueueAsync(new WebPipelineRunRequest(
             run.Id,
@@ -972,7 +972,8 @@ public class PipelinesController : Controller
             run.PipelineDefinitionName,
             run.PipelineDefinitionVersion,
             run.PolicyProfileName,
-            run.ContractVersion));
+                run.ContractVersion,
+                string.IsNullOrWhiteSpace(retryReason) ? null : retryReason));
     }
 
     private async Task<bool> IsReviewReworkCandidateAsync(PipelineRun run)

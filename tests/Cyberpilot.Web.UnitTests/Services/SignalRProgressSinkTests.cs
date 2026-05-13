@@ -134,6 +134,26 @@ public class SignalRProgressSinkTests : IDisposable
         Assert.Equal(12.0m, log.EstimatedCostUsd); // 4.00 in + 8.00 out = $12.00
     }
 
+    [Fact]
+    public void OnStageStarted_WithRetryReason_WritesReasonToMatchingStageLog()
+    {
+        var sink = new SignalRProgressSink(
+            _run.Id,
+            string.Empty,
+            42,
+            _dbContext,
+            _hubContext.Object,
+            NullLogger.Instance,
+            retryStageName: "implement",
+            retryReason: "Need to address review findings.");
+        var stage = new StageDefinition("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing");
+
+        sink.OnStageStarted(stage, 42);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("Need to address review findings.", log.RetryReason);
+    }
+
     private SignalRProgressSink CreateSink(string model = "")
     {
         return new SignalRProgressSink(

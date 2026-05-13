@@ -179,6 +179,10 @@
                     <label class="form-label form-label-sm mb-1">Timeout (min) <small class="text-muted">(optional)</small></label>
                     <input name="StageTimeoutMinutes" type="number" class="form-control form-control-sm" min="1" max="120" placeholder="@Model.Run.StageTimeoutMinutes" style="width:100px" />
                 </div>
+                <div class="flex-grow-1">
+                    <label class="form-label form-label-sm mb-1">Reason <small class="text-muted">(optional)</small></label>
+                    <input name="RetryReason" type="text" class="form-control form-control-sm" maxlength="500" placeholder="what changed or needs another attempt" />
+                </div>
                 <button type="submit" class="btn btn-sm btn-primary">↩ Retry Stage</button>
             </form>
         </div>

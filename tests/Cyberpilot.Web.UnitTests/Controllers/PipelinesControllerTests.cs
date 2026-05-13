@@ -463,6 +463,7 @@ public class PipelinesControllerTests
         Assert.NotNull(queue.LastRequest);
         Assert.Equal(run.Id, queue.LastRequest.RunId);
         Assert.Equal("implement", queue.LastRequest.StartStage);
+        Assert.Equal("Review feedback routed back to implementation.", queue.LastRequest.RetryReason);
         Assert.True(queue.LastRequest.SkipDeliver);
         Assert.True(queue.LastRequest.AllowMissingDocs);
         Assert.Equal("Review feedback routed back to implementation. Cyberpilot will update the existing PR branch, then return to review.", controller.TempData["PipelineNotice"]);
@@ -592,7 +593,7 @@ public class PipelinesControllerTests
         db.PipelineRuns.Add(run);
         await db.SaveChangesAsync();
 
-        var result = Assert.IsType<RedirectToActionResult>(await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "implement" }));
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "implement", RetryReason = "Need to apply review feedback." }));
 
         Assert.Equal("Details", result.ActionName);
         var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
@@ -602,6 +603,7 @@ public class PipelinesControllerTests
         Assert.Null(updated.Error);
         Assert.NotNull(queue.LastRequest);
         Assert.Equal("implement", queue.LastRequest.StartStage);
+        Assert.Equal("Need to apply review feedback.", queue.LastRequest.RetryReason);
     }
 
     [Fact]

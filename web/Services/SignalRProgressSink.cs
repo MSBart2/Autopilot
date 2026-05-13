@@ -18,10 +18,13 @@ public sealed class SignalRProgressSink(
     int issueNumber,
     CyberpilotDbContext dbContext,
     IHubContext<PipelineHub> hubContext,
-    ILogger logger) : ICyberpilotProgressSink
+    ILogger logger,
+    string? retryStageName = null,
+    string? retryReason = null) : ICyberpilotProgressSink
 {
     private readonly StringBuilder buffer = new();
     private PipelineStageLog? currentLog;
+    private bool retryReasonApplied;
 
     /// <inheritdoc />
     public void OnStageStarted(StageDefinition stage, int issueNumber)
@@ -37,6 +40,15 @@ public sealed class SignalRProgressSink(
             StartedAt = DateTime.UtcNow,
             RetryCount = retryCount,
         };
+
+        if (!retryReasonApplied
+            && !string.IsNullOrWhiteSpace(retryReason)
+            && stage.Name.Equals(retryStageName, StringComparison.OrdinalIgnoreCase))
+        {
+            currentLog.RetryReason = retryReason.Trim();
+            retryReasonApplied = true;
+        }
+
         dbContext.PipelineStageLogs.Add(currentLog);
 
         var run = dbContext.PipelineRuns.Find(runId);

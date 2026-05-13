@@ -106,7 +106,7 @@ public sealed class CyberpilotPipelineService(
             }
 
             var sinkLogger = scope.ServiceProvider.GetRequiredService<ILogger<SignalRProgressSink>>();
-            sink = new SignalRProgressSink(run.Id, run.Model, run.IssueNumber, dbContext, hubContext, sinkLogger);
+            sink = new SignalRProgressSink(run.Id, run.Model, run.IssueNumber, dbContext, hubContext, sinkLogger, request.StartStage, request.RetryReason);
             var result = await runner.RunAsync(new CyberpilotRunRequest(
                 request.IssueNumber,
                 repoRoot,

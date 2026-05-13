@@ -566,6 +566,10 @@ public sealed class RetryStageRequest
     /// <summary>Gets or sets an optional stage timeout override in minutes for this retry attempt.</summary>
     [Range(1, 120)]
     public int? StageTimeoutMinutes { get; set; }
+
+    /// <summary>Gets or sets an optional operator note explaining why the stage is being retried.</summary>
+    [StringLength(500)]
+    public string? RetryReason { get; set; }
 }
 
 /// <summary>
