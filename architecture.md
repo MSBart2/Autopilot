@@ -60,12 +60,19 @@ Registered services in [web/Program.cs](web/Program.cs):
 | `CyberpilotPipelineService` | Background SDK runner for web-triggered runs |
 | `ModelPricingService` | Static class in `Cyberpilot.Persistence`; maps model IDs to per-1M-token USD rates and returns `0` for unknown models. Powers cost estimation in both sink implementations. |
 
-**Token capture flow:** `CopilotStageRunner` calls `session.Rpc.Usage.GetMetricsAsync()` after each `SendAndWaitAsync`, stamps `InputTokens` and `OutputTokens` onto the returned `StageResult` (non-fatal — wrapped in try/catch), and both sink implementations (`CyberpilotRunHistoryProgressSink` and `SignalRProgressSink`) write those values plus `EstimatedCostUsd` (via `ModelPricingService.Estimate`) to `PipelineStageLog`.
+**Token capture flow:** `CopilotStageRunner` calls `session.Rpc.Usage.GetMetricsAsync()` after each `SendAndWaitAsync`, stamps `InputTokens` and `OutputTokens` onto the returned `StageResult` (non-fatal — wrapped in try/catch), and both sink implementations (`CyberpilotRunHistoryProgressSink` and `SignalRProgressSink`) write those values plus `EstimatedCostUsd` (via `ModelPricingService.Estimate`) and `RetryCount` to `PipelineStageLog`.
 
-**`PipelineStageLog` token columns** (added in migration `AddTokenUsageToPipelineStageLog`):
+**`PipelineStageLog` columns:**
+
+Token tracking (added in migration `AddTokenUsageToPipelineStageLog`):
 - `InputTokens` (INTEGER, nullable) — input tokens for this stage call
 - `OutputTokens` (INTEGER, nullable) — output tokens for this stage call
 - `EstimatedCostUsd` (REAL, nullable) — computed cost using `ModelPricingService`
+
+Retry tracking (added in migration `AddRetryCountToPipelineStageLog`):
+- `RetryCount` (INTEGER, nullable) — attempt index for this stage (0 = first attempt, 1 = first retry, etc.)
+
+The `RetryCount` value is set by both sink implementations (`SignalRProgressSink` and `CyberpilotRunHistoryProgressSink`) by counting existing logs for the same run and stage before inserting the new row.
 
 Middleware order:
 
@@ -88,7 +95,7 @@ Controllers:
 | Controller | Routes | Purpose |
 |------------|--------|---------|
 | `HomeController` | `/`, `/Home/Index`, `/Home/Error` | Pipeline portal and error view |
-| `PipelinesController` | `/Pipelines`, `/Pipelines/Issues`, `/Pipelines/{id}`, `/Pipelines/{id}/Continue`, `/Pipelines/{id}/ResetMission`, `/Pipelines/Guide/{mode}` | Pipeline modes, stages, run history, issue launcher, run details, run continuation, replay reset, and Markdown guides |
+| `PipelinesController` | `/Pipelines`, `/Pipelines/Issues`, `/Pipelines/{id}`, `/Pipelines/{id}/Continue`, `/Pipelines/{id}/RetryStage`, `/Pipelines/{id}/ResetMission`, `/Pipelines/Guide/{mode}` | Pipeline modes, stages, run history, issue launcher, run details, run continuation, stage retry, replay reset, and Markdown guides |
 | ASP.NET health checks | `/health/ready` | Readiness check |
 
 ## Pipeline Assets
@@ -104,6 +111,8 @@ Web-triggered SDK runs can separate the controller repository from the target re
 The web runner processes SDK runs through a durable database record plus an in-memory execution queue. Startup re-enqueues persisted `Queued` runs so a web app restart does not strand them. Runs for different configured repository roots can execute concurrently. Runs that target the same local repository root are serialized with a per-root lock, because simultaneous SDK runs can otherwise contend over the same checkout and branch state.
 
 Run details include an operational Run Room with issue title/body context, live SignalR agent output, continuation for terminal runs, cancellation for active runs, and Reset Mission for replay testing. Reset Mission removes SDK stage labels while preserving the base `sdk` label, deletes recognizable Cyberpilot issue comments, deletes the SDK issue branch locally/remotely when present, and removes the local `PipelineRun` record with its cascaded `PipelineStageLog` rows. Reset Mission is intentionally unavailable once a run completes delivery, because the associated code has already been merged.
+
+**Stage Retry & Selective Re-run:** Terminal runs (Failed, Stopped, Cancelled, Paused) expose a "⤹ Resume From Stage" panel in the Run Room. Any valid stage can be retried by name, with optional model and timeout overrides per attempt. Failed stage cards also surface a one-click Retry button. The `RetryStage` endpoint (`POST /Pipelines/{id}/RetryStage`) validates the stage name, enforces the `MaxStageRetries` cap (default: 3, configurable in `appsettings.json` under `Cyberpilot:MaxStageRetries`), and re-queues the run from the chosen stage. Remote runs (`IsRemote = true`) cannot use stage retry — the UI hides the controls and the server enforces the guard.
 
 ## Testing
 

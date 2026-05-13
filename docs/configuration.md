@@ -31,12 +31,13 @@ Cyberpilot's web project lives under [web/](../web) and keeps configuration focu
     "RepoRoot": "..",
     "AgentPromptRoot": "..",
     "ApproveAll": false,
-    "EnsureLabels": true
+    "EnsureLabels": true,
+    "MaxStageRetries": 3
   }
 }
 ```
 
-[web/appsettings.Development.json](../web/appsettings.Development.json) enables `Cyberpilot:ApproveAll` for local web-triggered SDK runs. `Cyberpilot:EnsureLabels` defaults to `true`, so web-triggered SDK runs create missing `sdk/*` labels in newly configured repositories before triage starts. `GitHub:Token` is intentionally blank; set `GITHUB_TOKEN`, `GH_TOKEN`, or a user-secret value instead of committing a token. Each `Cyberpilot:Repositories` entry can provide its own `RepoRoot`; the web runner clones the configured repository there when the path is missing, validates the local git work tree, and then lets the SDK create or switch issue branches in that clone. `Cyberpilot:AgentPromptRoot` points to the controller repository that contains `.github/agents`; when omitted, the web app uses the parent of the web content root.
+[web/appsettings.Development.json](../web/appsettings.Development.json) enables `Cyberpilot:ApproveAll` for local web-triggered SDK runs. `Cyberpilot:EnsureLabels` defaults to `true`, so web-triggered SDK runs create missing `sdk/*` labels in newly configured repositories before triage starts. `Cyberpilot:MaxStageRetries` defaults to `3` — once a stage has been attempted this many times on a single run, the Retry button is hidden and the `RetryStage` endpoint blocks further attempts. `GitHub:Token` is intentionally blank; set `GITHUB_TOKEN`, `GH_TOKEN`, or a user-secret value instead of committing a token. Each `Cyberpilot:Repositories` entry can provide its own `RepoRoot`; the web runner clones the configured repository there when the path is missing, validates the local git work tree, and then lets the SDK create or switch issue branches in that clone. `Cyberpilot:AgentPromptRoot` points to the controller repository that contains `.github/agents`; when omitted, the web app uses the parent of the web content root.
 
 ### Controller Repository and Target Repositories
 
