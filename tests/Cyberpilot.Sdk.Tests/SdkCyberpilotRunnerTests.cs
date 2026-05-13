@@ -231,6 +231,101 @@ public sealed class SdkCyberpilotRunnerTests
         Assert.Equal<string>(["docs"], stageRunner.StageNames);
     }
 
+    [Theory]
+    [InlineData("triage", new[] { "triage", "plan", "implement", "review", "docs", "deliver" })]
+    [InlineData("plan", new[] { "plan", "implement", "review", "docs", "deliver" })]
+    [InlineData("implement", new[] { "implement", "review", "docs", "deliver" })]
+    [InlineData("review", new[] { "review", "docs", "deliver" })]
+    [InlineData("docs", new[] { "docs", "deliver" })]
+    [InlineData("deliver", new[] { "deliver" })]
+    public async Task RunAsync_StartStage_ResumesAtRequestedStage(string startStage, string[] expectedStages)
+    {
+        var stageRunner = new RecordingStageRunner(_ => new StageResult("GO", "approved", true, null));
+        var output = new StringWriter();
+        var options = CreateOptions(122, true) with { StartStage = startStage };
+        var runner = new SdkCyberpilotRunner(options, new FakeIssueClient(), new FakeLabelService(), new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(expectedStages, stageRunner.StageNames);
+        Assert.Contains($"Resuming at stage: {startStage}", output.ToString());
+    }
+
+    [Fact]
+    public async Task RunAsync_DocsStopWithoutWaiver_HaltsBeforeDeliver()
+    {
+        var labels = new FakeLabelService();
+        var stageRunner = new RecordingStageRunner(stage => stage.Name == "docs"
+            ? new StageResult("STOP", "unknown", true, null)
+            : new StageResult("GO", "approved", true, null));
+        var output = new StringWriter();
+        var runner = CreateRunner(new FakeIssueClient(), labels, stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), output, approveAll: true);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(20, exitCode);
+        Assert.Equal<string>(["triage", "plan", "implement", "review", "docs"], stageRunner.StageNames);
+        Assert.Contains("sdk/failed", labels.StageLabels);
+        Assert.DoesNotContain("sdk/delivering", labels.StageLabels);
+        Assert.Contains("--allow-missing-docs", output.ToString());
+    }
+
+    [Fact]
+    public async Task RunAsync_DocsStopWithWaiver_ContinuesToDeliver()
+    {
+        var labels = new FakeLabelService();
+        var stageRunner = new RecordingStageRunner(stage => stage.Name == "docs"
+            ? new StageResult("STOP", "unknown", true, null)
+            : new StageResult("GO", "approved", true, null));
+        var output = new StringWriter();
+        var options = CreateOptions(122, true) with { AllowMissingDocs = true };
+        var runner = new SdkCyberpilotRunner(options, new FakeIssueClient(), labels, new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal<string>(["triage", "plan", "implement", "review", "docs", "deliver"], stageRunner.StageNames);
+        Assert.Contains("sdk/delivering", labels.StageLabels);
+        Assert.Contains("sdk/done", labels.StageLabels);
+        Assert.Contains("--allow-missing-docs is set", output.ToString());
+    }
+
+    [Fact]
+    public async Task RunAsync_ReviewRequestsChangesTwice_HaltsBeforeDocs()
+    {
+        var labels = new FakeLabelService();
+        var reviewCalls = 0;
+        var implementCalls = 0;
+        var stageRunner = new RecordingStageRunner(stage =>
+        {
+            if (stage.Name == "review")
+            {
+                reviewCalls++;
+                return new StageResult("GO", "changes_requested", true, null);
+            }
+
+            if (stage.Name == "implement")
+            {
+                implementCalls++;
+            }
+
+            return new StageResult("GO", "approved", true, null);
+        });
+        var output = new StringWriter();
+        var runner = new SdkCyberpilotRunner(CreateOptions(122, true), new FakeIssueClient(), labels, new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(4, exitCode);
+        Assert.Equal(2, reviewCalls);
+        Assert.Equal(2, implementCalls);
+        Assert.Equal<string>(["triage", "plan", "implement", "review", "implement", "review"], stageRunner.StageNames);
+        Assert.DoesNotContain("docs", stageRunner.StageNames);
+        Assert.DoesNotContain("sdk/docs", labels.StageLabels);
+        Assert.Contains("Review requested changes twice", output.ToString());
+    }
+
     [Fact]
     public async Task RunAsync_ShouldPauseAfterPlan_ReturnsExit3()
     {

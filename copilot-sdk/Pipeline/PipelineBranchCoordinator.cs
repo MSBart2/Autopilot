@@ -23,6 +23,11 @@ internal sealed class PipelineBranchCoordinator(
         return await EnsureBranchCoreAsync(start, cancellationToken);
     }
 
+    public Task CloseIssueAsync(CancellationToken cancellationToken)
+    {
+        return issueClient.CloseIssueAsync(options.IssueNumber, cancellationToken);
+    }
+
     private async Task<BranchRoutingResult> FastForwardForExistingPullRequestAsync(PipelineStart start, CancellationToken cancellationToken)
     {
         if (start.IsResume)

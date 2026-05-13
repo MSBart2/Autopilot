@@ -151,3 +151,22 @@ Surfaced definition metadata in the Run Room:
 - Added view-model tests for stored metadata and fallback default metadata.
 - Stabilized the web pipeline service tests by moving their SQLite fixture to a per-test database file, avoiding shared-connection races while the background service is active.
 - Validated with `dotnet build .\Cyberpilot.sln` and web unit tests.
+
+### Fifth Slice Status
+
+Added routing characterization tests before extracting a pipeline engine:
+
+- Covered resume from every stage.
+- Covered docs failure with and without `AllowMissingDocs`.
+- Covered review change requests exhausting the two-cycle rework loop.
+- Extracted current stage orchestration into `PipelineEngine` with `PipelineExecutionContext` while preserving `SdkCyberpilotRunner` preflight behavior and public run result fields.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Sixth Slice Status
+
+Moved the extracted engine toward definition-driven stage metadata while preserving current behavior:
+
+- Added a definition-aware `PipelineStartResolver` overload.
+- Updated `PipelineEngine` to resolve start stages and stage metadata from `PipelineExecutionContext.Definition`.
+- Kept `StageCatalog` compatibility in place for existing callers and index semantics.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
