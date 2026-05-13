@@ -22,7 +22,7 @@ internal sealed class StageExecutor(
         console.WriteDetail("Timeout", PipelineConsoleWriter.FormatDuration(timeout));
 
         progressSink.OnStageStarted(stage, issueNumber);
-        var prompt = await promptBuilder.BuildAsync(stage, mission, cancellationToken);
+        var prompt = await promptBuilder.BuildAsync(stageDefinition, mission, policyProfile, cancellationToken);
         var result = await stageRunner.RunAsync(stage, prompt, timeout, cancellationToken);
         if (!result.IsValid)
         {

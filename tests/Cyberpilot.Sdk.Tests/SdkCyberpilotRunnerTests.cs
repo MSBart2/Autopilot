@@ -504,9 +504,9 @@ public sealed class SdkCyberpilotRunnerTests
 
     private sealed class FakePromptBuilder : IPromptBuilder
     {
-        public Task<string> BuildAsync(StageDefinition stage, string mission, CancellationToken cancellationToken = default)
+        public Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult($"Prompt for {stage.Name}");
+            return Task.FromResult($"Prompt for {stageDefinition.Stage.Name}");
         }
     }
 

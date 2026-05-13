@@ -259,3 +259,14 @@ Added artifact validation before routing decisions:
 - Updated `StageExecutor` to validate successful stage results before emitting completion and before routing consumes them.
 - Added validator unit tests and runner-level coverage proving missing declared artifacts halt before the next stage.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Sixteenth Slice Status
+
+Injected selected stage result contracts into SDK prompts:
+
+- Updated `IPromptBuilder` to receive the full `PipelineStageDefinition` and selected `PolicyProfile`.
+- Added generated prompt guidance for policy profile, contract version, required artifacts, evidence, policy rationale, and required actions.
+- Built the artifact JSON example from the selected stage contract so prompt guidance follows the pipeline definition.
+- Updated `StageExecutor` and test fakes to use the richer prompt-builder contract.
+- Added prompt-builder tests for required artifact guidance and policy/action fields.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
