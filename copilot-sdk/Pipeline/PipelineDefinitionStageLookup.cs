@@ -4,8 +4,13 @@ internal static class PipelineDefinitionStageLookup
 {
     public static StageDefinition Stage(this PipelineDefinition definition, string stageName)
     {
-        var stage = definition.Stages.FirstOrDefault(candidate => candidate.Stage.Name.Equals(stageName, StringComparison.OrdinalIgnoreCase));
-        return stage?.Stage ?? throw new UnknownPipelineStageException(stageName);
+        return definition.PipelineStage(stageName).Stage;
+    }
+
+    public static PipelineStageDefinition PipelineStage(this PipelineDefinition definition, string stageName)
+    {
+        return definition.Stages.FirstOrDefault(candidate => candidate.Stage.Name.Equals(stageName, StringComparison.OrdinalIgnoreCase))
+            ?? throw new UnknownPipelineStageException(stageName);
     }
 
     public static int IndexOf(this PipelineDefinition definition, string stageName)

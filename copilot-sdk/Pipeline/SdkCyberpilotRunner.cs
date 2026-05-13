@@ -22,7 +22,7 @@ internal sealed class SdkCyberpilotRunner(
     public IReadOnlyList<StageResult> StageResults => pipelineContext.StageResults;
     private PipelineExecutionContext pipelineContext = new(options, DefaultPipelineDefinitionProvider.Definition);
     private readonly PipelineConsoleWriter console = new(output);
-    private readonly StageExecutor stageExecutor = new(promptBuilder, stageRunner, progressSink, new PipelineConsoleWriter(output));
+    private readonly StageExecutor stageExecutor = new(promptBuilder, stageRunner, new DefaultStageArtifactValidator(), progressSink, new PipelineConsoleWriter(output));
     private readonly PipelineBranchCoordinator branchCoordinator = new(options, issueClient, branchProvisioner, progressSink, new PipelineConsoleWriter(output));
 
     public async Task<int> RunAsync(CancellationToken cancellationToken = default)

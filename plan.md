@@ -248,3 +248,14 @@ Added backward-compatible stage result contract/artifact/evidence fields:
 - Updated SDK and web progress sinks to persist the result's contract version, falling back to the default when missing.
 - Added SDK tests for structured field parsing and SDK/web sink tests for result-specific contract version persistence.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web unit tests.
+
+### Fifteenth Slice Status
+
+Added artifact validation before routing decisions:
+
+- Added `IStageArtifactValidator`, `StageArtifactValidationResult`, and `DefaultStageArtifactValidator`.
+- Validated stage result contract versions against the selected stage contract.
+- Added legacy-safe artifact checks: omitted artifacts remain compatible during prompt transition, while partial artifact payloads must include all declared required artifacts.
+- Updated `StageExecutor` to validate successful stage results before emitting completion and before routing consumes them.
+- Added validator unit tests and runner-level coverage proving missing declared artifacts halt before the next stage.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.

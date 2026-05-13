@@ -257,7 +257,8 @@ internal sealed class PipelineEngine(
     private async Task<StageResult> RunStageAsync(StageDefinition stage, string mission, CancellationToken cancellationToken)
     {
         context.FinalStage = stage.Name;
-        var result = await stageExecutor.RunAsync(stage, Options.IssueNumber, Options.StageTimeout, mission, cancellationToken);
+        var stageDefinition = context.Definition.PipelineStage(stage.Name);
+        var result = await stageExecutor.RunAsync(stageDefinition, Options.IssueNumber, Options.StageTimeout, mission, context.Definition.PolicyProfile, cancellationToken);
         context.StageResults.Add(result);
         return result;
     }

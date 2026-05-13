@@ -200,6 +200,24 @@ public sealed class SdkCyberpilotRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_StageResultMissingDeclaredArtifact_HaltsBeforeNextStage()
+    {
+        var labels = new FakeLabelService();
+        var stageRunner = new ConditionalStageRunner(stage => stage.Name == "triage"
+            ? new StageResult("GO", "approved", true, null, Artifacts: [new StageArtifact("unexpected-artifact")])
+            : new StageResult("GO", "approved", true, null));
+        var output = new StringWriter();
+        var runner = CreateRunner(new FakeIssueClient(), labels, stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), output, approveAll: true);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(20, exitCode);
+        Assert.Contains("failed artifact validation", output.ToString());
+        Assert.Contains("sdk/failed", labels.StageLabels);
+        Assert.DoesNotContain("sdk/planning", labels.StageLabels);
+    }
+
+    [Fact]
     public async Task RunAsync_ReviewNotApproved_ReturnsExit4()
     {
         var stageRunner = new ConditionalStageRunner(stage =>
