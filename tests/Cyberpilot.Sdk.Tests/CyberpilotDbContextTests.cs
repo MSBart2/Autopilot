@@ -65,6 +65,15 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public void PipelineStageLog_TokenColumns_DefaultToNull()
+    {
+        var log = new PipelineStageLog();
+        Assert.Null(log.InputTokens);
+        Assert.Null(log.OutputTokens);
+        Assert.Null(log.EstimatedCostUsd);
+    }
+
+    [Fact]
     public async Task PipelineRun_CascadeDeletesStageLogs()
     {
         var run = new PipelineRun { IssueNumber = 1, Repository = "test/repo", Model = "m" };

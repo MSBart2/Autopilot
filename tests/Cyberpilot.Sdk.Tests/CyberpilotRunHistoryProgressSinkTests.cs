@@ -35,7 +35,7 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     [Fact]
     public void OnStageStarted_CreatesStageLogAndUpdatesRun()
     {
-        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, _dbContext);
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
         var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
 
         sink.OnStageStarted(stage, 1);
@@ -53,7 +53,7 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     [Fact]
     public void OnStageCompleted_UpdatesStageLogStatus()
     {
-        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, _dbContext);
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
         var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
         sink.OnStageStarted(stage, 1);
 
@@ -68,7 +68,7 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     [Fact]
     public void OnMessage_AppendsToStageLog()
     {
-        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, _dbContext);
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
         var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
         sink.OnStageStarted(stage, 1);
 
@@ -81,7 +81,7 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     [Fact]
     public void OnMessage_WithoutStageStarted_CreatesGenericLog()
     {
-        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, _dbContext);
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
         sink.OnMessage("warn", "No stage");
 
         var log = _dbContext.PipelineStageLogs.Single();
@@ -92,7 +92,7 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     [Fact]
     public void OnStreamDelta_BuffersContent()
     {
-        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, _dbContext);
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
         var stage = new StageDefinition("PLAN", "plan", "plan.agent.md", "sdk/planning");
         sink.OnStageStarted(stage, 1);
 
@@ -106,7 +106,7 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     [Fact]
     public void OnStreamDelta_FlushesWhenBufferExceeds4096()
     {
-        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, _dbContext);
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
         var stage = new StageDefinition("PLAN", "plan", "plan.agent.md", "sdk/planning");
         sink.OnStageStarted(stage, 1);
 
@@ -115,5 +115,21 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
 
         var log = _dbContext.PipelineStageLogs.First();
         Assert.Contains(largeContent, log.Output);
+    }
+
+    [Fact]
+    public void OnStageCompleted_WithTokenUsage_PersistsTokensAndCost()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "claude-sonnet-4.6", _dbContext);
+        var stage = new StageDefinition("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
+        sink.OnStageStarted(stage, 1);
+
+        var result = new StageResult("GO", "approved", true, null, InputTokens: 1_000_000, OutputTokens: 500_000);
+        sink.OnStageCompleted(stage, result);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal(1_000_000, log.InputTokens);
+        Assert.Equal(500_000, log.OutputTokens);
+        Assert.Equal(10.5m, log.EstimatedCostUsd); // 3.00 in + 7.50 out = $10.50
     }
 }

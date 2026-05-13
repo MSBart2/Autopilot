@@ -13,6 +13,7 @@ namespace Cyberpilot.Web.Services;
 /// </summary>
 public sealed class SignalRProgressSink(
     string runId,
+    string model,
     int issueNumber,
     CyberpilotDbContext dbContext,
     IHubContext<PipelineHub> hubContext,
@@ -54,10 +55,23 @@ public sealed class SignalRProgressSink(
         {
             currentLog.Status = result.Status;
             currentLog.CompletedAt = DateTime.UtcNow;
+            currentLog.InputTokens = result.InputTokens;
+            currentLog.OutputTokens = result.OutputTokens;
+            currentLog.EstimatedCostUsd = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens);
         }
 
         dbContext.SaveChanges();
-        hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("stageCompleted", new { runId, issueNumber, stage = stage.Name, result.Status, result.Decision }).GetAwaiter().GetResult();
+        hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("stageCompleted", new
+        {
+            runId,
+            issueNumber,
+            stage = stage.Name,
+            result.Status,
+            result.Decision,
+            inputTokens = result.InputTokens,
+            outputTokens = result.OutputTokens,
+            estimatedCostUsd = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens),
+        }).GetAwaiter().GetResult();
     }
 
     /// <inheritdoc />
