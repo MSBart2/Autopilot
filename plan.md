@@ -270,3 +270,14 @@ Injected selected stage result contracts into SDK prompts:
 - Updated `StageExecutor` and test fakes to use the richer prompt-builder contract.
 - Added prompt-builder tests for required artifact guidance and policy/action fields.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Seventeenth Slice Status
+
+Added built-in policy profile selection:
+
+- Added built-in `lenient`, `standard`, `strict`, and `security-critical` policy profiles.
+- Updated the pipeline definition selector to apply the selected built-in profile to the default definition.
+- Kept unsupported definitions and versions rejected before side effects.
+- Updated SDK help text to advertise available profiles.
+- Added selector and option-help tests for the built-in profiles.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.

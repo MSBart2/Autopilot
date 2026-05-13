@@ -159,8 +159,42 @@ public sealed class PipelineDefinitionTests
         var selected = PipelineDefinitionSelector.TrySelect(options, out var definition, out var error);
 
         Assert.True(selected);
-        Assert.Same(DefaultPipelineDefinitionProvider.Definition, definition);
+        Assert.Equal(DefaultPipelineDefinitionProvider.Definition.Name, definition!.Name);
+        Assert.Equal("standard", definition.PolicyProfile.Name);
         Assert.Null(error);
+    }
+
+    [Theory]
+    [InlineData("lenient", "Lenient")]
+    [InlineData("standard", "Standard")]
+    [InlineData("strict", "Strict")]
+    [InlineData("security-critical", "SecurityCritical")]
+    public void PipelineDefinitionSelector_BuiltInPolicyProfile_SelectsProfile(string policyProfileName, string expectedStrictness)
+    {
+        var options = new Cyberpilot.Options.CyberpilotOptions(
+            1,
+            Directory.GetCurrentDirectory(),
+            "owner/repo",
+            "test-model",
+            false,
+            false,
+            false,
+            false,
+            TimeSpan.FromMinutes(10),
+            true,
+            false,
+            null,
+            null,
+            false,
+            PolicyProfileName: policyProfileName);
+
+        var selected = PipelineDefinitionSelector.TrySelect(options, out var definition, out var error);
+
+        Assert.True(selected);
+        Assert.Null(error);
+        Assert.Equal(policyProfileName, definition!.PolicyProfile.Name);
+        Assert.Equal(expectedStrictness, definition.PolicyProfile.Strictness.ToString());
+        Assert.Equal(DefaultPipelineDefinitionProvider.Definition.Stages, definition.Stages);
     }
 
     [Fact]
@@ -201,7 +235,7 @@ public sealed class PipelineDefinitionTests
     [Theory]
     [InlineData("other-definition", "1.0", "standard", "Unsupported pipeline definition")]
     [InlineData("cyberpilot-default", "2.0", "standard", "Unsupported pipeline definition version")]
-    [InlineData("cyberpilot-default", "1.0", "strict", "Unsupported policy profile")]
+    [InlineData("cyberpilot-default", "1.0", "unknown-profile", "Unsupported policy profile")]
     public void PipelineDefinitionSelector_UnsupportedSelection_ReturnsError(string definitionName, string definitionVersion, string policyProfile, string expectedError)
     {
         var options = new Cyberpilot.Options.CyberpilotOptions(

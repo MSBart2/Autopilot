@@ -47,7 +47,7 @@ internal sealed record CyberpilotOptions(
             "  --pipeline-version <version>",
             "                       Pipeline definition version. Defaults to 1.0.",
             "  --policy-profile <name>",
-            "                       Policy profile to apply. Defaults to standard.",
+            "                       Policy profile to apply: lenient, standard, strict, security-critical. Defaults to standard.",
             "  --ensure-labels     Create missing sdk labels before running.",
             "  --check-labels      Check sdk labels and exit without running stages.",
             "  --check-model       Check Copilot model availability and exit without running stages.",

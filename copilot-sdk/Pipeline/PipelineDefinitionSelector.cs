@@ -20,13 +20,13 @@ internal static class PipelineDefinitionSelector
             return false;
         }
 
-        if (!options.PolicyProfileName.Equals(PipelineDefinitionDefaults.PolicyProfileName, StringComparison.OrdinalIgnoreCase))
+        if (!BuiltInPolicyProfiles.TryGet(options.PolicyProfileName, out var policyProfile))
         {
-            error = $"Unsupported policy profile '{options.PolicyProfileName}' for {options.PipelineDefinitionName}. Available profile: {PipelineDefinitionDefaults.PolicyProfileName}.";
+            error = $"Unsupported policy profile '{options.PolicyProfileName}' for {options.PipelineDefinitionName}. Available profiles: {BuiltInPolicyProfiles.AvailableNames}.";
             return false;
         }
 
-        definition = DefaultPipelineDefinitionProvider.Definition;
+        definition = DefaultPipelineDefinitionProvider.Definition with { PolicyProfile = policyProfile };
         var validationErrors = PipelineDefinitionValidator.Validate(definition);
         if (validationErrors.Count > 0)
         {

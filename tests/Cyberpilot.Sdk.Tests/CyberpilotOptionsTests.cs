@@ -210,6 +210,7 @@ public sealed class CyberpilotOptionsTests
         Assert.Contains("--config", CyberpilotOptions.HelpText);
         Assert.Contains("--pipeline-definition", CyberpilotOptions.HelpText);
         Assert.Contains("--policy-profile", CyberpilotOptions.HelpText);
+        Assert.Contains("security-critical", CyberpilotOptions.HelpText);
     }
 
     [Fact]
