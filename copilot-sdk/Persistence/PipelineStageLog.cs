@@ -44,6 +44,9 @@ public sealed class PipelineStageLog
     /// <summary>Gets or sets the estimated USD cost for this stage based on model pricing.</summary>
     public decimal? EstimatedCostUsd { get; set; }
 
+    /// <summary>Gets or sets the retry attempt number for this stage log (0 = first attempt).</summary>
+    public int? RetryCount { get; set; }
+
     /// <summary>Gets or sets the owning run.</summary>
     public PipelineRun? Run { get; set; }
 }

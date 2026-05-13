@@ -129,4 +129,82 @@ public class PipelineRunDetailsViewModelTests
         Assert.Equal(["Rerun triage.", "Verify the triage handoff comment exists."], diagnostic.CorrectiveActions);
         Assert.Equal("Plan result: STOP.", diagnostic.Evidence);
     }
+
+    [Fact]
+    public void GetStageRetryCount_CountsLogsForStage()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m", Status = "Failed" };
+        var logs = new[]
+        {
+            new PipelineStageLog { RunId = run.Id, StageName = "plan", Status = "STOP" },
+            new PipelineStageLog { RunId = run.Id, StageName = "plan", Status = "STOP" },
+            new PipelineStageLog { RunId = run.Id, StageName = "triage", Status = "GO" },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, logs);
+
+        Assert.Equal(2, vm.GetStageRetryCount("plan"));
+        Assert.Equal(1, vm.GetStageRetryCount("triage"));
+        Assert.Equal(0, vm.GetStageRetryCount("implement"));
+    }
+
+    [Fact]
+    public void CanRetryStage_TerminalRunBelowCap_ReturnsTrue()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m", Status = "Failed", IsRemote = false };
+        var logs = new[]
+        {
+            new PipelineStageLog { RunId = run.Id, StageName = "plan", Status = "STOP" },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, logs);
+
+        Assert.True(vm.CanRetryStage("plan", 3));
+    }
+
+    [Fact]
+    public void CanRetryStage_RemoteRun_ReturnsFalse()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m", Status = "Failed", IsRemote = true };
+
+        var vm = new PipelineRunDetailsViewModel(run, []);
+
+        Assert.False(vm.CanRetryStage("plan", 3));
+    }
+
+    [Fact]
+    public void CanRetryStage_ActiveRun_ReturnsFalse()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m", Status = "Running", IsRemote = false };
+
+        var vm = new PipelineRunDetailsViewModel(run, []);
+
+        Assert.False(vm.CanRetryStage("plan", 3));
+    }
+
+    [Fact]
+    public void CanRetryStage_UnknownStage_ReturnsFalse()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m", Status = "Failed", IsRemote = false };
+
+        var vm = new PipelineRunDetailsViewModel(run, []);
+
+        Assert.False(vm.CanRetryStage("unknown-stage", 3));
+    }
+
+    [Fact]
+    public void CanRetryStage_AtCap_ReturnsFalse()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m", Status = "Failed", IsRemote = false };
+        var logs = new[]
+        {
+            new PipelineStageLog { RunId = run.Id, StageName = "plan", Status = "STOP" },
+            new PipelineStageLog { RunId = run.Id, StageName = "plan", Status = "STOP" },
+            new PipelineStageLog { RunId = run.Id, StageName = "plan", Status = "STOP" },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, logs);
+
+        Assert.False(vm.CanRetryStage("plan", 3));
+    }
 }
