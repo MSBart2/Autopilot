@@ -345,3 +345,33 @@ Added a deterministic gate for branch readiness:
 - Registered the gate in `BuiltInPipelineGates` while keeping default definitions unattached.
 - Added branch-ready gate tests for pass, missing branch, blank branch, and built-in registration coverage.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Twenty-Fourth Slice Status
+
+Persisted blocking gate outcomes as structured stage-result evidence:
+
+- Enriched blocking gate failure `StageResult` values with gate evidence and policy rationale.
+- Preserved existing dispatch logging while adding machine-readable gate context to halted results.
+- Carried gate corrective actions into the synthetic invalid stage result.
+- Added engine-level coverage proving a blocking gate halts before agent execution and records evidence/actions.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Twenty-Fifth Slice Status
+
+Added first-class approval request and decision state primitives:
+
+- Added `ApprovalGateRequest` as the SDK model for pending human approval gates.
+- Added `ApprovalDecision` and `ApprovalStatus` for approved, rejected, cancelled, and pending states.
+- Added immutable approve/reject transitions with actor validation and trimmed decision metadata.
+- Added SDK tests for pending state, approval, rejection, duplicate decisions, and missing actors.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Twenty-Sixth Slice Status
+
+Added a richer pause decision hook for approval-aware pauses:
+
+- Added `PipelinePauseContext` and `PipelinePauseDecision` for structured pause decisions.
+- Added an optional `ShouldPauseDecisionAsync` hook to SDK options while preserving the existing boolean pause callback.
+- Updated `PipelineEngine` to prefer structured pause decisions and emit approval dispatch events when an approval request is attached.
+- Added pause decision unit tests and runner coverage for approval-aware pauses after plan.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.

@@ -21,7 +21,8 @@ internal sealed record CyberpilotOptions(
     Func<CancellationToken, Task<bool>>? ShouldPauseAsync = null,
     string PipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName,
     string PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
-    string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName)
+    string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
+    Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);

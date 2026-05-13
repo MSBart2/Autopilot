@@ -385,6 +385,38 @@ public sealed class SdkCyberpilotRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_ShouldPauseDecisionAfterPlan_ReturnsExit3WithApprovalDispatch()
+    {
+        var stageRunner = new RecordingStageRunner(_ => new StageResult("GO", "approved", true, null));
+        var progressSink = new RecordingProgressSink();
+        var output = new StringWriter();
+        var options = CreateOptions(122, true) with
+        {
+            ShouldPauseDecisionAsync = (context, _) => Task.FromResult(context.CompletedStageName == "plan"
+                ? PipelinePauseDecision.Pause(
+                    "Maintainer approval required before implementation.",
+                    new ApprovalGateRequest(
+                        "approval-122-plan",
+                        context.IssueNumber,
+                        context.CompletedStageName,
+                        GateTiming.AfterStage,
+                        "Plan approval required before implementation.",
+                        "maintainer",
+                        "implement",
+                        DateTimeOffset.Parse("2026-05-13T10:00:00Z")))
+                : PipelinePauseDecision.Continue())
+        };
+        var runner = new SdkCyberpilotRunner(options, new FakeIssueClient(), new FakeLabelService(), new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), progressSink, output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(3, exitCode);
+        Assert.Equal<string>(["triage", "plan"], stageRunner.StageNames);
+        Assert.Contains(progressSink.Dispatches, dispatch => dispatch.Type == DispatchType.Approval && dispatch.Message.Contains("approval-122-plan", StringComparison.Ordinal));
+        Assert.Contains("Maintainer approval required", output.ToString());
+    }
+
+    [Fact]
     public async Task RunAsync_ReviewRequestsChanges_ReworksAndReviewsAgain()
     {
         var reviewCalls = 0;
@@ -554,5 +586,17 @@ public sealed class SdkCyberpilotRunnerTests
             Calls++;
             return Task.FromResult(result);
         }
+    }
+
+    private sealed class RecordingProgressSink : ICyberpilotProgressSink
+    {
+        public List<(string Type, string Message)> Dispatches { get; } = [];
+
+        public void OnStageStarted(StageDefinition stage, int issueNumber) { }
+        public void OnStageCompleted(StageDefinition stage, StageResult result) { }
+        public void OnBranchReady(string branchName) { }
+        public void OnMessage(string level, string message) { }
+        public void OnStreamDelta(string content) { }
+        public void OnDispatch(string type, string message) => Dispatches.Add((type, message));
     }
 }

@@ -239,6 +239,20 @@ internal sealed class PipelineEngine(
 
     private async Task<int?> CheckPauseAsync(string completedStage, CancellationToken cancellationToken)
     {
+        if (Options.ShouldPauseDecisionAsync is not null)
+        {
+            var pauseContext = new PipelinePauseContext(completedStage, Options.IssueNumber, context.BranchName, context.PrUrl);
+            var decision = await Options.ShouldPauseDecisionAsync(pauseContext, cancellationToken);
+            if (!decision.ShouldPause) return null;
+
+            var message = decision.ApprovalRequest is null
+                ? decision.Reason
+                : $"{decision.Reason} Approval '{decision.ApprovalRequest.Id}' requested for role '{decision.ApprovalRequest.RequestedRole}'.";
+            progressSink.OnDispatch(DispatchType.Approval, message);
+            console.WriteStep(message);
+            return 3;
+        }
+
         if (Options.ShouldPauseAsync is null) return null;
         if (!await Options.ShouldPauseAsync(cancellationToken)) return null;
 
@@ -287,11 +301,14 @@ internal sealed class PipelineEngine(
             progressSink.OnDispatch(DispatchType.Gate, $"Gate '{evaluation.Gate.Name}' {outcome} for stage '{stageDefinition.Stage.Name}': {evaluation.Result.Summary}");
             if (!evaluation.Result.Passed && evaluation.Gate.IsBlocking)
             {
+                var summary = $"Blocking gate '{evaluation.Gate.Name}' failed for stage '{stageDefinition.Stage.Name}': {evaluation.Result.Summary}";
                 return new StageResult(
                     "INVALID",
                     "unknown",
                     false,
-                    $"Blocking gate '{evaluation.Gate.Name}' failed for stage '{stageDefinition.Stage.Name}': {evaluation.Result.Summary}",
+                    summary,
+                    Evidence: [new StageEvidence($"gate:{evaluation.Gate.Name}", evaluation.Result.Summary)],
+                    PolicyRationale: $"Deterministic gate '{evaluation.Gate.Name}' blocked stage '{stageDefinition.Stage.Name}'.",
                     RequiredActions: evaluation.Result.RequiredActions);
             }
         }
