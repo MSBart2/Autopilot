@@ -459,6 +459,11 @@ public class PipelinesController : Controller
             return NotFound();
         }
 
+        if (!ModelState.IsValid)
+        {
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         if (run.Status is "Queued" or "Running" or "Pausing")
         {
             TempData["PipelineError"] = "This run is already active.";
@@ -488,6 +493,7 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
+        // ToLower() is used here because EF Core cannot translate StringComparison enum overloads to SQL.
         var stageLogCount = await _dbContext.PipelineStageLogs.CountAsync(log =>
             log.RunId == id && log.StageName.ToLower() == request.StageName.ToLower());
         if (stageLogCount >= _options.MaxStageRetries)

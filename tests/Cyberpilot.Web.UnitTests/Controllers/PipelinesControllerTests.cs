@@ -770,6 +770,60 @@ public class PipelinesControllerTests
         Assert.Contains("already has an active", controller.TempData["PipelineError"]!.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task RetryStage_PausedRun_RequeuesRunFromThatStage()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 9,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Paused",
+            CurrentStage = "review",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "implement" }));
+
+        Assert.Equal("Details", result.ActionName);
+        var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("Queued", updated.Status);
+        Assert.Equal("implement", updated.CurrentStage);
+        Assert.Null(updated.CompletedAt);
+        Assert.NotNull(queue.LastRequest);
+    }
+
+    [Fact]
+    public async Task RetryStage_CancelledRun_RequeuesRunFromThatStage()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var run = new PipelineRun
+        {
+            IssueNumber = 11,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            Status = "Cancelled",
+            CurrentStage = "docs",
+            CompletedAt = DateTime.UtcNow,
+            StageTimeoutMinutes = 10,
+        };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.RetryStage(run.Id, new RetryStageRequest { StageName = "docs" }));
+
+        Assert.Equal("Details", result.ActionName);
+        var updated = await db.PipelineRuns.FirstAsync(item => item.Id == run.Id);
+        Assert.Equal("Queued", updated.Status);
+        Assert.Equal("docs", updated.CurrentStage);
+        Assert.Null(updated.CompletedAt);
+        Assert.NotNull(queue.LastRequest);
+    }
+
     private sealed class TestTempDataProvider : ITempDataProvider
     {
         public IDictionary<string, object?> LoadTempData(HttpContext context) => new Dictionary<string, object?>();
