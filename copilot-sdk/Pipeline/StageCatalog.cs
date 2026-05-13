@@ -2,22 +2,18 @@ namespace Cyberpilot.Pipeline;
 
 internal static class StageCatalog
 {
-    public static StageDefinition Triage { get; } = new("TRIAGE", "triage", "triage.agent.md", "sdk/triage");
-    public static StageDefinition Plan { get; } = new("PLAN", "plan", "plan.agent.md", "sdk/planning");
-    public static StageDefinition Implement { get; } = new("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing");
-    public static StageDefinition Review { get; } = new("REVIEW", "review", "pipeline-review.agent.md", "sdk/review");
-    public static StageDefinition Docs { get; } = new("DOCS", "docs", "docs.agent.md", "sdk/docs");
-    public static StageDefinition Deliver { get; } = new("LAND", "deliver", "deliver.agent.md", "sdk/delivering");
+    private static readonly IReadOnlyList<StageDefinition> DefaultStages = DefaultPipelineDefinitionProvider.Definition.Stages
+        .Select(stage => stage.Stage)
+        .ToArray();
 
-    public static IReadOnlyList<StageDefinition> All { get; } =
-    [
-        Triage,
-        Plan,
-        Implement,
-        Review,
-        Docs,
-        Deliver,
-    ];
+    public static StageDefinition Triage { get; } = DefaultStages[0];
+    public static StageDefinition Plan { get; } = DefaultStages[1];
+    public static StageDefinition Implement { get; } = DefaultStages[2];
+    public static StageDefinition Review { get; } = DefaultStages[3];
+    public static StageDefinition Docs { get; } = DefaultStages[4];
+    public static StageDefinition Deliver { get; } = DefaultStages[5];
+
+    public static IReadOnlyList<StageDefinition> All { get; } = DefaultStages;
 
     public static int IndexOf(string stageName)
     {

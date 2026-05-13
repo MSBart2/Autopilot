@@ -1,9 +1,10 @@
+using System.Collections.Concurrent;
 using Cyberpilot;
 using Cyberpilot.Persistence;
+using Cyberpilot.Pipeline;
 using Cyberpilot.Web.Hubs;
 using Cyberpilot.Web.Services;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -14,16 +15,17 @@ namespace Cyberpilot.Web.UnitTests.Services;
 
 public sealed class CyberpilotPipelineServiceTests : IDisposable
 {
-    private readonly SqliteConnection connection = new("DataSource=:memory:");
-
-    public CyberpilotPipelineServiceTests()
-    {
-        connection.Open();
-    }
+    private readonly string databasePath = Path.Combine(Path.GetTempPath(), $"cyberpilot-service-tests-{Guid.NewGuid():N}.db");
 
     public void Dispose()
     {
-        connection.Dispose();
+        try
+        {
+            File.Delete(databasePath);
+        }
+        catch (IOException)
+        {
+        }
     }
 
     [Fact]
@@ -81,6 +83,36 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
         await service.StopAsync(CancellationToken.None);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_PassesPipelineDefinitionMetadataToRunner()
+    {
+        var queue = new CyberpilotRunQueue();
+        var runner = new BlockingRunner(expectedConcurrentStarts: 1);
+        using var provider = CreateProvider(queue, runner);
+        await SeedRunAsync(provider, "run-1", "owner/repo-one");
+        var service = CreateService(provider, queue);
+
+        await service.StartAsync(CancellationToken.None);
+        await queue.EnqueueAsync(CreateRequest(
+            "run-1",
+            "owner/repo-one",
+            "C:\\Repos\\One",
+            PipelineDefinitionDefaults.DefinitionName,
+            PipelineDefinitionDefaults.DefinitionVersion,
+            PipelineDefinitionDefaults.PolicyProfileName,
+            PipelineDefinitionDefaults.ContractVersion));
+
+        await runner.WaitForExpectedStartsAsync();
+
+        var request = Assert.Single(runner.Requests);
+        Assert.Equal(PipelineDefinitionDefaults.DefinitionName, request.PipelineDefinitionName);
+        Assert.Equal(PipelineDefinitionDefaults.DefinitionVersion, request.PipelineDefinitionVersion);
+        Assert.Equal(PipelineDefinitionDefaults.PolicyProfileName, request.PolicyProfileName);
+
+        runner.ReleaseAll();
+        await service.StopAsync(CancellationToken.None);
+    }
+
     private static CyberpilotPipelineService CreateService(ServiceProvider provider, ICyberpilotRunQueue queue)
     {
         var hubContext = provider.GetRequiredService<IHubContext<PipelineHub>>();
@@ -95,7 +127,7 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
     private ServiceProvider CreateProvider(ICyberpilotRunQueue queue, BlockingRunner runner)
     {
         var services = new ServiceCollection();
-        services.AddDbContext<CyberpilotDbContext>(options => options.UseSqlite(connection));
+        services.AddDbContext<CyberpilotDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
         services.AddSingleton(queue);
         services.AddSingleton<ICyberpilotRunner>(runner);
         services.AddSingleton<ILocalRepositoryValidator, PassthroughRepositoryValidator>();
@@ -121,8 +153,37 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
         return hubContext.Object;
     }
 
-    private static WebPipelineRunRequest CreateRequest(string runId, string repository, string repoRoot)
-        => new(runId, 1, repository, repoRoot, "C:\\Repos\\Cyberpilot", null, "gpt-4.1", false, TimeSpan.FromMinutes(10), false);
+    private static WebPipelineRunRequest CreateRequest(
+        string runId,
+        string repository,
+        string repoRoot,
+        string? pipelineDefinitionName = null,
+        string? pipelineDefinitionVersion = null,
+        string? policyProfileName = null,
+        string? contractVersion = null)
+        => new(
+            runId,
+            1,
+            repository,
+            repoRoot,
+            "C:\\Repos\\Cyberpilot",
+            null,
+            "gpt-4.1",
+            false,
+            TimeSpan.FromMinutes(10),
+            false,
+            PipelineDefinitionName: pipelineDefinitionName,
+            PipelineDefinitionVersion: pipelineDefinitionVersion,
+            PolicyProfileName: policyProfileName,
+            ContractVersion: contractVersion);
+
+    private static async Task SeedRunAsync(ServiceProvider provider, string runId, string repository)
+    {
+        using var scope = provider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<CyberpilotDbContext>();
+        dbContext.PipelineRuns.Add(new PipelineRun { Id = runId, IssueNumber = 1, Repository = repository, Model = "gpt-4.1", Status = "Queued", StageTimeoutMinutes = 10 });
+        await dbContext.SaveChangesAsync();
+    }
 
     private static async Task SeedRunsAsync(ServiceProvider provider, string firstRunId, string firstRepository, string secondRunId, string secondRepository)
     {
@@ -140,11 +201,14 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
         private readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int started;
 
+        public ConcurrentQueue<CyberpilotRunRequest> Requests { get; } = [];
+
         public Task<CyberpilotRunResult> RunAsync(CyberpilotRunRequest request, CancellationToken cancellationToken = default)
             => RunAsync(request, new TextWriterProgressSink(TextWriter.Null, TextWriter.Null), cancellationToken);
 
         public async Task<CyberpilotRunResult> RunAsync(CyberpilotRunRequest request, ICyberpilotProgressSink progressSink, CancellationToken cancellationToken = default)
         {
+            Requests.Enqueue(request);
             var currentStarted = Interlocked.Increment(ref started);
             if (currentStarted >= expectedConcurrentStarts)
             {

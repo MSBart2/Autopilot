@@ -1,4 +1,5 @@
 using Cyberpilot.Options;
+using Cyberpilot.Pipeline;
 
 namespace Cyberpilot.Sdk.Tests;
 
@@ -105,6 +106,44 @@ public sealed class CyberpilotOptionsTests
     }
 
     [Fact]
+    public void Parse_DefaultPipelineDefinition_UsesDefaultDefinitionMetadata()
+    {
+        var options = CyberpilotOptions.Parse(["--check-model", "--repo-root", RepoRoot]);
+
+        Assert.Equal(DefaultPipelineDefinitionProvider.DefinitionName, options.PipelineDefinitionName);
+        Assert.Equal(DefaultPipelineDefinitionProvider.DefinitionVersion, options.PipelineDefinitionVersion);
+        Assert.Equal("standard", options.PolicyProfileName);
+    }
+
+    [Fact]
+    public void Parse_PipelineDefinitionOptions_SetDefinitionMetadata()
+    {
+        var options = CyberpilotOptions.Parse(
+            [
+                "--check-model",
+                "--pipeline-definition",
+                "docs-only",
+                "--pipeline-version",
+                "2.0",
+                "--policy-profile",
+                "strict",
+                "--repo-root",
+                RepoRoot,
+            ]);
+
+        Assert.Equal("docs-only", options.PipelineDefinitionName);
+        Assert.Equal("2.0", options.PipelineDefinitionVersion);
+        Assert.Equal("strict", options.PolicyProfileName);
+    }
+
+    [Fact]
+    public void Parse_EmptyPipelineDefinitionOption_Throws()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            CyberpilotOptions.Parse(["--check-model", "--pipeline-definition", "", "--repo-root", RepoRoot]));
+    }
+
+    [Fact]
     public void Parse_InvalidStageTimeout_Throws()
     {
         Assert.Throws<ArgumentException>(() =>
@@ -169,6 +208,8 @@ public sealed class CyberpilotOptionsTests
         Assert.Contains("Usage:", CyberpilotOptions.HelpText);
         Assert.Contains("--model", CyberpilotOptions.HelpText);
         Assert.Contains("--config", CyberpilotOptions.HelpText);
+        Assert.Contains("--pipeline-definition", CyberpilotOptions.HelpText);
+        Assert.Contains("--policy-profile", CyberpilotOptions.HelpText);
     }
 
     [Fact]

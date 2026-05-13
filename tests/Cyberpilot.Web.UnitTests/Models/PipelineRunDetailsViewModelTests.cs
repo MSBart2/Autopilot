@@ -1,4 +1,5 @@
 using Cyberpilot.Persistence;
+using Cyberpilot.Pipeline;
 using Cyberpilot.Web.Models;
 
 namespace Cyberpilot.Web.UnitTests.Models;
@@ -28,6 +29,39 @@ public class PipelineRunDetailsViewModelTests
         var vm = new PipelineRunDetailsViewModel(run, logs);
 
         Assert.Empty(vm.Labels);
+    }
+
+    [Fact]
+    public void PipelineDefinitionLabels_DefaultToBuiltInMetadata()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+
+        var vm = new PipelineRunDetailsViewModel(run, []);
+
+        Assert.Equal($"{PipelineDefinitionDefaults.DefinitionName} v{PipelineDefinitionDefaults.DefinitionVersion}", vm.PipelineDefinitionLabel);
+        Assert.Equal(PipelineDefinitionDefaults.PolicyProfileName, vm.PolicyProfileLabel);
+        Assert.Equal(PipelineDefinitionDefaults.ContractVersion, vm.ContractVersionLabel);
+    }
+
+    [Fact]
+    public void PipelineDefinitionLabels_UseRunMetadataWhenPresent()
+    {
+        var run = new PipelineRun
+        {
+            IssueNumber = 1,
+            Repository = "r",
+            Model = "m",
+            PipelineDefinitionName = "review-only",
+            PipelineDefinitionVersion = "2.0",
+            PolicyProfileName = "strict",
+            ContractVersion = "3.1",
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, []);
+
+        Assert.Equal("review-only v2.0", vm.PipelineDefinitionLabel);
+        Assert.Equal("strict", vm.PolicyProfileLabel);
+        Assert.Equal("3.1", vm.ContractVersionLabel);
     }
 
     [Fact]

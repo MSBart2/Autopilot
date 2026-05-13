@@ -1,4 +1,5 @@
 using Cyberpilot.Persistence;
+using Cyberpilot.Pipeline;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -43,6 +44,31 @@ public sealed class CyberpilotDbContextTests : IDisposable
         Assert.NotNull(retrieved);
         Assert.Equal(42, retrieved.IssueNumber);
         Assert.Equal("Queued", retrieved.Status);
+    }
+
+    [Fact]
+    public async Task PipelineRun_PipelineDefinitionMetadata_CanBeAddedAndRetrieved()
+    {
+        var run = new PipelineRun
+        {
+            IssueNumber = 42,
+            Repository = "test/repo",
+            Model = "test-model",
+            PipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName,
+            PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
+            PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
+            ContractVersion = PipelineDefinitionDefaults.ContractVersion,
+        };
+        _dbContext.PipelineRuns.Add(run);
+        await _dbContext.SaveChangesAsync();
+
+        var retrieved = await _dbContext.PipelineRuns.FindAsync(run.Id);
+
+        Assert.NotNull(retrieved);
+        Assert.Equal(PipelineDefinitionDefaults.DefinitionName, retrieved.PipelineDefinitionName);
+        Assert.Equal(PipelineDefinitionDefaults.DefinitionVersion, retrieved.PipelineDefinitionVersion);
+        Assert.Equal(PipelineDefinitionDefaults.PolicyProfileName, retrieved.PolicyProfileName);
+        Assert.Equal(PipelineDefinitionDefaults.ContractVersion, retrieved.ContractVersion);
     }
 
     [Fact]

@@ -13,6 +13,10 @@ namespace Cyberpilot.Web.Services;
 /// <param name="SkipDeliver">Whether delivery should be skipped.</param>
 /// <param name="StageTimeout">The per-stage timeout.</param>
 /// <param name="AllowMissingDocs">Whether missing docs may be tolerated.</param>
+/// <param name="PipelineDefinitionName">The pipeline definition selected for this run.</param>
+/// <param name="PipelineDefinitionVersion">The pipeline definition version selected for this run.</param>
+/// <param name="PolicyProfileName">The policy profile selected for this run.</param>
+/// <param name="ContractVersion">The stage result contract version selected for this run.</param>
 public sealed record WebPipelineRunRequest(
     string RunId,
     int IssueNumber,
@@ -24,4 +28,8 @@ public sealed record WebPipelineRunRequest(
     bool SkipDeliver,
     TimeSpan StageTimeout,
     bool AllowMissingDocs,
-    string? StartStage = null);
+    string? StartStage = null,
+    string? PipelineDefinitionName = null,
+    string? PipelineDefinitionVersion = null,
+    string? PolicyProfileName = null,
+    string? ContractVersion = null);

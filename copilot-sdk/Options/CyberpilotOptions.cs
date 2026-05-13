@@ -1,3 +1,5 @@
+using Cyberpilot.Pipeline;
+
 namespace Cyberpilot.Options;
 
 internal sealed record CyberpilotOptions(
@@ -16,7 +18,10 @@ internal sealed record CyberpilotOptions(
     string? ConfigPath,
     bool ShowHelp,
     string? StartStage = null,
-    Func<CancellationToken, Task<bool>>? ShouldPauseAsync = null)
+    Func<CancellationToken, Task<bool>>? ShouldPauseAsync = null,
+    string PipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName,
+    string PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
+    string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);
@@ -37,6 +42,12 @@ internal sealed record CyberpilotOptions(
             "  --model <model-id>   Copilot model. Defaults to claude-sonnet-4.6.",
             "  --stage-timeout-minutes <minutes>",
             "                       Wait time for each Copilot stage. Defaults to 10.",
+            "  --pipeline-definition <name>",
+            "                       Pipeline definition to run. Defaults to cyberpilot-default.",
+            "  --pipeline-version <version>",
+            "                       Pipeline definition version. Defaults to 1.0.",
+            "  --policy-profile <name>",
+            "                       Policy profile to apply. Defaults to standard.",
             "  --ensure-labels     Create missing sdk labels before running.",
             "  --check-labels      Check sdk labels and exit without running stages.",
             "  --check-model       Check Copilot model availability and exit without running stages.",
@@ -66,6 +77,9 @@ internal sealed record CyberpilotOptions(
         var allowMissingDocs = false;
         string? databaseConnectionString = null;
         string? configPath = null;
+        var pipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName;
+        var pipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion;
+        var policyProfileName = PipelineDefinitionDefaults.PolicyProfileName;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -87,6 +101,15 @@ internal sealed record CyberpilotOptions(
                     break;
                 case "--stage-timeout-minutes":
                     stageTimeout = ParsePositiveMinutes(RequireValue(args, ref index, arg), arg);
+                    break;
+                case "--pipeline-definition":
+                    pipelineDefinitionName = RequireNonEmptyValue(args, ref index, arg);
+                    break;
+                case "--pipeline-version":
+                    pipelineDefinitionVersion = RequireNonEmptyValue(args, ref index, arg);
+                    break;
+                case "--policy-profile":
+                    policyProfileName = RequireNonEmptyValue(args, ref index, arg);
                     break;
                 case "--skip-deliver":
                     skipDeliver = true;
@@ -126,7 +149,24 @@ internal sealed record CyberpilotOptions(
             throw new ArgumentException("Provide a positive issue number. Try: dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- run issue 135");
         }
 
-        return new CyberpilotOptions(issueNumber ?? 0, RepoRootFinder.Find(repoRoot), repository, model, skipDeliver, ensureLabels, checkLabelsOnly, checkModelOnly, stageTimeout, approveAll, allowMissingDocs, databaseConnectionString, configPath, false);
+        return new CyberpilotOptions(
+            issueNumber ?? 0,
+            RepoRootFinder.Find(repoRoot),
+            repository,
+            model,
+            skipDeliver,
+            ensureLabels,
+            checkLabelsOnly,
+            checkModelOnly,
+            stageTimeout,
+            approveAll,
+            allowMissingDocs,
+            databaseConnectionString,
+            configPath,
+            false,
+            PipelineDefinitionName: pipelineDefinitionName,
+            PipelineDefinitionVersion: pipelineDefinitionVersion,
+            PolicyProfileName: policyProfileName);
     }
 
     private static TimeSpan ParsePositiveMinutes(string value, string optionName)
@@ -148,5 +188,16 @@ internal sealed record CyberpilotOptions(
 
         index++;
         return args[index];
+    }
+
+    private static string RequireNonEmptyValue(string[] args, ref int index, string optionName)
+    {
+        var value = RequireValue(args, ref index, optionName);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException($"{optionName} requires a non-empty value.");
+        }
+
+        return value;
     }
 }

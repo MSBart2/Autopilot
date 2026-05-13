@@ -192,6 +192,11 @@
                 <strong class="text-truncate d-block" title="@Model.Run.Model">@Model.Run.Model</strong>
             </div>
             <div class="stat-card">
+                <div class="stat-label">Definition</div>
+                <strong class="text-truncate d-block" title="@Model.PipelineDefinitionLabel">@Model.PipelineDefinitionLabel</strong>
+                <small class="muted-cell">@Model.PolicyProfileLabel / contract @Model.ContractVersionLabel</small>
+            </div>
+            <div class="stat-card">
                 <div class="stat-label">Branch</div>
                 @if (!string.IsNullOrWhiteSpace(Model.Run.BranchName))
                 {

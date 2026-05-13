@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Cyberpilot.Git;
 using Cyberpilot.GitHub;
 using Cyberpilot.Persistence;
+using Cyberpilot.Pipeline;
 using Cyberpilot.Web.Models;
 using Cyberpilot.Web.Services;
 using Markdig;
@@ -317,6 +318,10 @@ public class PipelinesController : Controller
             StageTimeoutMinutes = request.StageTimeoutMinutes,
             AllowMissingDocs = request.AllowMissingDocs,
             IssueTitle = issueTitle,
+            PipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName,
+            PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
+            PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
+            ContractVersion = PipelineDefinitionDefaults.ContractVersion,
         };
 
         _dbContext.PipelineRuns.Add(run);
@@ -963,7 +968,11 @@ public class PipelinesController : Controller
             run.SkipDeliver,
             TimeSpan.FromMinutes(run.StageTimeoutMinutes),
             run.AllowMissingDocs,
-            run.CurrentStage));
+            run.CurrentStage,
+            run.PipelineDefinitionName,
+            run.PipelineDefinitionVersion,
+            run.PolicyProfileName,
+            run.ContractVersion));
     }
 
     private async Task<bool> IsReviewReworkCandidateAsync(PipelineRun run)

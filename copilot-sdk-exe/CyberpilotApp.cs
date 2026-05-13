@@ -108,6 +108,10 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             SkipDeliver = options.SkipDeliver,
             StageTimeoutMinutes = options.StageTimeout.TotalMinutes,
             AllowMissingDocs = options.AllowMissingDocs,
+            PipelineDefinitionName = options.PipelineDefinitionName,
+            PipelineDefinitionVersion = options.PipelineDefinitionVersion,
+            PolicyProfileName = options.PolicyProfileName,
+            ContractVersion = PipelineDefinitionDefaults.ContractVersion,
         };
 
         dbContext.PipelineRuns.Add(run);

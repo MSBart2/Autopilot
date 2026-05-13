@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Cyberpilot.GitHub;
 using Cyberpilot.Persistence;
+using Cyberpilot.Pipeline;
 
 namespace Cyberpilot.Web.Models;
 
@@ -239,6 +240,32 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
             .Where(log => PipelineStopDiagnostic.IsBlockedStatus(log.Status))
             .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
             .FirstOrDefault()?.StageName);
+
+    /// <summary>Gets the pipeline definition label shown in run telemetry.</summary>
+    public string PipelineDefinitionLabel
+    {
+        get
+        {
+            var name = string.IsNullOrWhiteSpace(Run.PipelineDefinitionName)
+                ? PipelineDefinitionDefaults.DefinitionName
+                : Run.PipelineDefinitionName;
+            var version = string.IsNullOrWhiteSpace(Run.PipelineDefinitionVersion)
+                ? PipelineDefinitionDefaults.DefinitionVersion
+                : Run.PipelineDefinitionVersion;
+
+            return $"{name} v{version}";
+        }
+    }
+
+    /// <summary>Gets the policy profile label shown in run telemetry.</summary>
+    public string PolicyProfileLabel => string.IsNullOrWhiteSpace(Run.PolicyProfileName)
+        ? PipelineDefinitionDefaults.PolicyProfileName
+        : Run.PolicyProfileName;
+
+    /// <summary>Gets the stage contract version label shown in run telemetry.</summary>
+    public string ContractVersionLabel => string.IsNullOrWhiteSpace(Run.ContractVersion)
+        ? PipelineDefinitionDefaults.ContractVersion
+        : Run.ContractVersion;
 
     /// <summary>Gets the retry attempt count for a specific stage (number of existing stage logs for that stage).</summary>
     public int GetStageRetryCount(string stageName)

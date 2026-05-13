@@ -88,6 +88,22 @@ public sealed class PipelineRun
     /// <summary>Gets or sets whether missing docs may be tolerated.</summary>
     public bool AllowMissingDocs { get; set; }
 
+    /// <summary>Gets or sets the pipeline definition used for this run.</summary>
+    [StringLength(120)]
+    public string? PipelineDefinitionName { get; set; }
+
+    /// <summary>Gets or sets the pipeline definition version used for this run.</summary>
+    [StringLength(40)]
+    public string? PipelineDefinitionVersion { get; set; }
+
+    /// <summary>Gets or sets the policy profile selected for this run.</summary>
+    [StringLength(80)]
+    public string? PolicyProfileName { get; set; }
+
+    /// <summary>Gets or sets the stage result contract version selected for this run.</summary>
+    [StringLength(40)]
+    public string? ContractVersion { get; set; }
+
     /// <summary>Gets or sets the stage logs for this run.</summary>
     public ICollection<PipelineStageLog> StageLogs { get; set; } = [];
 

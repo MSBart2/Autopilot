@@ -120,7 +120,10 @@ public sealed class CyberpilotPipelineService(
                 EnsureLabels: options.Value.EnsureLabels,
                 AgentPromptRoot: request.AgentPromptRoot,
                 StartStage: request.StartStage,
-                ShouldPauseAsync: ShouldPauseAsync), sink, cancellationToken);
+                ShouldPauseAsync: ShouldPauseAsync,
+                PipelineDefinitionName: request.PipelineDefinitionName,
+                PipelineDefinitionVersion: request.PipelineDefinitionVersion,
+                PolicyProfileName: request.PolicyProfileName), sink, cancellationToken);
 
             run.Status = result.Status;
             run.BranchName = result.BranchName;
@@ -252,7 +255,11 @@ public sealed class CyberpilotPipelineService(
             run.SkipDeliver,
             TimeSpan.FromMinutes(run.StageTimeoutMinutes),
             run.AllowMissingDocs,
-            run.CurrentStage);
+            run.CurrentStage,
+            run.PipelineDefinitionName,
+            run.PipelineDefinitionVersion,
+            run.PolicyProfileName,
+            run.ContractVersion);
     }
 
     private bool TryGetConfiguredRepository(string repository, out RuntimeConfiguredRepository configuredRepository)

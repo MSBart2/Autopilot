@@ -16,4 +16,7 @@ public sealed record CyberpilotRunRequest(
     bool EnsureLabels = false,
     string? AgentPromptRoot = null,
     string? StartStage = null,
-    Func<CancellationToken, Task<bool>>? ShouldPauseAsync = null);
+    Func<CancellationToken, Task<bool>>? ShouldPauseAsync = null,
+    string? PipelineDefinitionName = null,
+    string? PipelineDefinitionVersion = null,
+    string? PolicyProfileName = null);
