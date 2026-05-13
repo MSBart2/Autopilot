@@ -35,6 +35,22 @@ public sealed class PipelineGateRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_PostStageGate_ReceivesStageResult()
+    {
+        var gate = new RecordingGate(PipelineGateResult.Pass("ready"));
+        var runner = new PipelineGateRunner(new Dictionary<string, IPipelineGate>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["review-approved"] = gate,
+        });
+        var stage = Stage([new GateDefinition("review-approved", GateTiming.AfterStage, true)]);
+        var stageResult = new StageResult("GO", "approved", true, null);
+
+        await runner.RunAsync(Context(), stage, GateTiming.AfterStage, stageResult);
+
+        Assert.Same(stageResult, gate.LastContext?.StageResult);
+    }
+
+    [Fact]
     public async Task RunAsync_MissingEvaluator_ReturnsFailedEvaluation()
     {
         var runner = PipelineGateRunner.Empty;

@@ -8,6 +8,7 @@ internal sealed class PipelineGateRunner(IReadOnlyDictionary<string, IPipelineGa
         PipelineExecutionContext executionContext,
         PipelineStageDefinition stage,
         GateTiming timing,
+        StageResult? stageResult = null,
         CancellationToken cancellationToken = default)
     {
         var evaluations = new List<PipelineGateEvaluation>();
@@ -23,7 +24,7 @@ internal sealed class PipelineGateRunner(IReadOnlyDictionary<string, IPipelineGa
                 continue;
             }
 
-            var result = await pipelineGate.EvaluateAsync(new PipelineGateContext(executionContext, stage, gate), cancellationToken);
+            var result = await pipelineGate.EvaluateAsync(new PipelineGateContext(executionContext, stage, gate, stageResult), cancellationToken);
             evaluations.Add(new PipelineGateEvaluation(gate, result));
         }
 

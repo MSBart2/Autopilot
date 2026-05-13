@@ -324,3 +324,24 @@ Added a deterministic gate for linked pull request presence:
 - Preserved current default behavior because no default stages declare gates yet.
 - Added pass/fail/closed-PR tests and built-in registration coverage.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Twenty-Second Slice Status
+
+Added post-stage gate result context and a review approval gate:
+
+- Extended `PipelineGateContext` so post-stage gates can inspect the completed `StageResult`.
+- Updated `PipelineGateRunner` and `PipelineEngine` to pass the stage result into after-stage gates.
+- Added the `review-approved` built-in gate for deterministic review approval checks.
+- Returned retryable corrective actions when review requests changes.
+- Added gate runner coverage for stage-result propagation and review approval gate tests.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Twenty-Third Slice Status
+
+Added a deterministic gate for branch readiness:
+
+- Added the `branch-ready` built-in gate to validate that `PipelineExecutionContext.BranchName` is populated.
+- Returned retryable corrective guidance when no pipeline branch is available.
+- Registered the gate in `BuiltInPipelineGates` while keeping default definitions unattached.
+- Added branch-ready gate tests for pass, missing branch, blank branch, and built-in registration coverage.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.

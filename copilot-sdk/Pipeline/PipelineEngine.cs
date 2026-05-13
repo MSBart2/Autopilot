@@ -267,7 +267,7 @@ internal sealed class PipelineEngine(
         }
 
         var result = await stageExecutor.RunAsync(stageDefinition, Options.IssueNumber, Options.StageTimeout, mission, context.Definition.PolicyProfile, cancellationToken);
-        var afterGateResult = await RunGatesAsync(stageDefinition, GateTiming.AfterStage, cancellationToken);
+        var afterGateResult = await RunGatesAsync(stageDefinition, GateTiming.AfterStage, cancellationToken, result);
         if (afterGateResult is not null)
         {
             context.StageResults.Add(afterGateResult);
@@ -278,9 +278,9 @@ internal sealed class PipelineEngine(
         return result;
     }
 
-    private async Task<StageResult?> RunGatesAsync(PipelineStageDefinition stageDefinition, GateTiming timing, CancellationToken cancellationToken)
+    private async Task<StageResult?> RunGatesAsync(PipelineStageDefinition stageDefinition, GateTiming timing, CancellationToken cancellationToken, StageResult? stageResult = null)
     {
-        var evaluations = await gateRunner.RunAsync(context, stageDefinition, timing, cancellationToken);
+        var evaluations = await gateRunner.RunAsync(context, stageDefinition, timing, stageResult, cancellationToken);
         foreach (var evaluation in evaluations)
         {
             var outcome = evaluation.Result.Passed ? "passed" : "failed";
