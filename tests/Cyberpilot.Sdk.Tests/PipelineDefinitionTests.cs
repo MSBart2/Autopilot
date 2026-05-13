@@ -95,4 +95,48 @@ public sealed class PipelineDefinitionTests
         Assert.Contains(transitions, transition => transition is { FromStage: "review", ToStage: "implement", Condition: "changes_requested" });
         Assert.Contains(transitions, transition => transition is { FromStage: "review", ToStage: "docs", Condition: "approved" });
     }
+
+    [Fact]
+    public void PipelineDefinitionSelector_DefaultOptions_SelectsDefaultDefinition()
+    {
+        var options = new Cyberpilot.Options.CyberpilotOptions(1, Directory.GetCurrentDirectory(), "owner/repo", "test-model", false, false, false, false, TimeSpan.FromMinutes(10), true, false, null, null, false);
+
+        var selected = PipelineDefinitionSelector.TrySelect(options, out var definition, out var error);
+
+        Assert.True(selected);
+        Assert.Same(DefaultPipelineDefinitionProvider.Definition, definition);
+        Assert.Null(error);
+    }
+
+    [Theory]
+    [InlineData("other-definition", "1.0", "standard", "Unsupported pipeline definition")]
+    [InlineData("cyberpilot-default", "2.0", "standard", "Unsupported pipeline definition version")]
+    [InlineData("cyberpilot-default", "1.0", "strict", "Unsupported policy profile")]
+    public void PipelineDefinitionSelector_UnsupportedSelection_ReturnsError(string definitionName, string definitionVersion, string policyProfile, string expectedError)
+    {
+        var options = new Cyberpilot.Options.CyberpilotOptions(
+            1,
+            Directory.GetCurrentDirectory(),
+            "owner/repo",
+            "test-model",
+            false,
+            false,
+            false,
+            false,
+            TimeSpan.FromMinutes(10),
+            true,
+            false,
+            null,
+            null,
+            false,
+            PipelineDefinitionName: definitionName,
+            PipelineDefinitionVersion: definitionVersion,
+            PolicyProfileName: policyProfile);
+
+        var selected = PipelineDefinitionSelector.TrySelect(options, out var definition, out var error);
+
+        Assert.False(selected);
+        Assert.Null(definition);
+        Assert.Contains(expectedError, error);
+    }
 }

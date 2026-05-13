@@ -31,7 +31,7 @@ internal sealed class PipelineEngine(
             console.WriteHeader($"Resuming at stage: {start.Stage.Name}");
         }
 
-        var routing = await branchCoordinator.ResolveStartAsync(start, cancellationToken);
+        var routing = await branchCoordinator.ResolveStartAsync(start, context.Definition, cancellationToken);
         start = routing.Start;
         context.BranchName = routing.BranchName;
         context.PrUrl = routing.PrUrl;
@@ -43,7 +43,7 @@ internal sealed class PipelineEngine(
         var docsStage = Stage("docs");
         var deliverStage = Stage("deliver");
 
-        if (start.ShouldRun(triageStage))
+        if (ShouldRun(start, triageStage))
         {
             await labels.SetStageAsync(Options.IssueNumber, triageStage.Label, cancellationToken);
             var triage = await RunStageAsync(triageStage, "Classify the issue and publish the mandatory triage handoff comment.", cancellationToken);
@@ -77,7 +77,7 @@ internal sealed class PipelineEngine(
 
         context.BranchName = await branchCoordinator.EnsureBranchAsync(start, cancellationToken);
 
-        if (start.ShouldRun(planStage))
+        if (ShouldRun(start, planStage))
         {
             await labels.SetStageAsync(Options.IssueNumber, planStage.Label, cancellationToken);
             var plan = await RunStageAsync(planStage, $"Create the implementation plan and issue comments for branch `{context.BranchName}`. The controller has already created or reused the branch; do not create a different branch.", cancellationToken);
@@ -93,7 +93,7 @@ internal sealed class PipelineEngine(
             if (pauseResult.HasValue) return pauseResult.Value;
         }
 
-        if (start.ShouldRun(implementStage))
+        if (ShouldRun(start, implementStage))
         {
             await labels.SetStageAsync(Options.IssueNumber, implementStage.Label, cancellationToken);
             var implement = await RunStageAsync(implementStage, "Execute the plan, validate the changes, commit, push, create the PR, and post the build-complete issue comment.", cancellationToken);
@@ -109,7 +109,7 @@ internal sealed class PipelineEngine(
             if (pauseResult.HasValue) return pauseResult.Value;
         }
 
-        if (start.ShouldRun(reviewStage))
+        if (ShouldRun(start, reviewStage))
         {
             progressSink.OnDispatch(DispatchType.ReviewLoop, "Entering review loop — architecture, security, quality, and test coverage checks");
 
@@ -133,7 +133,7 @@ internal sealed class PipelineEngine(
             if (pauseResult.HasValue) return pauseResult.Value;
         }
 
-        if (start.ShouldRun(docsStage))
+        if (ShouldRun(start, docsStage))
         {
             await labels.SetStageAsync(Options.IssueNumber, docsStage.Label, cancellationToken);
             var docs = await RunStageAsync(docsStage, "Update XML/markdown documentation and post the human verification walkthrough. Continue even if there are no docs changes.", cancellationToken);
@@ -263,6 +263,11 @@ internal sealed class PipelineEngine(
 
     private StageDefinition Stage(string name)
     {
-        return context.Definition.Stages.First(stage => stage.Stage.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Stage;
+        return context.Definition.Stage(name);
+    }
+
+    private bool ShouldRun(PipelineStart start, StageDefinition stage)
+    {
+        return context.Definition.ShouldRun(start, stage);
     }
 }

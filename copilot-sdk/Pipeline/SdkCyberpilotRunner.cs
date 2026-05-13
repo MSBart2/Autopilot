@@ -20,7 +20,7 @@ internal sealed class SdkCyberpilotRunner(
     public string? BranchName => pipelineContext.BranchName;
     public string? PrUrl => pipelineContext.PrUrl;
     public IReadOnlyList<StageResult> StageResults => pipelineContext.StageResults;
-    private readonly PipelineExecutionContext pipelineContext = new(options, DefaultPipelineDefinitionProvider.Definition);
+    private PipelineExecutionContext pipelineContext = new(options, DefaultPipelineDefinitionProvider.Definition);
     private readonly PipelineConsoleWriter console = new(output);
     private readonly StageExecutor stageExecutor = new(promptBuilder, stageRunner, progressSink, new PipelineConsoleWriter(output));
     private readonly PipelineBranchCoordinator branchCoordinator = new(options, issueClient, branchProvisioner, progressSink, new PipelineConsoleWriter(output));
@@ -40,6 +40,15 @@ internal sealed class SdkCyberpilotRunner(
         {
             return await CheckModelAsync(cancellationToken);
         }
+
+        if (!PipelineDefinitionSelector.TrySelect(options, out var definition, out var definitionError))
+        {
+            progressSink.OnDispatch(DispatchType.Halt, definitionError ?? "Unsupported pipeline definition.");
+            console.WriteFailure(definitionError ?? "Unsupported pipeline definition.");
+            return 12;
+        }
+
+        pipelineContext = new PipelineExecutionContext(options, definition!);
 
         console.WriteHeader($"Cyberpilot issue #{options.IssueNumber}");
         console.WriteDetail("Repository", options.RepoRoot);

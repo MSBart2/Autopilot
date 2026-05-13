@@ -13,9 +13,9 @@ internal sealed class PipelineBranchCoordinator(
     ICyberpilotProgressSink progressSink,
     PipelineConsoleWriter console)
 {
-    public async Task<BranchRoutingResult> ResolveStartAsync(PipelineStart start, CancellationToken cancellationToken)
+    public async Task<BranchRoutingResult> ResolveStartAsync(PipelineStart start, PipelineDefinition definition, CancellationToken cancellationToken)
     {
-        return await FastForwardForExistingPullRequestAsync(start, cancellationToken);
+        return await FastForwardForExistingPullRequestAsync(start, definition, cancellationToken);
     }
 
     public async Task<string> EnsureBranchAsync(PipelineStart start, CancellationToken cancellationToken)
@@ -28,7 +28,7 @@ internal sealed class PipelineBranchCoordinator(
         return issueClient.CloseIssueAsync(options.IssueNumber, cancellationToken);
     }
 
-    private async Task<BranchRoutingResult> FastForwardForExistingPullRequestAsync(PipelineStart start, CancellationToken cancellationToken)
+    private async Task<BranchRoutingResult> FastForwardForExistingPullRequestAsync(PipelineStart start, PipelineDefinition definition, CancellationToken cancellationToken)
     {
         if (start.IsResume)
         {
@@ -45,7 +45,8 @@ internal sealed class PipelineBranchCoordinator(
 
             progressSink.OnDispatch(DispatchType.Routing, $"Existing PR #{existingPr.Number} found for issue #{options.IssueNumber} — fast-forwarding to Review");
             console.WriteSuccess($"Found open PR #{existingPr.Number} ({existingPr.HeadBranch}). Skipping triage/plan/implement.");
-            return new BranchRoutingResult(new PipelineStart(StageCatalog.IndexOf(StageCatalog.Review.Name), StageCatalog.Review, true), existingPr.HeadBranch, existingPr.Url);
+            var review = definition.Stage("review");
+            return new BranchRoutingResult(new PipelineStart(definition.IndexOf(review.Name), review, true), existingPr.HeadBranch, existingPr.Url);
         }
         catch (Exception ex)
         {

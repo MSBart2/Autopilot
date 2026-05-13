@@ -12,26 +12,13 @@ internal static class PipelineStartResolver
             return new PipelineStart(0, definition.Stages[0].Stage, false);
         }
 
-        var index = IndexOf(definition, startStage);
+        var index = definition.IndexOf(startStage);
         if (index < 0)
         {
             throw new UnknownPipelineStageException(startStage);
         }
 
         return new PipelineStart(index, definition.Stages[index].Stage, true);
-    }
-
-    private static int IndexOf(PipelineDefinition definition, string stageName)
-    {
-        for (var index = 0; index < definition.Stages.Count; index++)
-        {
-            if (definition.Stages[index].Stage.Name.Equals(stageName, StringComparison.OrdinalIgnoreCase))
-            {
-                return index;
-            }
-        }
-
-        return -1;
     }
 }
 

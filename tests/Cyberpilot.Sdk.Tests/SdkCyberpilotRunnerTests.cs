@@ -97,6 +97,27 @@ public sealed class SdkCyberpilotRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_UnsupportedPipelineDefinition_StopsBeforeIssueAndLabels()
+    {
+        var issueClient = new FakeIssueClient { IssueState = "OPEN" };
+        var labels = new FakeLabelService();
+        var stageRunner = new FakeStageRunner();
+        var modelChecker = new FakeModelChecker(ModelAvailabilityResult.Available);
+        var output = new StringWriter();
+        var options = CreateOptions(122, true) with { PipelineDefinitionName = "docs-only" };
+        var runner = new SdkCyberpilotRunner(options, issueClient, labels, new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, modelChecker, new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(12, exitCode);
+        Assert.Contains("Unsupported pipeline definition", output.ToString());
+        Assert.Equal(0, issueClient.StateCalls);
+        Assert.Equal(0, labels.EnsureRequiredCalls);
+        Assert.Equal(0, modelChecker.Calls);
+        Assert.Equal(0, stageRunner.Calls);
+    }
+
+    [Fact]
     public async Task RunAsync_TriageStop_ReturnsExit2()
     {
         var labels = new FakeLabelService();

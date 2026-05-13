@@ -170,3 +170,22 @@ Moved the extracted engine toward definition-driven stage metadata while preserv
 - Updated `PipelineEngine` to resolve start stages and stage metadata from `PipelineExecutionContext.Definition`.
 - Kept `StageCatalog` compatibility in place for existing callers and index semantics.
 - Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Seventh Slice Status
+
+Removed remaining runtime routing dependencies on `StageCatalog` from the extracted engine path:
+
+- Added definition stage lookup helpers for stage retrieval, index lookup, and `ShouldRun` checks.
+- Updated existing-PR fast-forward routing to resolve Review from the selected definition.
+- Removed `StageCatalog` index usage from `PipelineStart` and engine routing decisions.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
+
+### Eighth Slice Status
+
+Validated selected pipeline definition/profile before routing starts:
+
+- Added `PipelineDefinitionSelector` for the current built-in definition registry.
+- Accepted only `cyberpilot-default` version `1.0` with the `standard` policy profile until additional definitions exist.
+- Added clear unsupported-definition/profile diagnostics with exit code `12` before issue, label, model, or stage side effects.
+- Added selector and runner tests for supported and unsupported selections.
+- Validated with `dotnet build .\Cyberpilot.sln` and SDK tests.
