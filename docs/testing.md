@@ -9,7 +9,7 @@ Cyberpilot keeps web tests small and focused. Pipeline behavior is primarily cov
 | `tests/Cyberpilot.Web.UnitTests` | Unit tests for the minimal MVC controllers |
 | `tests/Cyberpilot.Web.IntegrationTests` | `WebApplicationFactory` smoke tests for the portal and readiness endpoint |
 | `tests/Cyberpilot.Web.PlaywrightTests` | Browser smoke tests, skipped locally unless CI variables are present |
-| `tests/Cyberpilot.Sdk.Tests` | SDK runner behavior, options, labels, parsing, and stage results |
+| `tests/Cyberpilot.Sdk.Tests` | SDK runner behavior, options, labels, parsing, pipeline definitions, policy profiles, approvals, evidence, and stage results |
 
 ## Commands
 
@@ -46,6 +46,26 @@ Build without tests:
 
 ```bash
 dotnet build
+```
+
+## Focus Areas
+
+Use the smallest meaningful suite first, then broaden when the behavior crosses project boundaries:
+
+| Change area | First validation | Broaden when |
+|-------------|------------------|--------------|
+| SDK pipeline definitions, JSON definition files, policy profiles, gates, stage results, evidence mapping, or approval primitives | `dotnet test tests/Cyberpilot.Sdk.Tests/Cyberpilot.Sdk.Tests.csproj` | The change is consumed by the web runner or shared persistence. |
+| Web launch selection, Run Room approvals, evidence display, retry/continue actions, or queue behavior | `dotnet test tests/Cyberpilot.Web.UnitTests` | Routes, startup, migrations, or hosted services are affected. |
+| Startup, migrations, health/readiness, or full web smoke behavior | `dotnet test tests/Cyberpilot.Web.IntegrationTests` | The change touches app boot or persistence initialization. |
+| Documentation-only changes | Diagnostics plus `git diff --check` | The docs change alters documented commands or workflows; then run the relevant build/test command. |
+
+For the current SDK harness roadmap, the usual validation stack after a successful build is:
+
+```powershell
+dotnet test .\tests\Cyberpilot.Sdk.Tests\Cyberpilot.Sdk.Tests.csproj --no-build
+dotnet test .\tests\Cyberpilot.Web.UnitTests\Cyberpilot.Web.UnitTests.csproj --no-build
+dotnet test .\tests\Cyberpilot.Web.IntegrationTests\Cyberpilot.Web.IntegrationTests.csproj --no-build
+git diff --check
 ```
 
 ## Playwright

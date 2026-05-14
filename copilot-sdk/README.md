@@ -11,6 +11,8 @@ The executable harness lives in [../copilot-sdk-exe/](../copilot-sdk-exe) and re
 - uses the GitHub issue thread as the pipeline state file
 - supports the review rework loop with a maximum of two review cycles
 - supports selectable pipeline definitions, including built-in and JSON-backed definitions
+- records structured stage results, evidence, policy rationale, and required actions
+- treats human approval gates as resumable pauses instead of failed runs
 - checks Copilot model availability before applying issue labels or running stages
 - requires explicit `--approve-all` before granting Copilot SDK tool permissions
 - exits before label changes or stage work when the target issue is already closed
@@ -73,6 +75,12 @@ dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 13
 
 JSON definition files contain a top-level `definitions` array. File definitions are combined with built-ins and take precedence when names overlap. The runner validates the selected definition before issue labels, model checks, or stage execution.
 
+## Policy, Evidence, and Approvals
+
+Each run records the selected definition, definition version, policy profile, and contract version. Stage results can include artifacts, evidence, policy rationale, and required actions; the SDK persists those fields for Run Room display and later reporting.
+
+Policy profiles (`lenient`, `standard`, `strict`, and `security-critical`) tune how deterministic gates and artifact validation respond to missing evidence or policy-sensitive outcomes. Human approval gates create pending approval state that can be approved, rejected, and resumed from the web Run Room without treating the pause as a failed run.
+
 ## Required Labels
 
 The runner fails before touching an issue unless every SDK label exists. Create or verify them explicitly:
@@ -134,8 +142,8 @@ Docs are blocking by default so human verification steps are recorded before del
 - `Options/` handles CLI options and repository-root discovery.
 - `GitHub/` wraps `gh` commands and owns SDK label behavior.
 - `Copilot/` wraps Copilot SDK stage execution and model availability checks.
-- `Pipeline/` owns stage definitions, prompt building, result parsing, and orchestration.
-- `../tests/Cyberpilot.Sdk.Tests/` covers option parsing, label parsing, stage result parsing, label transitions, closed-issue no-op behavior, and model preflight behavior.
+- `Pipeline/` owns stage definitions, prompt building, result parsing, artifact validation, policy gates, and orchestration.
+- `../tests/Cyberpilot.Sdk.Tests/` covers option parsing, label parsing, stage result parsing, definition loading, artifact validation, policy behavior, label transitions, closed-issue no-op behavior, and model preflight behavior.
 
 ## Notes
 

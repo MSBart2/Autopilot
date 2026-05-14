@@ -701,3 +701,42 @@ Carried file-backed definitions through the programmatic SDK facade:
 - Passed the request value into `CyberpilotOptions` so programmatic runners can use the same JSON definition-file support as the console harness.
 - Left web-launched runs unchanged; they continue to use built-in definitions selected through the web catalog.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, web integration tests, diagnostics, and `git diff --check`.
+
+### Fifty-Eighth Slice Status
+
+Started Step 11 prompt updates with SDK contract-aware stage guidance:
+
+- Updated `triage.agent.md`, `pipeline-review.agent.md`, `docs.agent.md`, and `deliver.agent.md` with concise SDK stage result contract notes.
+- Kept each agent's existing voice, headings, and task flow intact.
+- Aligned each prompt with its required artifact: `triage-comment`, `review-verdict`, `documentation-summary`, and `landing-report`.
+- Added guidance to include evidence, policy rationale, and required corrective actions in final SDK result JSON.
+- Validated with customization diagnostics, `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, web integration tests, and `git diff --check`.
+
+### Fifty-Ninth Slice Status
+
+Added dedicated policy and approval workflow documentation:
+
+- Added `docs/policies.md` for built-in policy profiles, selection, gates, required actions, evidence, and compatibility notes.
+- Added `docs/approval-workflow.md` for pending approval creation, approve/reject decisions, resume constraints, evidence, and compatibility notes.
+- Linked both new docs from `docs/README.md`.
+- Validated with docs diagnostics, `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, web integration tests, and `git diff --check`.
+
+### Sixtieth Slice Status
+
+Updated canonical lifecycle and testing docs for the matured SDK harness:
+
+- Updated `AI-SDLC.md` to describe SDK built-in definitions, JSON-backed definitions, policy profiles, evidence, and approval pauses.
+- Updated the mode comparison and failure behavior to reflect definition-driven SDK runs and resumable approvals.
+- Updated `docs/testing.md` with current SDK test coverage areas and the usual validation stack for SDK harness changes.
+- Validated with docs diagnostics, `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, web integration tests, and `git diff --check`.
+
+### Sixty-First Slice Status
+
+Completed final Step 11 README alignment:
+
+- Updated the root `README.md` so the default six-stage flow is described as the default vocabulary rather than the only SDK shape.
+- Added root README examples for `--pipeline-definition`, `--policy-profile`, and `--pipeline-definition-file`.
+- Updated the SDK README with structured evidence, policy rationale, required actions, and approval-pause behavior.
+- Updated the SDK EXE README with built-in definition/profile and JSON-backed definition examples.
+- Step 11 is complete: prompts and docs now describe the SDK definition, policy, evidence, approval, and compatibility model.
+- Validated with docs diagnostics, `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, web integration tests, and `git diff --check`.

@@ -147,6 +147,13 @@ When delegating to `security-reviewer` and `code-quality-reviewer`, ask them for
 
 ## Return Value
 
+When running under the SDK controller, the prompt wrapper supplies the exact stage result contract and required artifact names. Satisfy that wrapper contract in your final JSON block:
+
+- Include the PR review verdict as the `review-verdict` artifact.
+- Include evidence summaries for architecture, security, quality, test, documentation, CI/build, and PR-review findings.
+- Include `policy_rationale` explaining why the selected policy profile permits approval or requires changes.
+- Include `required_actions` for every blocking change request or unresolved risk, with file/line references where possible.
+
 When complete, return:
 - `decision`: "approved" or "changes_requested"
 - `findings_critical`: count of critical findings

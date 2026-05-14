@@ -23,6 +23,19 @@ dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- --check-labe
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- --check-model --repo rbmathis/Cyberpilot
 ```
 
+Select a built-in process definition or policy profile when the default full SDLC is too broad:
+
+```powershell
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition bugfix --policy-profile strict
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition docs-only --skip-deliver
+```
+
+Load additional JSON-backed definitions with `--pipeline-definition-file`:
+
+```powershell
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition custom-docs --pipeline-definition-file .\pipelines\custom.json
+```
+
 ## Repository Tokens From Config
 
 The EXE can use the same `Cyberpilot:Repositories` shape as the web app. By default it looks for `appsettings.json` and `appsettings.Development.json` in the current directory and under `web/` in the repo root. You can also pass an explicit config file:

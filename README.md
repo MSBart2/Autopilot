@@ -10,13 +10,13 @@ Cyberpilot is a pipeline-first AI-SDLC repository. The MVC web app now lives und
 | Cloud | GitHub Agentic Workflows | `cyberpilot`, `cloud/*` | [AI-SDLC.md#cloud-mode](AI-SDLC.md#cloud-mode) |
 | SDK | .NET console app in [copilot-sdk-exe/](copilot-sdk-exe) | `sdk`, `sdk/*` | [AI-SDLC.md#sdk-mode](AI-SDLC.md#sdk-mode) |
 
-All modes follow the same delivery shape:
+All modes share the same delivery vocabulary. The default flow remains:
 
 ```text
 Issue -> Triage -> Plan -> Implement -> Review -> Docs -> Deliver
 ```
 
-The GitHub issue is the state file. Each stage writes structured comments so downstream stages can continue with a clear handoff.
+SDK mode can also run focused definitions such as `bugfix` and `docs-only`, or JSON-backed definitions supplied at launch. The GitHub issue is the state file. Each stage writes structured comments and SDK runs also persist structured results, evidence, policy context, and approval state in the run-history database.
 
 ## What Remains In The Web App
 
@@ -92,15 +92,22 @@ Local launch settings bind the app to `http://localhost:5203` by default. The we
 - **Cancel Run** marks an active queued/running run as cancelled.
 - **Reset Mission** prepares an issue for replay by clearing SDK stage labels, deleting recognizable Cyberpilot comments, deleting the SDK issue branch when present, and removing the local run/stage-log records. It is hidden and rejected after a delivered run, because the code has already been merged.
 
-The web runner can process missions for different configured repository roots at the same time. Missions that use the same local checkout stay serialized so two agents do not fight over one working tree or branch.
+The web runner can process missions for different configured repository roots at the same time. Missions that use the same local checkout stay serialized so two agents do not fight over one working tree or branch. Run details surface definition/profile metadata, policy evidence, and pending approval decisions when a run pauses for human review.
 
 SDK mode:
 
 ```powershell
-dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- issue 135 --repo rbmathis/Cyberpilot --approve-all --skip-deliver
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --skip-deliver
 ```
 
 Add `--db "Data Source=<path>"` to persist EXE runs into the SDK-owned run-history database.
+
+Select a focused SDK definition or policy profile when needed:
+
+```powershell
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition bugfix --policy-profile strict
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition custom-docs --pipeline-definition-file .\pipelines\custom.json
+```
 
 Useful SDK preflights:
 
@@ -135,3 +142,5 @@ Commit regenerated `.lock.yml` files with their `.md` sources. Do not edit lockf
 
 - [AI-SDLC.md](AI-SDLC.md) for local, cloud, and SDK AI-SDLC modes.
 - [architecture.md](architecture.md) for the current repository and web app architecture overview.
+- [docs/policies.md](docs/policies.md) for SDK policy profiles, gates, evidence, and required actions.
+- [docs/approval-workflow.md](docs/approval-workflow.md) for human approval pause, decision, and resume behavior.

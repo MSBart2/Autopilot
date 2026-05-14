@@ -206,6 +206,13 @@ Example DUPLICATE comment:
 
 ## Return Value
 
+When running under the SDK controller, the prompt wrapper supplies the exact stage result contract and required artifact names. Satisfy that wrapper contract in your final JSON block:
+
+- Include the triage comment as the `triage-comment` artifact when the case proceeds, stops, or is marked duplicate.
+- Include concrete evidence summaries for duplicate searches, related issues/PRs, quality-gate findings, and labels applied.
+- Include `policy_rationale` explaining why the issue is ready to plan, why it must stop, or why it is a confirmed duplicate.
+- Include `required_actions` whenever `status` is `STOP`, using actionable items the issue author or operator can complete.
+
 When complete, return a summary object with:
 - `status`: "GO", "STOP", or "DUPLICATE"
 - `type`: the classification type (only if GO)

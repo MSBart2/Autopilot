@@ -87,6 +87,13 @@ If merge fails (conflicts, failed checks):
 
 ## Return Value
 
+When running under the SDK controller, the prompt wrapper supplies the exact stage result contract and required artifact names. Satisfy that wrapper contract in your final JSON block:
+
+- Include the landing report as the `landing-report` artifact.
+- Include evidence summaries for approval status, CI status, merge result, branch cleanup, and issue comment posting.
+- Include `policy_rationale` explaining why the selected policy profile permits delivery.
+- Include `required_actions` whenever delivery stops because approval, CI, mergeability, branch cleanup, or posting fails.
+
 When complete, return:
 - `merged`: true/false
 - `merge_commit`: the commit SHA

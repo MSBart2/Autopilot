@@ -29,7 +29,7 @@ All modes use the GitHub issue as the state file. Each stage posts structured co
 Issue -> Triage -> Plan -> Implement -> Review -> Docs -> Deliver
 ```
 
-The stage order is shared across local and SDK mode. Cloud mode uses the same logical flow, with a final `Finish` workflow that performs delivery on GitHub Actions.
+The default stage order is shared across local and SDK mode. Cloud mode uses the same logical flow, with a final `Finish` workflow that performs delivery on GitHub Actions. SDK mode can also run selected pipeline definitions, such as focused `bugfix` and `docs-only` variants, while preserving the default full SDLC as `cyberpilot-default`.
 
 | Stage | Purpose | Primary Artifact |
 |-------|---------|------------------|
@@ -87,6 +87,7 @@ The agent files live in [.github/agents/](.github/agents). Each file includes a 
 | Stage prompts | `.github/agents/*.agent.md` | Workflow prompts plus imported agents | `.github/agents/*.agent.md` with SDK wrapper |
 | Labels | `local`, `local/*` | `cyberpilot`, `cloud/*` | `sdk`, `sdk/*` |
 | Runtime | Current editor/chat session | GitHub Actions + Copilot coding agent | Copilot SDK sessions |
+| Process variants | Manual single-stage invocation | Workflow-specific dispatch | Built-in or JSON-backed pipeline definitions |
 | Best for | Hands-on local delivery | Remote autonomous delivery | Programmatic experiments and repeatable controller behavior |
 
 ---
@@ -301,6 +302,26 @@ For local development, prefer user secrets or environment variables for real tok
 - Supports `--skip-deliver` for pilot runs that stop before merge.
 - Supports `--allow-missing-docs` when deliberately accepting missing documentation risk.
 
+### SDK Pipeline Definitions And Policies
+
+SDK mode selects a pipeline definition and policy profile before issue, label, model, or stage side effects begin. Built-in definitions include:
+
+| Definition | Stages | Use case |
+|------------|--------|----------|
+| `cyberpilot-default` | `triage -> plan -> implement -> review -> docs -> deliver` | Full issue-to-PR SDLC |
+| `bugfix` | `plan -> implement -> review -> deliver` | Focused fixes when triage and docs are unnecessary |
+| `docs-only` | `docs -> deliver` | Documentation-only updates and landing reports |
+
+The SDK executable supports JSON-backed definitions with `--pipeline-definition-file <path>`. File-backed definitions are combined with built-ins and validated before routing starts. The web launcher exposes built-in definitions only.
+
+Policy profiles are `lenient`, `standard`, `strict`, and `security-critical`. The selected profile is recorded on the run, injected into SDK prompts, and used by policy-aware validation and evidence. See [docs/policies.md](docs/policies.md) for profile behavior and compatibility notes.
+
+### SDK Evidence And Approvals
+
+SDK runs persist structured evidence separately from raw stage transcripts. Evidence can include stage artifacts, policy rationale, deterministic gate outcomes, approval decisions, pull request references, token/cost usage, and repository profile signals.
+
+Web-triggered SDK runs can pause after a stage and create a first-class approval request. Operators can approve or reject in the Run Room; approved requests resume from the recorded resume stage, while rejected requests stop the run until targeted retry or rework addresses the rejection. See [docs/approval-workflow.md](docs/approval-workflow.md) for the operator workflow.
+
 ### SDK Labels
 
 | Label | Meaning |
@@ -339,7 +360,7 @@ Failures are reported on the issue whenever possible. The issue retains the stag
 |------|------------------|
 | Local | `cyberpilot` stops and reports the failed stage. Re-run the full pipeline or resume from a specific agent. |
 | Cloud | Workflow failure comments and Actions logs provide telemetry. Re-run from the Actions tab or reapply the relevant trigger label. |
-| SDK | Runner fails closed, records stage results, and uses `sdk/failed` for halted runs. |
+| SDK | Runner fails closed, records stage results and evidence, uses `sdk/failed` for halted runs, and treats approvals as resumable pauses rather than failures. |
 
 Review rework is capped at two cycles before human intervention.
 
@@ -365,3 +386,5 @@ Commit regenerated `.lock.yml` files with their `.md` sources. Do not edit lockf
 - [copilot-sdk-exe/README.md](copilot-sdk-exe/README.md) - SDK executable harness
 - [architecture.md](architecture.md) - technical architecture
 - [docs/README.md](docs/README.md) - operational documentation index
+- [docs/policies.md](docs/policies.md) - policy profiles and evidence behavior
+- [docs/approval-workflow.md](docs/approval-workflow.md) - approval pause and resume workflow

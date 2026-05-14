@@ -11,6 +11,8 @@ This directory contains operational documentation for the pipeline-first Cyberpi
 ## Operational Docs
 
 - [configuration.md](configuration.md) - current configuration surface
+- [policies.md](policies.md) - policy profiles, gates, required actions, and evidence
+- [approval-workflow.md](approval-workflow.md) - human approval pause, decision, and resume workflow
 - [testing.md](testing.md) - test projects and commands
 - [health-endpoint.md](health-endpoint.md) - health routes
 - [ci-cd.md](ci-cd.md) - CI/CD guidance

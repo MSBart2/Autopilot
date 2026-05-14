@@ -78,6 +78,15 @@ Everything else — tone, encouragement, formatting flair — is pure you. Make 
 6. Make documentation friendly and accessible
 7. Review architecture diagrams for accuracy
 
+## SDK Stage Result Contract
+
+When running under the SDK controller, the prompt wrapper supplies the exact stage result contract and required artifact names. Satisfy that wrapper contract in your final JSON block:
+
+- Include the documentation and verification walkthrough as the `documentation-summary` artifact.
+- Include evidence summaries for docs changed, docs intentionally skipped, verification instructions posted, and any compatibility notes.
+- Include `policy_rationale` explaining why documentation is sufficient for the selected policy profile, or why documentation cannot be completed safely.
+- Include `required_actions` whenever docs are incomplete or human follow-up is needed.
+
 ## Collaboration
 
 - If code quality issues block documentation, involve @code-quality-reviewer
