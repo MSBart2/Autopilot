@@ -618,3 +618,14 @@ Made built-in definitions and policy profiles discoverable from launch surfaces:
 - Validated selected values server-side, persisted them on the run, and carried them through the queued web request.
 - Added SDK and web unit tests for defaults, help text, validation, persistence, and queue handoff.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Fiftieth Slice Status
+
+Added passive target repository profiling:
+
+- Added a web repository profile detector for common `.NET`, Node.js, build, test, README, and `docs/` conventions.
+- Registered the detector in web DI and ran it after target repository clone/validation but before SDK execution.
+- Emitted profile results as persisted `repo_profile` dispatches so Run Room history can show repository conventions without a schema change.
+- Kept profiling advisory only; it does not change routing, gates, prompts, or selected definitions yet.
+- Added web unit tests for profile detection and background-service dispatch persistence.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.

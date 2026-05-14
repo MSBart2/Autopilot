@@ -80,6 +80,9 @@ public static class DispatchType
     /// <summary>Deterministic policy gate evaluation.</summary>
     public const string Gate = "gate";
 
+    /// <summary>Target repository profile detection.</summary>
+    public const string RepositoryProfile = "repo_profile";
+
     /// <summary>Skip-deliver or early termination.</summary>
     public const string Skip = "skip";
 

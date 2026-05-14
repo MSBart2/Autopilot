@@ -114,6 +114,36 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteAsync_ProfilesRepositoryBeforeRunnerStarts()
+    {
+        var queue = new CyberpilotRunQueue();
+        var runner = new BlockingRunner(expectedConcurrentStarts: 1);
+        using var provider = CreateProvider(queue, runner, new RepositoryProfile([".NET"], ["dotnet build ./App.sln"], ["dotnet test ./App.sln"], ["README.md"]));
+        await SeedRunAsync(provider, "run-1", "owner/repo-one");
+        var service = CreateService(provider, queue);
+
+        await service.StartAsync(CancellationToken.None);
+        await queue.EnqueueAsync(CreateRequest("run-1", "owner/repo-one", "C:\\Repos\\One"));
+
+        await runner.WaitForExpectedStartsAsync();
+
+        using (var scope = provider.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<CyberpilotDbContext>();
+            var dispatches = await dbContext.PipelineDispatches
+                .Where(item => item.Type == DispatchType.RepositoryProfile && item.RunId == "run-1")
+                .ToListAsync();
+            var message = Assert.Single(dispatches.Select(item => item.Message).Distinct());
+            Assert.Contains("languages: .NET", message);
+            Assert.Contains("dotnet build ./App.sln", message);
+            Assert.Contains("README.md", message);
+        }
+
+        runner.ReleaseAll();
+        await service.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_PassesStructuredPauseDecisionToRunner()
     {
         var queue = new CyberpilotRunQueue();
@@ -196,13 +226,14 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
             NullLogger<CyberpilotPipelineService>.Instance);
     }
 
-    private ServiceProvider CreateProvider(ICyberpilotRunQueue queue, BlockingRunner runner)
+    private ServiceProvider CreateProvider(ICyberpilotRunQueue queue, BlockingRunner runner, RepositoryProfile? repositoryProfile = null)
     {
         var services = new ServiceCollection();
         services.AddDbContext<CyberpilotDbContext>(options => options.UseSqlite($"Data Source={databasePath}"));
         services.AddSingleton(queue);
         services.AddSingleton<ICyberpilotRunner>(runner);
         services.AddSingleton<ILocalRepositoryValidator, PassthroughRepositoryValidator>();
+        services.AddSingleton<IRepositoryProfileDetector>(new StaticRepositoryProfileDetector(repositoryProfile ?? RepositoryProfile.Empty));
         services.AddSingleton(CreateHubContext());
         services.AddSingleton<ILogger<SignalRProgressSink>>(NullLogger<SignalRProgressSink>.Instance);
         var provider = services.BuildServiceProvider();
@@ -327,5 +358,10 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
 
         public Task<string> ValidateAsync(string repoRoot, CancellationToken cancellationToken = default)
             => Task.FromResult(Path.GetFullPath(repoRoot));
+    }
+
+    private sealed class StaticRepositoryProfileDetector(RepositoryProfile profile) : IRepositoryProfileDetector
+    {
+        public Task<RepositoryProfile> DetectAsync(string repoRoot, CancellationToken cancellationToken = default) => Task.FromResult(profile);
     }
 }

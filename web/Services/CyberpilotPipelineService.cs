@@ -90,9 +90,14 @@ public sealed class CyberpilotPipelineService(
         SignalRProgressSink? sink = null;
         try
         {
+            var sinkLogger = scope.ServiceProvider.GetRequiredService<ILogger<SignalRProgressSink>>();
+            sink = new SignalRProgressSink(run.Id, run.Model, run.IssueNumber, dbContext, hubContext, sinkLogger, request.StartStage, request.RetryReason);
             var repoRoot = await localRepositoryValidator.PrepareAsync(request.RepoRoot, request.Repository, request.GitHubToken, cancellationToken);
             run.WorktreePath = repoRoot;
             await dbContext.SaveChangesAsync(cancellationToken);
+            var profileDetector = scope.ServiceProvider.GetRequiredService<IRepositoryProfileDetector>();
+            var profile = await profileDetector.DetectAsync(repoRoot, cancellationToken);
+            sink.OnDispatch(DispatchType.RepositoryProfile, profile.ToSummary());
 
             // Lambda that checks if a pause has been requested (reads fresh from DB)
             var runId = run.Id;
@@ -125,8 +130,6 @@ public sealed class CyberpilotPipelineService(
                     approvalRequest);
             }
 
-            var sinkLogger = scope.ServiceProvider.GetRequiredService<ILogger<SignalRProgressSink>>();
-            sink = new SignalRProgressSink(run.Id, run.Model, run.IssueNumber, dbContext, hubContext, sinkLogger, request.StartStage, request.RetryReason);
             var result = await runner.RunAsync(new CyberpilotRunRequest(
                 request.IssueNumber,
                 repoRoot,
