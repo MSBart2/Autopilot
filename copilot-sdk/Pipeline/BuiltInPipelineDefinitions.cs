@@ -3,7 +3,7 @@ namespace Cyberpilot.Pipeline;
 internal static class BuiltInPipelineDefinitions
 {
     private static PipelineDefinition DocsOnlyDefinition { get; } = new(
-        "docs-only",
+        BuiltInPipelineCatalog.DocsOnlyDefinitionName,
         new PipelineDefinitionVersion(PipelineDefinitionDefaults.DefinitionVersion),
         new PolicyProfile(PipelineDefinitionDefaults.PolicyProfileName, PolicyStrictness.Standard),
         [
@@ -18,7 +18,7 @@ internal static class BuiltInPipelineDefinitions
         [DocsOnlyDefinition.Name] = DocsOnlyDefinition,
     };
 
-    public static string AvailableNames => string.Join(", ", Definitions.Keys.Order(StringComparer.OrdinalIgnoreCase));
+    public static string AvailableNames => BuiltInPipelineCatalog.AvailableDefinitionNames;
 
     public static bool TryGet(string name, out PipelineDefinition? definition)
     {

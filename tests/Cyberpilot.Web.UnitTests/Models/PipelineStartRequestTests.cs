@@ -1,3 +1,4 @@
+using Cyberpilot.Pipeline;
 using Cyberpilot.Web.Models;
 
 namespace Cyberpilot.Web.UnitTests.Models;
@@ -30,5 +31,19 @@ public class PipelineStartRequestTests
     {
         var request = new PipelineStartRequest();
         Assert.False(request.AllowMissingDocs);
+    }
+
+    [Fact]
+    public void DefaultPipelineDefinitionName_IsDefaultDefinition()
+    {
+        var request = new PipelineStartRequest();
+        Assert.Equal(PipelineDefinitionDefaults.DefinitionName, request.PipelineDefinitionName);
+    }
+
+    [Fact]
+    public void DefaultPolicyProfileName_IsStandard()
+    {
+        var request = new PipelineStartRequest();
+        Assert.Equal(PipelineDefinitionDefaults.PolicyProfileName, request.PolicyProfileName);
     }
 }

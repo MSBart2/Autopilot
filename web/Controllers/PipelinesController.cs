@@ -288,6 +288,18 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Issues));
         }
 
+        if (!BuiltInPipelineCatalog.TryGetDefinition(request.PipelineDefinitionName, out var definition))
+        {
+            TempData["PipelineError"] = $"Unsupported pipeline definition '{request.PipelineDefinitionName}'. Available definitions: {BuiltInPipelineCatalog.AvailableDefinitionNames}.";
+            return RedirectToAction(nameof(Issues));
+        }
+
+        if (!BuiltInPipelineCatalog.TryGetPolicyProfile(request.PolicyProfileName, out var policyProfile))
+        {
+            TempData["PipelineError"] = $"Unsupported policy profile '{request.PolicyProfileName}'. Available profiles: {BuiltInPipelineCatalog.AvailablePolicyProfileNames}.";
+            return RedirectToAction(nameof(Issues));
+        }
+
         var connection = _connectionStore.Get(request.ConnectionId);
         if (!string.IsNullOrWhiteSpace(request.ConnectionId)
             && (connection is null || !connection.Repository.Equals(repository, StringComparison.OrdinalIgnoreCase)))
@@ -332,9 +344,9 @@ public class PipelinesController : Controller
             StageTimeoutMinutes = request.StageTimeoutMinutes,
             AllowMissingDocs = request.AllowMissingDocs,
             IssueTitle = issueTitle,
-            PipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName,
-            PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
-            PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
+            PipelineDefinitionName = definition!.Name,
+            PipelineDefinitionVersion = definition.Version,
+            PolicyProfileName = policyProfile!.Name,
             ContractVersion = PipelineDefinitionDefaults.ContractVersion,
         };
 

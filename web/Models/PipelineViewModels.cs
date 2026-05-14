@@ -789,6 +789,16 @@ public sealed class PipelineStartRequest
     [StringLength(120)]
     public string Model { get; set; } = "claude-sonnet-4.6";
 
+    /// <summary>Gets or sets the built-in pipeline definition selected for the run.</summary>
+    [Required]
+    [StringLength(80)]
+    public string PipelineDefinitionName { get; set; } = PipelineDefinitionDefaults.DefinitionName;
+
+    /// <summary>Gets or sets the built-in policy profile selected for the run.</summary>
+    [Required]
+    [StringLength(80)]
+    public string PolicyProfileName { get; set; } = PipelineDefinitionDefaults.PolicyProfileName;
+
     /// <summary>Gets or sets whether delivery should be skipped.</summary>
     public bool SkipDeliver { get; set; }
 

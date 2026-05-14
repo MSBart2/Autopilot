@@ -606,3 +606,15 @@ Enabled the first selectable process variant:
 - Updated selector tests to prove `docs-only` is listed, selected, version-checked, and profile-compatible.
 - Updated runner tests so unknown definitions still fail before issue/label/model work, while `docs-only` runs only Docs then Deliver.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web integration tests.
+
+### Forty-Ninth Slice Status
+
+Made built-in definitions and policy profiles discoverable from launch surfaces:
+
+- Added a public SDK catalog for built-in pipeline definitions and policy profiles.
+- Updated CLI help so `--pipeline-definition` lists `cyberpilot-default` and `docs-only`, and policy help uses the shared profile catalog.
+- Added web start request fields for pipeline definition and policy profile, defaulting to the existing SDLC and `standard` policy.
+- Updated the issue launch form to select a definition and profile per run.
+- Validated selected values server-side, persisted them on the run, and carried them through the queued web request.
+- Added SDK and web unit tests for defaults, help text, validation, persistence, and queue handoff.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.

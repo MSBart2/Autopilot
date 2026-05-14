@@ -1,5 +1,6 @@
 using Cyberpilot.GitHub;
 using Cyberpilot.Persistence;
+using Cyberpilot.Pipeline;
 using Cyberpilot.Web.Controllers;
 using Cyberpilot.Web.Models;
 using Cyberpilot.Web.Services;
@@ -268,6 +269,52 @@ public class PipelinesControllerTests
         Assert.Equal("C:\\Repos\\Repo", queue.LastRequest.RepoRoot);
         Assert.Equal(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..")), queue.LastRequest.AgentPromptRoot);
         Assert.Equal("token-value", queue.LastRequest.GitHubToken);
+    }
+
+    [Fact]
+    public async Task Start_SelectedDefinitionAndPolicyProfile_PersistsAndQueuesMetadata()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var request = new PipelineStartRequest
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            PipelineDefinitionName = BuiltInPipelineCatalog.DocsOnlyDefinitionName,
+            PolicyProfileName = "strict",
+        };
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Start(request));
+
+        Assert.Equal("Details", result.ActionName);
+        var run = Assert.Single(db.PipelineRuns);
+        Assert.Equal(BuiltInPipelineCatalog.DocsOnlyDefinitionName, run.PipelineDefinitionName);
+        Assert.Equal(PipelineDefinitionDefaults.DefinitionVersion, run.PipelineDefinitionVersion);
+        Assert.Equal("strict", run.PolicyProfileName);
+        Assert.NotNull(queue.LastRequest);
+        Assert.Equal(BuiltInPipelineCatalog.DocsOnlyDefinitionName, queue.LastRequest.PipelineDefinitionName);
+        Assert.Equal(PipelineDefinitionDefaults.DefinitionVersion, queue.LastRequest.PipelineDefinitionVersion);
+        Assert.Equal("strict", queue.LastRequest.PolicyProfileName);
+    }
+
+    [Fact]
+    public async Task Start_UnsupportedDefinition_RedirectsToIssuesWithoutQueueing()
+    {
+        var (controller, db, queue, _) = CreateControllerWithDependencies();
+        var request = new PipelineStartRequest
+        {
+            IssueNumber = 7,
+            Repository = "owner/repo",
+            Model = "claude-sonnet-4.6",
+            PipelineDefinitionName = "unknown-definition",
+        };
+
+        var result = Assert.IsType<RedirectToActionResult>(await controller.Start(request));
+
+        Assert.Equal("Issues", result.ActionName);
+        Assert.Empty(db.PipelineRuns);
+        Assert.Null(queue.LastRequest);
+        Assert.Contains("Unsupported pipeline definition", Assert.IsType<string>(controller.TempData["PipelineError"]));
     }
 
     [Fact]
