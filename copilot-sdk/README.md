@@ -10,6 +10,7 @@ The executable harness lives in [../copilot-sdk-exe/](../copilot-sdk-exe) and re
 - reads stage prompts from the configured Cyberpilot controller repo's `.github/agents/*.agent.md`
 - uses the GitHub issue thread as the pipeline state file
 - supports the review rework loop with a maximum of two review cycles
+- supports selectable pipeline definitions, including built-in and JSON-backed definitions
 - checks Copilot model availability before applying issue labels or running stages
 - requires explicit `--approve-all` before granting Copilot SDK tool permissions
 - exits before label changes or stage work when the target issue is already closed
@@ -46,9 +47,31 @@ dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 13
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --model claude-sonnet-4.6
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --stage-timeout-minutes 20
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo-root C:\Users\rdpuser\Source\Cyberpilot
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition bugfix
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition custom-docs --pipeline-definition-file .\pipelines\custom.json
 ```
 
 Each Copilot stage waits up to 10 minutes by default (20 minutes when launched from the web UI). Use `--stage-timeout-minutes` for longer triage, implementation, review, or documentation runs.
+
+## Pipeline Definitions
+
+The default definition is `cyberpilot-default`, which runs `triage -> plan -> implement -> review -> docs -> deliver`. The SDK also ships these built-ins:
+
+| Definition | Stages | Use case |
+|------------|--------|----------|
+| `cyberpilot-default` | `triage -> plan -> implement -> review -> docs -> deliver` | Full issue-to-PR SDLC |
+| `bugfix` | `plan -> implement -> review -> deliver` | Focused implementation fixes when triage/docs are unnecessary |
+| `docs-only` | `docs -> deliver` | Documentation-only changes and landing reports |
+
+Select a definition with `--pipeline-definition <name>`. Use `--policy-profile <name>` to choose `lenient`, `standard`, `strict`, or `security-critical`; the selected profile is injected into stage prompts and used by policy-aware validation.
+
+The runner can also load additional JSON definitions:
+
+```powershell
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition custom-docs --pipeline-definition-file .\pipelines\custom.json
+```
+
+JSON definition files contain a top-level `definitions` array. File definitions are combined with built-ins and take precedence when names overlap. The runner validates the selected definition before issue labels, model checks, or stage execution.
 
 ## Required Labels
 

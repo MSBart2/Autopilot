@@ -683,3 +683,21 @@ Added JSON-backed pipeline definition files:
 - Kept built-in definitions as the default path when no file is supplied.
 - Added SDK tests for option parsing, provider loading, missing-file diagnostics, and runner execution from a JSON definition file.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Fifty-Sixth Slice Status
+
+Documented selectable and file-backed pipeline definitions:
+
+- Updated configuration docs with built-in definition/profile options and JSON definition-file examples.
+- Updated the SDK README with built-in definition behavior, `--pipeline-definition`, and `--pipeline-definition-file` usage.
+- Updated architecture notes to describe definition-driven SDK routing and file-backed provider loading.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, web integration tests, diagnostics, and `git diff --check`.
+
+### Fifty-Seventh Slice Status
+
+Carried file-backed definitions through the programmatic SDK facade:
+
+- Added optional `PipelineDefinitionFilePath` to `CyberpilotRunRequest`.
+- Passed the request value into `CyberpilotOptions` so programmatic runners can use the same JSON definition-file support as the console harness.
+- Left web-launched runs unchanged; they continue to use built-in definitions selected through the web catalog.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, web integration tests, diagnostics, and `git diff --check`.

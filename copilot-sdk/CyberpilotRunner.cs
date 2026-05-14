@@ -69,7 +69,8 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
             request.PipelineDefinitionName ?? PipelineDefinitionDefaults.DefinitionName,
             request.PipelineDefinitionVersion ?? PipelineDefinitionDefaults.DefinitionVersion,
             request.PolicyProfileName ?? PipelineDefinitionDefaults.PolicyProfileName,
-            request.ShouldPauseDecisionAsync);
+            request.ShouldPauseDecisionAsync,
+            request.PipelineDefinitionFilePath);
 
         var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output);
         var exitCode = await runner.RunAsync(cancellationToken);

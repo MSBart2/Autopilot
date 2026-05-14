@@ -106,6 +106,8 @@ Cloud mode uses `.github/workflows/cloud-*.md` source files compiled to `.lock.y
 
 SDK mode uses [copilot-sdk/Pipeline/SdkCyberpilotRunner.cs](copilot-sdk/Pipeline/SdkCyberpilotRunner.cs) to run stage prompts through Copilot SDK sessions. The command-line executable lives in [copilot-sdk-exe/](copilot-sdk-exe) and references the SDK library. It shares the same agent prompt files as local mode.
 
+SDK pipeline routing is definition-driven. Built-in definitions live under [copilot-sdk/Pipeline/](copilot-sdk/Pipeline) and include the full `cyberpilot-default` flow plus focused variants such as `bugfix` and `docs-only`. The runner can also load additional JSON definitions through `--pipeline-definition-file`; file-backed definitions are combined with built-ins and validated before issue, label, model, or stage side effects.
+
 Web-triggered SDK runs can separate the controller repository from the target repository. `Cyberpilot:AgentPromptRoot` points at the repository containing [.github/agents/](.github/agents), while each configured repository's `RepoRoot` points at the clone where code changes happen. This allows one Cyberpilot installation to drive issue-to-PR work across repositories that do not contain Cyberpilot's agent files.
 
 The web runner processes SDK runs through a durable database record plus an in-memory execution queue. Startup re-enqueues persisted `Queued` runs so a web app restart does not strand them. Runs for different configured repository roots can execute concurrently. Runs that target the same local repository root are serialized with a per-root lock, because simultaneous SDK runs can otherwise contend over the same checkout and branch state.

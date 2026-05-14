@@ -97,6 +97,10 @@ Important options:
 | `--repo <owner/name>` | GitHub repository for issue and PR operations. |
 | `--model <model-id>` | Copilot model. Defaults to the SDK runner default. |
 | `--stage-timeout-minutes <minutes>` | Per-stage timeout. |
+| `--pipeline-definition <name>` | Pipeline definition to run. Built-ins include `cyberpilot-default`, `bugfix`, and `docs-only`. |
+| `--pipeline-definition-file <path>` | Load additional JSON pipeline definitions from a file. |
+| `--pipeline-version <version>` | Pipeline definition version. Defaults to `1.0`. |
+| `--policy-profile <name>` | Policy profile to apply: `lenient`, `standard`, `strict`, or `security-critical`. |
 | `--approve-all` | Allow Copilot SDK tool permission requests. |
 | `--db <connection>` | Persist an EXE-triggered run to the shared SDK run-history database. |
 | `--skip-deliver` | Stop before merge/deliver. Useful for pilots. |
@@ -108,3 +112,67 @@ dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- --check-labe
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- --check-labels --ensure-labels --repo rbmathis/Cyberpilot
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- --check-model --repo rbmathis/Cyberpilot
 ```
+
+### Pipeline Definitions
+
+The SDK runner defaults to `cyberpilot-default`, which runs the full `triage -> plan -> implement -> review -> docs -> deliver` flow. The built-in `bugfix` definition skips triage and docs for focused fixes, and `docs-only` runs only documentation plus delivery.
+
+Select a built-in definition from the command line:
+
+```powershell
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition bugfix
+```
+
+Use `--pipeline-definition-file` when experimenting with additional definitions without recompiling the SDK. File definitions are loaded alongside built-ins, and file definitions take precedence when names overlap. Invalid or missing definition files stop the run before issue labels, model checks, or stage execution.
+
+```powershell
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition custom-docs --pipeline-definition-file .\pipelines\custom.json
+```
+
+Definition files use JSON with a top-level `definitions` array:
+
+```json
+{
+  "definitions": [
+    {
+      "name": "custom-docs",
+      "version": "1.0",
+      "policyProfile": {
+        "name": "standard",
+        "strictness": "standard"
+      },
+      "stages": [
+        {
+          "displayName": "DOCS",
+          "name": "docs",
+          "promptFile": "docs.agent.md",
+          "label": "sdk/docs",
+          "contract": {
+            "version": "1.0",
+            "requiredArtifacts": ["documentation-summary"]
+          }
+        },
+        {
+          "displayName": "LAND",
+          "name": "deliver",
+          "promptFile": "deliver.agent.md",
+          "label": "sdk/delivering",
+          "contract": {
+            "version": "1.0",
+            "requiredArtifacts": ["landing-report"]
+          }
+        }
+      ],
+      "transitions": [
+        {
+          "fromStage": "docs",
+          "toStage": "deliver",
+          "condition": "GO"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Each stage still uses the controller repository's `.github/agents/<promptFile>` prompt. A file-backed definition can reorder or omit stages, but it should use stage names and transitions that the SDK engine understands. Every selected definition is validated before routing starts.
