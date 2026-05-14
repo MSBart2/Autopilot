@@ -2,6 +2,23 @@ namespace Cyberpilot.Pipeline;
 
 internal static class BuiltInPipelineDefinitions
 {
+    private static PipelineDefinition BugfixDefinition { get; } = new(
+        BuiltInPipelineCatalog.BugfixDefinitionName,
+        new PipelineDefinitionVersion(PipelineDefinitionDefaults.DefinitionVersion),
+        new PolicyProfile(PipelineDefinitionDefaults.PolicyProfileName, PolicyStrictness.Standard),
+        [
+            DefaultPipelineDefinitionProvider.Definition.PipelineStage("plan"),
+            DefaultPipelineDefinitionProvider.Definition.PipelineStage("implement"),
+            DefaultPipelineDefinitionProvider.Definition.PipelineStage("review"),
+            DefaultPipelineDefinitionProvider.Definition.PipelineStage("deliver"),
+        ],
+        [
+            new StageTransition("plan", "implement", "GO"),
+            new StageTransition("implement", "review", "GO"),
+            new StageTransition("review", "implement", "changes_requested"),
+            new StageTransition("review", "deliver", "approved"),
+        ]);
+
     private static PipelineDefinition DocsOnlyDefinition { get; } = new(
         BuiltInPipelineCatalog.DocsOnlyDefinitionName,
         new PipelineDefinitionVersion(PipelineDefinitionDefaults.DefinitionVersion),
@@ -15,6 +32,7 @@ internal static class BuiltInPipelineDefinitions
     private static readonly IReadOnlyDictionary<string, PipelineDefinition> Definitions = new Dictionary<string, PipelineDefinition>(StringComparer.OrdinalIgnoreCase)
     {
         [DefaultPipelineDefinitionProvider.Definition.Name] = DefaultPipelineDefinitionProvider.Definition,
+        [BugfixDefinition.Name] = BugfixDefinition,
         [DocsOnlyDefinition.Name] = DocsOnlyDefinition,
     };
 

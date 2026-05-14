@@ -187,6 +187,19 @@ public sealed class PipelineDefinitionTests
     }
 
     [Fact]
+    public void BuiltInPipelineDefinitions_ListsBugfixDefinition()
+    {
+        var found = BuiltInPipelineDefinitions.TryGet("bugfix", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("bugfix", definition!.Name);
+        Assert.Equal<string>(["plan", "implement", "review", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+        Assert.Contains(definition.Transitions, transition => transition is { FromStage: "review", ToStage: "implement", Condition: "changes_requested" });
+        Assert.Contains(definition.Transitions, transition => transition is { FromStage: "review", ToStage: "deliver", Condition: "approved" });
+        Assert.Contains("bugfix", BuiltInPipelineDefinitions.AvailableNames);
+    }
+
+    [Fact]
     public void PipelineDefinitionSelector_DocsOnlyDefinition_SelectsVariant()
     {
         var options = new Cyberpilot.Options.CyberpilotOptions(
@@ -212,6 +225,35 @@ public sealed class PipelineDefinitionTests
         Assert.Null(error);
         Assert.Equal("docs-only", definition!.Name);
         Assert.Equal<string>(["docs", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+        Assert.Equal("standard", definition.PolicyProfile.Name);
+    }
+
+    [Fact]
+    public void PipelineDefinitionSelector_BugfixDefinition_SelectsVariant()
+    {
+        var options = new Cyberpilot.Options.CyberpilotOptions(
+            1,
+            Directory.GetCurrentDirectory(),
+            "owner/repo",
+            "test-model",
+            false,
+            false,
+            false,
+            false,
+            TimeSpan.FromMinutes(10),
+            true,
+            false,
+            null,
+            null,
+            false,
+            PipelineDefinitionName: "bugfix");
+
+        var selected = PipelineDefinitionSelector.TrySelect(options, out var definition, out var error);
+
+        Assert.True(selected);
+        Assert.Null(error);
+        Assert.Equal("bugfix", definition!.Name);
+        Assert.Equal<string>(["plan", "implement", "review", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
         Assert.Equal("standard", definition.PolicyProfile.Name);
     }
 

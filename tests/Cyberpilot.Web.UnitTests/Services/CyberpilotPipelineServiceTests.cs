@@ -139,6 +139,13 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
             Assert.Contains("README.md", message);
         }
 
+        var profileSummary = Assert.Single(runner.Requests
+            .Select(request => request.TargetRepositoryProfileSummary)
+            .Where(summary => !string.IsNullOrWhiteSpace(summary))
+            .Distinct());
+        Assert.Contains("languages: .NET", profileSummary);
+        Assert.Contains("dotnet test ./App.sln", profileSummary);
+
         runner.ReleaseAll();
         await service.StopAsync(CancellationToken.None);
     }

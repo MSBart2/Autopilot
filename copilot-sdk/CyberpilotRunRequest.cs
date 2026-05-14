@@ -22,4 +22,5 @@ public sealed record CyberpilotRunRequest(
     string? PipelineDefinitionName = null,
     string? PipelineDefinitionVersion = null,
     string? PolicyProfileName = null,
+    string? TargetRepositoryProfileSummary = null,
     Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null);

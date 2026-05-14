@@ -5,7 +5,7 @@ internal interface IPromptBuilder
 	Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, CancellationToken cancellationToken = default);
 }
 
-internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int issueNumber) : IPromptBuilder
+internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int issueNumber, string? targetRepositoryProfileSummary = null) : IPromptBuilder
 {
 	public async Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, CancellationToken cancellationToken = default)
 	{
@@ -17,6 +17,7 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 			: string.Join(", ", stageDefinition.Contract.RequiredArtifacts.Select(artifact => $"`{artifact}`"));
 		var artifactExample = BuildArtifactExample(stageDefinition.Contract.RequiredArtifacts);
 		var reportingGuidance = BuildReportingGuidance(stage.Name);
+		var repositoryProfileContext = BuildRepositoryProfileContext(targetRepositoryProfileSummary);
 
 		return $$"""
 			You are running as the Cyberpilot SDK cyberpilot controller.
@@ -66,6 +67,7 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 			Use these status values when applicable: GO, STOP, DUPLICATE.
 			Use these review decision values when applicable: approved, changes_requested, comment.
 			When status is STOP or the result needs human correction, populate `required_actions` with concrete next steps.
+			{{repositoryProfileContext}}
 			{{reportingGuidance}}
 
 			<stage-agent-prompt>
@@ -74,14 +76,30 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 			""";
 	}
 
-		private static string BuildReportingGuidance(string stageName)
+	private static string BuildRepositoryProfileContext(string? profileSummary)
+	{
+		if (string.IsNullOrWhiteSpace(profileSummary))
 		{
-			if (!stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase))
-			{
-				return string.Empty;
-			}
+			return string.Empty;
+		}
 
-			return """
+		return $$"""
+
+			## Target Repository Profile
+
+			Use this detected target-repository context when choosing validation, documentation, and implementation commands:
+			{{profileSummary.Trim()}}
+			""";
+	}
+
+	private static string BuildReportingGuidance(string stageName)
+	{
+		if (!stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase))
+		{
+			return string.Empty;
+		}
+
+		return """
 
 				## Landing Report Evidence
 
@@ -91,7 +109,7 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 				- Summarize policy signals, gate outcomes, approvals, and any required actions that were resolved.
 				- Keep raw transcripts out of the report; cite concise evidence links or summaries instead.
 				""";
-		}
+	}
 
 	private static string BuildArtifactExample(IReadOnlyList<string> requiredArtifacts)
 	{

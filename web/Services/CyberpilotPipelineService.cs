@@ -146,7 +146,8 @@ public sealed class CyberpilotPipelineService(
                 ShouldPauseDecisionAsync: ShouldPauseDecisionAsync,
                 PipelineDefinitionName: request.PipelineDefinitionName,
                 PipelineDefinitionVersion: request.PipelineDefinitionVersion,
-                PolicyProfileName: request.PolicyProfileName), sink, cancellationToken);
+                PolicyProfileName: request.PolicyProfileName,
+                TargetRepositoryProfileSummary: profile.ToSummary()), sink, cancellationToken);
 
             run.Status = result.Status;
             run.BranchName = result.BranchName;

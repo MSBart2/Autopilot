@@ -84,6 +84,31 @@ public sealed class PromptBuilderTests
         Assert.Contains("Summarize policy signals, gate outcomes, approvals", prompt);
     }
 
+    [Fact]
+    public async Task BuildAsync_WithTargetRepositoryProfile_IncludesProfileContext()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "implement.agent.md"), "implement instructions");
+        var builder = new PromptBuilder(
+            targetRepo.Path,
+            agentRepo.Path,
+            42,
+            "Repository profile detected: languages: .NET | build: dotnet build ./App.sln | test: dotnet test ./App.sln.");
+
+        var prompt = await builder.BuildAsync(
+            Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", ["validation-summary"]),
+            "implement issue",
+            StandardPolicy());
+
+        Assert.Contains("## Target Repository Profile", prompt);
+        Assert.Contains("Use this detected target-repository context", prompt);
+        Assert.Contains("dotnet build ./App.sln", prompt);
+        Assert.Contains("dotnet test ./App.sln", prompt);
+    }
+
     private static PolicyProfile StandardPolicy() => new("standard", PolicyStrictness.Standard);
 
     private static PipelineStageDefinition Stage(string displayName, string name, string promptFile, string label, IReadOnlyList<string> requiredArtifacts)

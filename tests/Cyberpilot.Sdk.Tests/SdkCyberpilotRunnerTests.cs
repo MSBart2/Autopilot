@@ -136,6 +136,28 @@ public sealed class SdkCyberpilotRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_BugfixPipelineDefinition_RunsPlanImplementReviewThenDeliver()
+    {
+        var labels = new FakeLabelService();
+        var stageRunner = new RecordingStageRunner(stage =>
+            stage.Name.Equals("review", StringComparison.OrdinalIgnoreCase)
+                ? new StageResult("GO", "approved", true, null)
+                : new StageResult("GO", "done", true, null));
+        var output = new StringWriter();
+        var options = CreateOptions(122, true) with { PipelineDefinitionName = "bugfix" };
+        var runner = new SdkCyberpilotRunner(options, new FakeIssueClient(), labels, new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal<string>(["plan", "implement", "review", "deliver"], stageRunner.StageNames);
+        Assert.DoesNotContain("sdk/triage", labels.StageLabels);
+        Assert.DoesNotContain("sdk/docs", labels.StageLabels);
+        Assert.Contains("sdk/delivering", labels.StageLabels);
+        Assert.Contains("sdk/done", labels.StageLabels);
+    }
+
+    [Fact]
     public async Task RunAsync_TriageStop_ReturnsExit2()
     {
         var labels = new FakeLabelService();

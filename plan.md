@@ -640,3 +640,25 @@ Promoted repository profile signals into the evidence ledger:
 - Sorted `preflight` evidence before stage evidence so profile context appears first.
 - Added SDK helper/sink tests plus web SignalR sink and view-model tests for repository profile evidence.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Fifty-Second Slice Status
+
+Carried repository profile context into SDK prompts:
+
+- Added optional target repository profile summary context to `CyberpilotRunRequest`.
+- Passed the detected web repository profile summary into the SDK runner request after clone/validation.
+- Updated `PromptBuilder` to include a `Target Repository Profile` section when profile context is available.
+- Kept the context advisory only; it does not change routing, gates, definitions, or stage contracts.
+- Added SDK prompt-builder tests and web service tests proving the profile summary reaches stage prompts.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Fifty-Third Slice Status
+
+Added the first implementation-focused process variant:
+
+- Added the built-in `bugfix` pipeline definition for `plan -> implement -> review -> deliver`.
+- Published `bugfix` through the public built-in catalog so CLI help and web launch selection can discover it.
+- Updated review-approved routing to honor definitions that target `deliver` directly instead of always assuming docs follows review.
+- Kept review rework behavior intact with `review -> implement` on `changes_requested`.
+- Added SDK definition-selection and runner tests proving `bugfix` skips triage/docs and runs each intended stage once.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.

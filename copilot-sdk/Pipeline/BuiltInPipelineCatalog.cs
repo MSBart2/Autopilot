@@ -20,6 +20,9 @@ public sealed record PolicyProfileMetadata(string Name, string Description);
 /// </summary>
 public static class BuiltInPipelineCatalog
 {
+    /// <summary>The bugfix built-in pipeline definition name.</summary>
+    public const string BugfixDefinitionName = "bugfix";
+
     /// <summary>The docs-only built-in pipeline definition name.</summary>
     public const string DocsOnlyDefinitionName = "docs-only";
 
@@ -27,6 +30,7 @@ public static class BuiltInPipelineCatalog
     public static IReadOnlyList<PipelineDefinitionMetadata> Definitions { get; } =
     [
         new(PipelineDefinitionDefaults.DefinitionName, PipelineDefinitionDefaults.DefinitionVersion, "Full issue-to-PR SDLC"),
+        new(BugfixDefinitionName, PipelineDefinitionDefaults.DefinitionVersion, "Plan, implement, review, and deliver a focused fix"),
         new(DocsOnlyDefinitionName, PipelineDefinitionDefaults.DefinitionVersion, "Documentation and landing report only"),
     ];
 

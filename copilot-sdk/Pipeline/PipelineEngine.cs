@@ -123,8 +123,20 @@ internal sealed class PipelineEngine(
                 return 4;
             }
 
-            docsStage = TransitionTarget("review", "approved");
-            progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Docs stage");
+            var approvedTarget = TransitionTarget("review", "approved");
+            if (approvedTarget.Name.Equals("docs", StringComparison.OrdinalIgnoreCase))
+            {
+                docsStage = approvedTarget;
+                progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Docs stage");
+            }
+            else if (approvedTarget.Name.Equals("deliver", StringComparison.OrdinalIgnoreCase))
+            {
+                progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Deliver stage");
+            }
+            else
+            {
+                return await HaltAsync($"Review approved transition targets unsupported stage '{approvedTarget.Name}'.", cancellationToken);
+            }
 
             var pauseResult = await CheckPauseAsync("review", cancellationToken);
             if (pauseResult.HasValue) return pauseResult.Value;

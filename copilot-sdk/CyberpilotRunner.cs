@@ -46,7 +46,7 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
         var output = TextWriter.Null;
         var labels = new SdkLabelService(issueClient, output);
         var branchProvisioner = new BranchProvisioner();
-        var promptBuilder = new PromptBuilder(request.RepoRoot, request.AgentPromptRoot ?? request.RepoRoot, request.IssueNumber);
+        var promptBuilder = new PromptBuilder(request.RepoRoot, request.AgentPromptRoot ?? request.RepoRoot, request.IssueNumber, request.TargetRepositoryProfileSummary);
         var stageRunner = new CopilotStageRunner(request.RepoRoot, request.Model, progressSink, TextWriter.Null);
         var modelChecker = new CopilotModelAvailabilityChecker();
         var options = new CyberpilotOptions(
