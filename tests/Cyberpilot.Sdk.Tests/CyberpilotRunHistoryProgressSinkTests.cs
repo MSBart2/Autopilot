@@ -276,4 +276,20 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
         Assert.Equal("gate", evidence.Source);
         Assert.Single(_dbContext.PipelineDispatches);
     }
+
+    [Fact]
+    public void OnDispatch_WithRepositoryProfile_PersistsRepositoryProfileEvidence()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);
+
+        sink.OnDispatch(DispatchType.RepositoryProfile, "Repository profile detected: languages: .NET | build: dotnet build ./App.sln.");
+
+        var evidence = _dbContext.PipelineEvidence.Single();
+        Assert.Equal(_run.Id, evidence.RunId);
+        Assert.Equal("preflight", evidence.StageName);
+        Assert.Equal("repository-profile", evidence.Kind);
+        Assert.Equal("target-repository", evidence.Name);
+        Assert.Equal("profile", evidence.Source);
+        Assert.Single(_dbContext.PipelineDispatches);
+    }
 }

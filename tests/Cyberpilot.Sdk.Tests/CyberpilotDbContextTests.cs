@@ -450,6 +450,31 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public void PipelineEvidence_FromRepositoryProfileDispatch_CreatesRepositoryProfileRow()
+    {
+        var evidence = PipelineEvidence.FromRepositoryProfileDispatch(
+            "run-1",
+            DispatchType.RepositoryProfile,
+            "Repository profile detected: languages: .NET | build: dotnet build ./App.sln.");
+
+        Assert.NotNull(evidence);
+        Assert.Equal("run-1", evidence.RunId);
+        Assert.Equal("preflight", evidence.StageName);
+        Assert.Equal("repository-profile", evidence.Kind);
+        Assert.Equal("target-repository", evidence.Name);
+        Assert.Equal("profile", evidence.Source);
+        Assert.Equal("text/plain", evidence.MediaType);
+    }
+
+    [Fact]
+    public void PipelineEvidence_FromRepositoryProfileDispatch_WithNonProfileDispatch_ReturnsNull()
+    {
+        var evidence = PipelineEvidence.FromRepositoryProfileDispatch("run-1", DispatchType.Routing, "Repository profile detected: languages: .NET.");
+
+        Assert.Null(evidence);
+    }
+
+    [Fact]
     public async Task PipelineApproval_FromPendingRequest_CanBeAddedAndRetrieved()
     {
         var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };

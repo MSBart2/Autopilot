@@ -129,6 +129,15 @@ public class PipelineRunDetailsViewModelTests
             new PipelineEvidence
             {
                 RunId = run.Id,
+                StageName = "preflight",
+                Kind = "repository-profile",
+                Name = "target-repository",
+                Summary = "Repository profile detected: languages: .NET.",
+                CreatedAt = DateTime.Parse("2026-05-13T07:30:00Z").ToUniversalTime(),
+            },
+            new PipelineEvidence
+            {
+                RunId = run.Id,
                 StageName = "plan",
                 Kind = "approval-request",
                 Name = "approval-plan",
@@ -161,6 +170,12 @@ public class PipelineRunDetailsViewModelTests
 
         Assert.Collection(
             vm.EvidenceItems,
+            item =>
+            {
+                Assert.Equal("Preflight", item.StageLabel);
+                Assert.Equal("Repository", item.KindLabel);
+                Assert.Equal("target-repository", item.Name);
+            },
             item =>
             {
                 Assert.Equal("Plan", item.StageLabel);

@@ -167,6 +167,7 @@ public sealed class SignalRProgressSink(
     {
         AddDeliveryEvidence(type, message);
         AddGateEvidence(type, message);
+        AddRepositoryProfileEvidence(type, message);
         var dispatch = new Cyberpilot.Persistence.PipelineDispatch
         {
             RunId = runId,
@@ -192,6 +193,17 @@ public sealed class SignalRProgressSink(
     private void AddGateEvidence(string type, string message)
     {
         var evidence = PipelineEvidence.FromGateDispatch(runId, type, message);
+        if (evidence is null)
+        {
+            return;
+        }
+
+        dbContext.PipelineEvidence.Add(evidence);
+    }
+
+    private void AddRepositoryProfileEvidence(string type, string message)
+    {
+        var evidence = PipelineEvidence.FromRepositoryProfileDispatch(runId, type, message);
         if (evidence is null)
         {
             return;

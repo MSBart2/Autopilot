@@ -325,6 +325,11 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
 
     private static int StageSortOrder(string stageName)
     {
+        if (stageName.Equals("preflight", StringComparison.OrdinalIgnoreCase))
+        {
+            return -1;
+        }
+
         for (var index = 0; index < ValidStageNames.Count; index++)
         {
             if (ValidStageNames[index].Equals(stageName, StringComparison.OrdinalIgnoreCase))
@@ -373,6 +378,7 @@ public sealed record PipelineEvidenceViewModel(
         "usage-metrics" => "Usage",
         "delivery-outcome" => "Delivery",
         "gate-outcome" => "Gate",
+        "repository-profile" => "Repository",
         _ => string.IsNullOrWhiteSpace(Kind) ? "Evidence" : Kind,
     };
 

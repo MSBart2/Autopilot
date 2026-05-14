@@ -629,3 +629,14 @@ Added passive target repository profiling:
 - Kept profiling advisory only; it does not change routing, gates, prompts, or selected definitions yet.
 - Added web unit tests for profile detection and background-service dispatch persistence.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Fifty-First Slice Status
+
+Promoted repository profile signals into the evidence ledger:
+
+- Added `repository-profile` evidence mapping for `repo_profile` dispatches.
+- Persisted repository profile evidence through both SDK history and web SignalR progress sinks.
+- Labeled repository profile rows as `Repository` in the Run Room Evidence ledger.
+- Sorted `preflight` evidence before stage evidence so profile context appears first.
+- Added SDK helper/sink tests plus web SignalR sink and view-model tests for repository profile evidence.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.

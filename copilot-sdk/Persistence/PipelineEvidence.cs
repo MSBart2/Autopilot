@@ -321,6 +321,36 @@ public sealed class PipelineEvidence
         };
     }
 
+    /// <summary>
+    /// Creates an evidence ledger row for a target repository profile dispatch event.
+    /// </summary>
+    /// <param name="runId">The owning run identifier.</param>
+    /// <param name="type">The dispatch type.</param>
+    /// <param name="message">The dispatch message.</param>
+    /// <returns>A repository profile evidence row, or null when the dispatch is not a repository profile event.</returns>
+    public static PipelineEvidence? FromRepositoryProfileDispatch(string runId, string type, string message)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(type);
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+        if (!type.Trim().Equals(DispatchType.RepositoryProfile, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return new PipelineEvidence
+        {
+            RunId = runId,
+            StageName = "preflight",
+            Kind = "repository-profile",
+            Name = "target-repository",
+            Summary = message.Trim(),
+            MediaType = "text/plain",
+            Source = "profile",
+        };
+    }
+
     private static bool TryParseGateDispatch(string message, out string gateName, out string outcome, out string stageName, out string summary)
     {
         gateName = string.Empty;
