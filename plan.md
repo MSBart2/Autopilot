@@ -596,3 +596,13 @@ Prepared the engine for process variants with lazy stage resolution:
 - Delivery still fails cleanly if the `deliver` stage is required but missing.
 - Added SDK engine tests for definitions without `deliver` in both `--skip-deliver` and required-delivery paths.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web integration tests.
+
+### Forty-Eighth Slice Status
+
+Enabled the first selectable process variant:
+
+- Registered `docs-only` as a built-in pipeline definition.
+- The `docs-only` variant runs the existing `docs` stage followed by `deliver`, reusing the default stage contracts, prompts, and labels.
+- Updated selector tests to prove `docs-only` is listed, selected, version-checked, and profile-compatible.
+- Updated runner tests so unknown definitions still fail before issue/label/model work, while `docs-only` runs only Docs then Deliver.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, and web integration tests.

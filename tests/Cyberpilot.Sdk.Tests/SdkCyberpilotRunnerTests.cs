@@ -104,7 +104,7 @@ public sealed class SdkCyberpilotRunnerTests
         var stageRunner = new FakeStageRunner();
         var modelChecker = new FakeModelChecker(ModelAvailabilityResult.Available);
         var output = new StringWriter();
-        var options = CreateOptions(122, true) with { PipelineDefinitionName = "docs-only" };
+        var options = CreateOptions(122, true) with { PipelineDefinitionName = "unknown-definition" };
         var runner = new SdkCyberpilotRunner(options, issueClient, labels, new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, modelChecker, new TextWriterProgressSink(output, TextWriter.Null), output);
 
         var exitCode = await runner.RunAsync();
@@ -115,6 +115,24 @@ public sealed class SdkCyberpilotRunnerTests
         Assert.Equal(0, labels.EnsureRequiredCalls);
         Assert.Equal(0, modelChecker.Calls);
         Assert.Equal(0, stageRunner.Calls);
+    }
+
+    [Fact]
+    public async Task RunAsync_DocsOnlyPipelineDefinition_RunsDocsThenDeliver()
+    {
+        var labels = new FakeLabelService();
+        var stageRunner = new RecordingStageRunner(_ => new StageResult("GO", "approved", true, null));
+        var output = new StringWriter();
+        var options = CreateOptions(122, true) with { PipelineDefinitionName = "docs-only" };
+        var runner = new SdkCyberpilotRunner(options, new FakeIssueClient(), labels, new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+        var exitCode = await runner.RunAsync();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal<string>(["docs", "deliver"], stageRunner.StageNames);
+        Assert.Contains("sdk/docs", labels.StageLabels);
+        Assert.Contains("sdk/delivering", labels.StageLabels);
+        Assert.Contains("sdk/done", labels.StageLabels);
     }
 
     [Fact]
