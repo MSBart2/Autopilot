@@ -117,11 +117,13 @@
         background-color: rgba(251, 63, 104, .10);
         border-color: rgba(251, 63, 104, .30);
     }
+
     .alert-warning {
         color: #fcd34d;
         background-color: rgba(250, 204, 21, .08);
         border-color: rgba(250, 204, 21, .28);
     }
+
     .alert-info {
         color: var(--oc-cyan);
         background-color: rgba(34, 211, 238, .08);
@@ -1377,7 +1379,10 @@
         overflow-wrap: anywhere;
         cursor: default;
     }
-    .output-chip[title] { cursor: help; }
+
+    .output-chip[title] {
+        cursor: help;
+    }
 
     .output-value-long {
         display: block;

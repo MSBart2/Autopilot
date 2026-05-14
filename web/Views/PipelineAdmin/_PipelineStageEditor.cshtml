@@ -18,7 +18,8 @@
     <div class="row g-3">
         <div class="col-md-6">
             <label class="form-label" for="@(prefix).DisplayName">Display name</label>
-            <input class="form-control" id="@(prefix).DisplayName" name="@(prefix).DisplayName" value="@stage.DisplayName" />
+            <input class="form-control" id="@(prefix).DisplayName" name="@(prefix).DisplayName"
+                   value="@stage.DisplayName" />
         </div>
         <div class="col-md-6">
             <label class="form-label" for="@(prefix).Name">Stage key</label>
@@ -26,23 +27,28 @@
         </div>
         <div class="col-md-6">
             <label class="form-label" for="@(prefix).PromptFile">Prompt file</label>
-            <input class="form-control" id="@(prefix).PromptFile" name="@(prefix).PromptFile" value="@stage.PromptFile" placeholder="docs.prompt.md" />
+            <input class="form-control" id="@(prefix).PromptFile" name="@(prefix).PromptFile" value="@stage.PromptFile"
+                   placeholder="docs.prompt.md" />
         </div>
         <div class="col-md-6">
             <label class="form-label" for="@(prefix).Label">Stage label</label>
-            <input class="form-control" id="@(prefix).Label" name="@(prefix).Label" value="@stage.Label" placeholder="sdk/docs" />
+            <input class="form-control" id="@(prefix).Label" name="@(prefix).Label" value="@stage.Label"
+                   placeholder="sdk/docs" />
         </div>
         <div class="col-md-4">
             <label class="form-label" for="@(prefix).ContractVersion">Contract version</label>
-            <input class="form-control" id="@(prefix).ContractVersion" name="@(prefix).ContractVersion" value="@stage.ContractVersion" />
+            <input class="form-control" id="@(prefix).ContractVersion" name="@(prefix).ContractVersion"
+                   value="@stage.ContractVersion" />
         </div>
         <div class="col-md-8">
             <label class="form-label" for="@(prefix).RequiredArtifactsText">Required artifacts</label>
-            <input class="form-control" id="@(prefix).RequiredArtifactsText" name="@(prefix).RequiredArtifactsText" value="@stage.RequiredArtifactsText" placeholder="plan, tests, pull-request" />
+            <input class="form-control" id="@(prefix).RequiredArtifactsText" name="@(prefix).RequiredArtifactsText"
+                   value="@stage.RequiredArtifactsText" placeholder="plan, tests, pull-request" />
         </div>
         <div class="col-12">
             <label class="form-label" for="@(prefix).GatesText">Gates</label>
-            <textarea class="form-control font-monospace" id="@(prefix).GatesText" name="@(prefix).GatesText" rows="3" placeholder="model-available|BeforeStage|true&#10;review-approval|AfterStage|true">@stage.GatesText</textarea>
+            <textarea class="form-control font-monospace" id="@(prefix).GatesText" name="@(prefix).GatesText" rows="3"
+                      placeholder="model-available|BeforeStage|true&#10;review-approval|AfterStage|true">@stage.GatesText</textarea>
             <div class="form-text text-secondary">One gate per line: name|BeforeStage or AfterStage|true or false.</div>
         </div>
     </div>

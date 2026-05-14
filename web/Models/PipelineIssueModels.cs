@@ -217,6 +217,3 @@ public sealed class PipelineApprovalDecisionRequest
     [StringLength(1000)]
     public string? Reason { get; set; }
 }
-
-
-

@@ -52,29 +52,30 @@
                                         <hr class="dropdown-divider">
                                     </li>
                                     <li><a class="dropdown-item" asp-controller="Info" asp-action="Admin">Admin</a></li>
-                                    <li><a class="dropdown-item" asp-controller="PipelineAdmin" asp-action="Index">Pipeline Admin</a></li>
-                                </ul>
-                            </li>
-                        </ul>
+                                    <li><a class="dropdown-item" asp-controller="PipelineAdmin" asp-action="Index">Pipeline
+                                        Admin</a></li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
-                </div>
-            </nav>
-        </header>
-        <div class="app-container page-shell command-shell">
-            <main role="main">
-                @RenderBody()
-            </main>
-        </div>
-
-        <footer class="site-footer command-footer">
-            <div class="app-container footer-inner">
-                <span>Cyberpilot Mission Control</span>
-                <span class="footer-pulse" aria-hidden="true"></span>
+                </nav>
+            </header>
+            <div class="app-container page-shell command-shell">
+                <main role="main">
+                    @RenderBody()
+                </main>
             </div>
-        </footer>
-        <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
-        <script src="~/js/site.js" asp-append-version="true"></script>
-        @await RenderSectionAsync("Scripts", required: false)
-    </body>
 
-</html>
+            <footer class="site-footer command-footer">
+                <div class="app-container footer-inner">
+                    <span>Cyberpilot Mission Control</span>
+                    <span class="footer-pulse" aria-hidden="true"></span>
+                </div>
+            </footer>
+            <script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+            <script src="~/js/site.js" asp-append-version="true"></script>
+            @await RenderSectionAsync("Scripts", required: false)
+        </body>
+
+    </html>

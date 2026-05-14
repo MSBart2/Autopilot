@@ -18,5 +18,5 @@ These instructions apply when working in the documentation folder.
 
 ## Validation
 
-- Run `pwsh .\scripts\lint-docs.sh` from the repository root when Markdown formatting changes are broad enough to justify it.
+- Run `bash ./scripts/lint-docs.sh` from the repository root when Markdown formatting changes are broad enough to justify it.
 - For command examples, prefer commands already documented in [`../architecture.md`](../architecture.md), [`../README.md`](../README.md), or the relevant project `AGENTS.md` file.
