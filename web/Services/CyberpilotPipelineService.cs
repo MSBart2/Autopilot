@@ -147,7 +147,8 @@ public sealed class CyberpilotPipelineService(
                 PipelineDefinitionName: request.PipelineDefinitionName,
                 PipelineDefinitionVersion: request.PipelineDefinitionVersion,
                 PolicyProfileName: request.PolicyProfileName,
-                TargetRepositoryProfileSummary: profile.ToSummary()), sink, cancellationToken);
+                TargetRepositoryProfileSummary: profile.ToSummary(),
+                PipelineDefinitionFilePath: request.PipelineDefinitionFilePath), sink, cancellationToken);
 
             run.Status = result.Status;
             run.BranchName = result.BranchName;
@@ -179,7 +180,7 @@ public sealed class CyberpilotPipelineService(
         {
             logger.LogError(ex, "Cyberpilot run {RunId} failed.", run.Id);
             run.Status = "Failed";
-            run.Error = ex.Message;
+            run.Error = BuildErrorMessage(ex);
             run.CompletedAt = DateTime.UtcNow;
 
             // Finalize any stage logs still marked as Running
@@ -286,6 +287,24 @@ public sealed class CyberpilotPipelineService(
             run.PipelineDefinitionVersion,
             run.PolicyProfileName,
             run.ContractVersion);
+    }
+
+    private static string BuildErrorMessage(Exception ex)
+    {
+        var parts = new System.Text.StringBuilder();
+        var current = ex;
+        while (current is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(current.Message))
+            {
+                if (parts.Length > 0) parts.Append(" \u2192 ");
+                parts.Append(current.Message);
+            }
+
+            current = current.InnerException;
+        }
+
+        return parts.Length > 0 ? parts.ToString() : ex.Message;
     }
 
     private static void AddPullRequestEvidence(CyberpilotDbContext dbContext, string runId, string? prUrl)

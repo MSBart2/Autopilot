@@ -25,6 +25,9 @@ public sealed class CyberpilotWebOptions
 
     /// <summary>Gets or sets the maximum number of retry attempts allowed per stage per run. Defaults to 3.</summary>
     public int MaxStageRetries { get; set; } = 3;
+
+    /// <summary>Gets or sets the JSON file path for operator-managed pipeline definitions.</summary>
+    public string PipelineDefinitionFilePath { get; set; } = Path.Combine("App_Data", "pipeline-definitions.json");
 }
 
 /// <summary>

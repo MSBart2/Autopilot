@@ -194,15 +194,15 @@ else
                             }
                         </select>
                         <select class="form-select form-select-sm" name="PipelineDefinitionName" aria-label="Pipeline definition" @(disableForm ? "disabled" : null)>
-                            @foreach (var definition in BuiltInPipelineCatalog.Definitions)
+                            @foreach (var definition in Model.PipelineDefinitions)
                             {
-                                <option value="@definition.Name" title="@definition.Description" selected="@(definition.Name == PipelineDefinitionDefaults.DefinitionName ? "selected" : null)">@definition.Name</option>
+                                <option value="@definition.Name" title="@definition.Description" selected="@(definition.Name == PipelineDefinitionDefaults.DefinitionName ? "selected" : null)">@definition.Name@(definition.IsBuiltIn ? string.Empty : " (custom)")</option>
                             }
                         </select>
                         <select class="form-select form-select-sm" name="PolicyProfileName" aria-label="Policy profile" @(disableForm ? "disabled" : null)>
-                            @foreach (var profile in BuiltInPipelineCatalog.PolicyProfiles)
+                            @foreach (var profile in Model.PolicyProfiles)
                             {
-                                <option value="@profile.Name" title="@profile.Description" selected="@(profile.Name == PipelineDefinitionDefaults.PolicyProfileName ? "selected" : null)">@profile.Name</option>
+                                <option value="@profile.Name" title="@profile.Description" selected="@(profile.Name == PipelineDefinitionDefaults.PolicyProfileName ? "selected" : null)">@profile.Name@(profile.IsBuiltIn ? string.Empty : " (custom)")</option>
                             }
                         </select>
                         <input type="hidden" name="StageTimeoutMinutes" value="20" />

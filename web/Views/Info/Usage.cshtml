@@ -1,0 +1,265 @@
+@{
+    ViewData["Title"] = "Usage Guide";
+}
+
+<section class="guide-viewport">
+    <aside class="command-rail guide-rail">
+        <p class="eyebrow">Operator Manual</p>
+        <h1>Usage Guide</h1>
+        <p class="guide-summary">Everything you need to launch, monitor, and manage Cyberpilot pipeline runs.</p>
+        <nav class="guide-mode-nav" aria-label="Info pages">
+            <a asp-controller="Info" asp-action="Usage" class="btn btn-primary">Usage</a>
+            <a asp-controller="Info" asp-action="Architecture" class="btn btn-outline-primary">Architecture</a>
+            <a asp-controller="Info" asp-action="Admin" class="btn btn-outline-primary">Admin</a>
+        </nav>
+        <nav class="guide-mode-nav mt-3" aria-label="Jump to section" style="flex-direction:column;gap:.4rem;">
+            <a href="#launch" class="nav-link text-start p-0 small">01 · Launching a run</a>
+            <a href="#monitor" class="nav-link text-start p-0 small">02 · Monitoring execution</a>
+            <a href="#stops" class="nav-link text-start p-0 small">03 · Handling stops</a>
+            <a href="#approvals" class="nav-link text-start p-0 small">04 · Human approvals</a>
+            <a href="#reset" class="nav-link text-start p-0 small">05 · Reset Mission</a>
+        </nav>
+    </aside>
+
+    <article class="guide-content-wrap">
+        <div class="guide-content">
+
+            <section id="launch">
+                <h2>01 &mdash; Launching a run</h2>
+                <p>
+                    Open <strong>Dispatch</strong> from the navigation bar. Cyberpilot lists open GitHub issues from the
+                    configured repository.
+                    Each issue card shows its current Cyberpilot status so you can see which issues are in-flight, done,
+                    or still open.
+                </p>
+                <h3>Loading issues</h3>
+                <ul>
+                    <li>
+                        <strong>Configured repository</strong> &mdash; if <code>appsettings.json</code> contains a
+                        <code>Repositories</code> entry with a token, the selector at the top of the page switches
+                        between configured
+                        repositories automatically.
+                    </li>
+                    <li>
+                        <strong>Manual connection</strong> &mdash; enter any <code>owner/name</code> value or a full
+                        <code>github.com</code> URL and a fine-grained GitHub token. Use this for repositories that are
+                        not
+                        pre-configured.
+                    </li>
+                </ul>
+                <h3>Starting Cyberpilot</h3>
+                <p>Click <strong>Start</strong> on any open issue. The launch form lets you configure the run:</p>
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Setting</th>
+                            <th>Description</th>
+                            <th>Default</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Pipeline definition</strong></td>
+                            <td>Which stage sequence to run</td>
+                            <td><code>cyberpilot-default</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Model</strong></td>
+                            <td>The Copilot model to use for all stages</td>
+                            <td>claude-sonnet-4-5</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Policy profile</strong></td>
+                            <td>How strictly gates are enforced</td>
+                            <td><code>standard</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Skip Deliver</strong></td>
+                            <td>Stop after docs; do not merge the PR</td>
+                            <td>Off</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Stage timeout</strong></td>
+                            <td>Minutes before a stage is considered hung</td>
+                            <td>30</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Allow missing docs</strong></td>
+                            <td>Skip the docs stage if doc files are absent</td>
+                            <td>Off</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p>Once you click <strong>Start Cyberpilot</strong>, the run is queued and you are taken to the Run
+                    Room.</p>
+                </section>
+
+                <hr />
+
+                <section id="monitor">
+                    <h2>02 &mdash; Monitoring execution</h2>
+                    <p>
+                        The <strong>Run Room</strong> (Details page) shows live updates via SignalR. Agent cards appear as
+                        each stage starts
+                        and update in real time — no manual refresh needed.
+                    </p>
+                    <table class="table table-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th>Status badge</th>
+                                <th>Meaning</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge text-bg-secondary">Queued</span></td>
+                                <td>Run is waiting for the background worker to pick it up</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-primary">Running</span></td>
+                                <td>A stage is actively executing</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-info text-dark">Pausing</span></td>
+                                <td>Pause was requested; will stop after the current stage finishes</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-warning text-dark">Paused</span></td>
+                                <td>Run paused between stages; can be resumed</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-warning text-dark">Stopped</span></td>
+                                <td>Pipeline halted intentionally (e.g. triage STOP, review rejection, gate failure)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-danger">Failed</span></td>
+                                <td>Unexpected error during stage execution</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-warning">Cancelled</span></td>
+                                <td>Operator cancelled the run</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge text-bg-success">Completed</span></td>
+                                <td>All stages finished; code delivered (or staged for delivery)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p>
+                        Use <strong>Pause</strong> to request a graceful pause after the current stage. Use
+                        <strong>Cancel</strong> to
+                        immediately end a queued or running run.
+                    </p>
+                    <h3>Evidence and telemetry</h3>
+                    <p>
+                        Each completed stage records structured <strong>evidence</strong>: artifacts produced, policy
+                        reasoning, gate outcomes,
+                        and model usage. Expand the evidence ledger on the Run Room to review what each agent recorded.
+                        Token usage and
+                        estimated cost are summarised at the top of the ledger.
+                    </p>
+                </section>
+
+                <hr />
+
+                <section id="stops">
+                    <h2>03 &mdash; Handling stops and failures</h2>
+                    <p>
+                        When a run lands in <strong>Stopped</strong> or <strong>Failed</strong> state, the Run Room shows a
+                        stop diagnostic
+                        with the reason and suggested recovery path.
+                    </p>
+                    <h3>Recovery options</h3>
+                    <dl class="row">
+                        <dt class="col-sm-3">Continue</dt>
+                        <dd class="col-sm-9">
+                            Requeues the run from where it left off. Use this after a transient failure, after resolving a
+                            pending approval,
+                            or after the underlying issue has been corrected. Not available if approvals are pending or
+                            rejected.
+                        </dd>
+                        <dt class="col-sm-3">Retry Stage</dt>
+                        <dd class="col-sm-9">
+                            Restarts the run from a specific stage you choose. Useful when you want to re-run just one stage
+                            with a different
+                            model or after manually fixing a blocking problem. You can also change the model and stage
+                            timeout at retry time.
+                            Limited by <strong>Max Stage Retries</strong> (configurable, default&nbsp;3).
+                        </dd>
+                        <dt class="col-sm-3">Rework from Review</dt>
+                        <dd class="col-sm-9">
+                            Only available when the run stopped or failed during the review stage. Restarts from
+                            <strong>implement</strong>
+                            on the existing branch and PR, so the agent addresses review feedback without opening a new PR.
+                        </dd>
+                    </dl>
+                    <h3>Triage STOP</h3>
+                    <p>
+                        Triage returns STOP when it considers the issue unsuitable to proceed &mdash; a duplicate, out of
+                        scope, or needing
+                        human clarification. Read the triage comment on the GitHub issue, resolve the underlying problem,
+                        then use
+                        <strong>Continue</strong> to requeue if appropriate.
+                    </p>
+                </section>
+
+                <hr />
+
+                <section id="approvals">
+                    <h2>04 &mdash; Human approvals</h2>
+                    <p>
+                        Certain pipeline policy profiles include human approval gates. When a gate fires, the run pauses and
+                        an approval card
+                        appears in the Run Room.
+                    </p>
+                    <dl class="row">
+                        <dt class="col-sm-3">Approve</dt>
+                        <dd class="col-sm-9">
+                            Records the approval with an optional reason note. The run does <em>not</em> resume
+                            automatically &mdash;
+                            click <strong>Resume</strong> on the approved card to requeue the run at the designated resume
+                            stage.
+                        </dd>
+                        <dt class="col-sm-3">Reject</dt>
+                        <dd class="col-sm-9">
+                            Records the rejection and stops the run. The rejection reason is stored in the evidence ledger.
+                            Use
+                            <strong>Retry Stage</strong> or <strong>Rework from Review</strong> after addressing the
+                            rejection feedback.
+                        </dd>
+                        <dt class="col-sm-3">Resume</dt>
+                        <dd class="col-sm-9">
+                            Available after an approval is recorded. Requeues the run from the approval's target stage.
+                        </dd>
+                    </dl>
+                </section>
+
+                <hr />
+
+                <section id="reset">
+                    <h2>05 &mdash; Reset Mission</h2>
+                    <p>
+                        <strong>Reset Mission</strong> is a destructive cleanup action that removes all traces of a
+                        Cyberpilot run from the
+                        issue, repository, and database. Use it when you want a completely clean slate.
+                    </p>
+                    <p>It performs all of the following in one step:</p>
+                    <ul>
+                        <li>Removes all <code>sdk/*</code> labels from the GitHub issue</li>
+                        <li>Deletes all Cyberpilot agent comments from the issue</li>
+                        <li>Deletes the feature branch (local and remote) if it can be found</li>
+                        <li>Removes the pipeline run record from the database</li>
+                    </ul>
+                    <div class="alert alert-warning" role="alert">
+                        <strong>Not available</strong> for runs that have already been delivered (PR merged). Merged code
+                        history is preserved intentionally.
+                    </div>
+                    <p>
+                        After reset, the issue is back to its original state. You can launch a new Cyberpilot run
+                        immediately if desired.
+                    </p>
+                </section>
+
+            </div>
+        </article>
+    </section>

@@ -1,0 +1,352 @@
+@{
+    ViewData["Title"] = "Architecture";
+}
+
+<section class="guide-viewport">
+    <aside class="command-rail guide-rail">
+        <p class="eyebrow">Technical Reference</p>
+        <h1>Architecture</h1>
+        <p class="guide-summary">How the pipeline engine, agents, evidence, and policy system fit together.</p>
+        <nav class="guide-mode-nav" aria-label="Info pages">
+            <a asp-controller="Info" asp-action="Usage" class="btn btn-outline-primary">Usage</a>
+            <a asp-controller="Info" asp-action="Architecture" class="btn btn-primary">Architecture</a>
+            <a asp-controller="Info" asp-action="Admin" class="btn btn-outline-primary">Admin</a>
+        </nav>
+        <nav class="guide-mode-nav mt-3" aria-label="Jump to section" style="flex-direction:column;gap:.4rem;">
+            <a href="#pipeline" class="nav-link text-start p-0 small">01 · Pipeline model</a>
+            <a href="#stages" class="nav-link text-start p-0 small">02 · Stages &amp; agents</a>
+            <a href="#definitions" class="nav-link text-start p-0 small">03 · Pipeline definitions</a>
+            <a href="#profiles" class="nav-link text-start p-0 small">04 · Policy profiles</a>
+            <a href="#evidence" class="nav-link text-start p-0 small">05 · Evidence model</a>
+            <a href="#states" class="nav-link text-start p-0 small">06 · Run states</a>
+        </nav>
+    </aside>
+
+    <article class="guide-content-wrap">
+        <div class="guide-content">
+
+            <section id="pipeline">
+                <h2>01 &mdash; Pipeline model</h2>
+                <p>
+                    Cyberpilot runs an issue through a <strong>pipeline</strong>: an ordered sequence of AI-driven
+                    stages connected by
+                    explicit transitions. The default pipeline is:
+                </p>
+                <ol class="pipeline-track orbital-track" style="margin-bottom:1.5rem;">
+                    <li><span>01</span><strong>Triage</strong><small>detective</small></li>
+                    <li><span>02</span><strong>Plan</strong><small>architect</small></li>
+                    <li><span>03</span><strong>Implement</strong><small>engineer</small></li>
+                    <li><span>04</span><strong>Review</strong><small>quality gate</small></li>
+                    <li><span>05</span><strong>Docs</strong><small>archivist</small></li>
+                    <li><span>06</span><strong>Deliver</strong><small>flight lead</small></li>
+                </ol>
+                <p>
+                    Each stage produces a <strong>stage result</strong> with a decision verdict (<code>GO</code>,
+                    <code>approved</code>,
+                    <code>changes_requested</code>, <code>STOP</code>, etc.). The pipeline engine reads the verdict and
+                    follows the
+                    pre-defined transition graph to determine the next stage &mdash; or to halt cleanly.
+                </p>
+                <p>
+                    The review stage can loop back to implement (<code>changes_requested</code> transition) allowing the
+                    agent to
+                    address review feedback on the same branch and PR before returning to review.
+                </p>
+            </section>
+
+            <hr />
+
+            <section id="stages">
+                <h2>02 &mdash; Stages &amp; agents</h2>
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>Stage</th>
+                            <th>Agent role</th>
+                            <th>Primary artifact</th>
+                            <th>SDK label</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Triage</strong></td>
+                            <td>Tech-noir detective &mdash; classifies the issue, checks for duplicates, and decides
+                                whether to proceed</td>
+                                <td>Triage comment on the GitHub issue</td>
+                                <td><code>sdk/triage</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Plan</strong></td>
+                                <td>Architect &mdash; researches the codebase and produces a file-level implementation plan
+                                </td>
+                                <td>Plan comment and feature branch</td>
+                                <td><code>sdk/planning</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Implement</strong></td>
+                                <td>Engineer &mdash; applies the plan, runs tests, and opens a pull request</td>
+                                <td>Commits and pull request</td>
+                                <td><code>sdk/implementing</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Review</strong></td>
+                                <td>Quality gate &mdash; reviews architecture, security, quality, tests, docs, and build
+                                    health</td>
+                                    <td>PR review verdict (<code>approved</code> or <code>changes_requested</code>)</td>
+                                    <td><code>sdk/review</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Docs</strong></td>
+                                    <td>Archivist &mdash; updates XML comments, Markdown docs, and human verification notes</td>
+                                    <td>Documentation commit and issue comment</td>
+                                    <td><code>sdk/docs</code></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Deliver</strong></td>
+                                    <td>Flight lead &mdash; merges the approved PR, deletes the branch, posts a landing report
+                                    </td>
+                                    <td>Merged PR and landing report</td>
+                                    <td><code>sdk/delivering</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p>
+                            Each stage agent is defined by a prompt file (<code>*.agent.md</code>) that lives in the
+                            repository's
+                            <code>.github/agents/</code> folder. The SDK injects the pipeline context, policy profile, contract
+                            version,
+                            and required artifact shape into each stage at runtime.
+                        </p>
+                    </section>
+
+                    <hr />
+
+                    <section id="definitions">
+                        <h2>03 &mdash; Pipeline definitions</h2>
+                        <p>
+                            A <strong>pipeline definition</strong> specifies which stages run, in what order, and what
+                            transitions are allowed.
+                            Cyberpilot ships three built-in definitions:
+                        </p>
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Definition</th>
+                                    <th>Stages</th>
+                                    <th>Use case</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>cyberpilot-default</code></td>
+                                    <td>triage → plan → implement → review → docs → deliver</td>
+                                    <td>Full issue-to-PR SDLC workflow</td>
+                                </tr>
+                                <tr>
+                                    <td><code>bugfix</code></td>
+                                    <td>plan → implement → review → deliver</td>
+                                    <td>Focused fixes where triage and docs are unnecessary</td>
+                                </tr>
+                                <tr>
+                                    <td><code>docs-only</code></td>
+                                    <td>docs → deliver</td>
+                                    <td>Documentation-only changes and landing reports</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p>
+                            Each stage in a definition declares a <strong>stage contract</strong>: the set of required artifacts
+                            the agent must
+                            produce. The engine validates the contract after the stage completes; missing required artifacts
+                            trigger a gate failure
+                            under <code>standard</code> and <code>strict</code> profiles.
+                        </p>
+                    </section>
+
+                    <hr />
+
+                    <section id="profiles">
+                        <h2>04 &mdash; Policy profiles</h2>
+                        <p>
+                            A <strong>policy profile</strong> controls how strictly deterministic gates are enforced and what
+                            information is
+                            injected into stage prompts. Profiles are advisory at <code>lenient</code> and progressively more
+                            blocking toward
+                            <code>security-critical</code>.
+                        </p>
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Profile</th>
+                                    <th>Behaviour</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>lenient</code></td>
+                                    <td>Gates are advisory; blocking failures are reported but do not stop the pipeline. Good
+                                        for exploration and low-risk changes.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>standard</code></td>
+                                        <td>Required artifacts and key gates are blocking. Recommended default for most teams.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>strict</code></td>
+                                        <td>All gates are blocking. Suitable for regulated or high-risk codebases.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>security-critical</code></td>
+                                        <td>Maximum enforcement with additional security-focused gates and mandatory human approval
+                                            at key checkpoints.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <p>
+                                    Gates can fire <strong>before</strong> or <strong>after</strong> a stage. Pre-stage gates check
+                                    preconditions
+                                    (e.g. model availability, branch writability). Post-stage gates validate artifacts and policy
+                                    rationale produced
+                                    by the agent.
+                                </p>
+                            </section>
+
+                            <hr />
+
+                            <section id="evidence">
+                                <h2>05 &mdash; Evidence model</h2>
+                                <p>
+                                    Every stage records structured <strong>evidence</strong> &mdash; a durable ledger of what the agent
+                                    saw, decided,
+                                    and produced. Evidence is retained with the run and visible in the Run Room evidence tab.
+                                </p>
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Kind</th>
+                                            <th>Source</th>
+                                            <th>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><code>stage-artifact</code></td>
+                                            <td>Stage result</td>
+                                            <td>Concrete artifacts produced by the agent: PR URL, branch name, plan comment, validation
+                                                summary, landing report</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>stage-evidence</code></td>
+                                                <td>Stage result</td>
+                                                <td>General evidence the agent observed or reasoned about</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>policy-rationale</code></td>
+                                                <td>Stage result</td>
+                                                <td>The agent's policy reasoning; surfaced in the Policy summary panel</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>gate-outcome</code></td>
+                                                <td>Gate runner</td>
+                                                <td>Pass or fail result of a deterministic gate check, with details</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>required-action</code></td>
+                                                <td>Gate runner</td>
+                                                <td>Corrective actions suggested by a gate failure</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>approval-request</code></td>
+                                                <td>Pipeline engine</td>
+                                                <td>A human approval gate request, with the pause reason and resume target stage</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>approval-decision</code></td>
+                                                <td>Operator action</td>
+                                                <td>The operator's approve or reject decision, with optional reason note</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>usage</code></td>
+                                                <td>Stage log</td>
+                                                <td>Model token consumption and estimated USD cost for the stage</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p>
+                                        The evidence ledger is the authoritative record of a run's compliance and quality journey. It is
+                                        never modified after
+                                        it is written &mdash; approval decisions are appended, not edited.
+                                    </p>
+                                </section>
+
+                                <hr />
+
+                                <section id="states">
+                                    <h2>06 &mdash; Run states</h2>
+                                    <p>
+                                        A pipeline run moves through states as the engine progresses. Understanding the state machine helps
+                                        diagnose
+                                        unexpected stops.
+                                    </p>
+                                    <table class="table table-sm align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>State</th>
+                                                <th>Terminal?</th>
+                                                <th>Description</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td><code>Queued</code></td>
+                                                <td>No</td>
+                                                <td>Waiting for the background worker to pick up the run</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>Running</code></td>
+                                                <td>No</td>
+                                                <td>A stage is actively executing</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>Pausing</code></td>
+                                                <td>No</td>
+                                                <td>Pause requested; will stop after the current stage finishes</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>Paused</code></td>
+                                                <td>Resumable</td>
+                                                <td>Stopped gracefully between stages after a pause request</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>Stopped</code></td>
+                                                <td>Resumable</td>
+                                                <td>Pipeline halted intentionally: triage STOP, gate failure, or review rejection</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>Failed</code></td>
+                                                <td>Resumable</td>
+                                                <td>Unexpected error during stage execution; see stage log for details</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>Cancelled</code></td>
+                                                <td>Resumable</td>
+                                                <td>Operator cancelled the run via the Run Room</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>Completed</code></td>
+                                                <td>Yes</td>
+                                                <td>All stages finished; code delivered (or staged for delivery if SkipDeliver was set)</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <p>
+                                        Resumable states can be re-queued via <strong>Continue</strong>, <strong>Retry Stage</strong>, or
+                                        <strong>Resume</strong> (after an approval). Completed delivered runs are immutable &mdash; Reset
+                                        Mission is blocked
+                                        to protect merged code history.
+                                    </p>
+                                </section>
+
+                            </div>
+                        </article>
+                    </section>

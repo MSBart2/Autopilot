@@ -1,0 +1,49 @@
+@model Cyberpilot.Web.Models.PipelineAdminPolicyEditViewModel
+@{
+    ViewData["Title"] = string.IsNullOrWhiteSpace(Model.OriginalName) ? "New Policy" : $"Edit {Model.Name}";
+}
+
+<section class="guide-viewport" aria-labelledby="policy-editor-title">
+    <aside class="guide-rail">
+        <p class="eyebrow">Admin</p>
+        <h1 id="policy-editor-title">Policy Editor</h1>
+        <p class="rail-summary">Policy profiles name the strictness applied to custom pipeline definitions.</p>
+        <a class="btn btn-outline-info btn-sm" asp-action="Index">Back to admin</a>
+    </aside>
+
+    <div class="guide-content-wrap">
+        <form asp-action="SavePolicy" method="post" class="telemetry-panel">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="OriginalName" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label" asp-for="Name"></label>
+                    <input class="form-control" asp-for="Name" />
+                    <span class="text-danger small" asp-validation-for="Name"></span>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" asp-for="Strictness"></label>
+                    <select class="form-select" asp-for="Strictness">
+                        <option value="Lenient">Lenient</option>
+                        <option value="Standard">Standard</option>
+                        <option value="Strict">Strict</option>
+                        <option value="SecurityCritical">SecurityCritical</option>
+                    </select>
+                    <span class="text-danger small" asp-validation-for="Strictness"></span>
+                </div>
+                <div class="col-12">
+                    <label class="form-label" asp-for="Description"></label>
+                    <textarea class="form-control" asp-for="Description" rows="4"></textarea>
+                    <span class="text-danger small" asp-validation-for="Description"></span>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 justify-content-end mt-4">
+                <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
+                <button class="btn btn-primary" type="submit">Save policy</button>
+            </div>
+        </form>
+    </div>
+</section>

@@ -109,6 +109,7 @@ public class PipelinesControllerTests
             connectionStore,
             new MemoryCache(new MemoryCacheOptions()),
             Microsoft.Extensions.Options.Options.Create(webOptions ?? new CyberpilotWebOptions { Repository = "rbmathis/Cyberpilot" }),
+            new TestPipelineDefinitionAdminStore(),
             NullLogger<PipelinesController>.Instance);
         controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
         controller.TempData = new TempDataDictionary(controller.HttpContext, new TestTempDataProvider());
@@ -1354,6 +1355,38 @@ public class PipelinesControllerTests
 
         public RepositoryConnection? Get(string? id)
             => id is not null && connections.TryGetValue(id, out var connection) ? connection : null;
+    }
+
+    private sealed class TestPipelineDefinitionAdminStore : IPipelineDefinitionAdminStore
+    {
+        public string DefinitionFilePath => Path.Combine(Path.GetTempPath(), "pipeline-definitions-test.json");
+
+        public Task<PipelineDefinitionAdminFile> ReadAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(PipelineDefinitionAdminFile.Empty);
+
+        public Task SaveDefinitionAsync(PipelineAdminDefinitionEditViewModel model, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task DeleteDefinitionAsync(string name, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task SavePolicyAsync(PipelineAdminPolicyEditViewModel model, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task DeletePolicyAsync(string name, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<PipelineDefinitionOptionViewModel>> GetDefinitionOptionsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<PipelineDefinitionOptionViewModel>>([]);
+
+        public Task<IReadOnlyList<PipelinePolicyOptionViewModel>> GetPolicyOptionsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<PipelinePolicyOptionViewModel>>([]);
+
+        public Task<PipelineAdminDefinition?> FindDefinitionAsync(string name, CancellationToken cancellationToken = default)
+            => Task.FromResult<PipelineAdminDefinition?>(null);
+
+        public Task<PipelineAdminPolicyProfile?> FindPolicyAsync(string name, CancellationToken cancellationToken = default)
+            => Task.FromResult<PipelineAdminPolicyProfile?>(null);
     }
 
     private sealed class TestEnvironment : IWebHostEnvironment

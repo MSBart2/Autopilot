@@ -5,7 +5,6 @@ using Cyberpilot.Persistence;
 using Cyberpilot.Pipeline;
 using Cyberpilot.Web.Models;
 using Cyberpilot.Web.Services;
-using Markdig;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -17,33 +16,8 @@ namespace Cyberpilot.Web.Controllers;
 /// Displays the Cyberpilot pipeline modes, stages, and implementation assets.
 /// </summary>
 [Route("[controller]")]
-public class PipelinesController : Controller
+public partial class PipelinesController : Controller
 {
-    private static readonly string[] AgentCommentMarkers =
-    [
-        "## 🕵️ Case File",
-        "## 🎯 The Playbook",
-        "## 🚀 Mission Control — Landing Report",
-        "SDK Cyberpilot branch ready:",
-        "Planning Started",
-        "Research Complete",
-        "Branch Ready",
-        "build-complete",
-        "human verification",
-    ];
-
-    private static readonly IReadOnlyDictionary<string, GuideDefinition> GuideFiles = new Dictionary<string, GuideDefinition>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["local"] = new("AI-SDLC.md", "Local", "Controller Session", "VS Code Copilot Chat or Copilot CLI orchestration with repository agents.", "Local Mode"),
-        ["cloud"] = new("AI-SDLC.md", "Cloud", "Actions Orbit", "GitHub Agentic Workflow automation with review and finish gates.", "Cloud Mode"),
-        ["sdk"] = new("AI-SDLC.md", "SDK", "Web Dispatch", "Programmatic Copilot SDK execution for repeatable issue-to-PR workflows.", "SDK Mode")
-    };
-
-    private static readonly MarkdownPipeline GuideMarkdownPipeline = new MarkdownPipelineBuilder()
-        .UseAdvancedExtensions()
-        .DisableHtml()
-        .Build();
-
     private readonly CyberpilotDbContext _dbContext;
     private readonly IWebHostEnvironment _environment;
     private readonly ICyberpilotRunQueue _queue;
@@ -53,8 +27,9 @@ public class PipelinesController : Controller
     private readonly IMemoryCache _cache;
     private readonly CyberpilotWebOptions _options;
     private readonly ILogger<PipelinesController> _logger;
-
-    private static readonly TimeSpan IssueCacheTtl = TimeSpan.FromMinutes(30);
+    private readonly RepositoryConfigurationHelper _configHelper;
+    private readonly PipelineIssuesViewBuilder _viewBuilder;
+    private readonly IPipelineDefinitionAdminStore _pipelineAdminStore;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PipelinesController"/> class.
@@ -67,6 +42,7 @@ public class PipelinesController : Controller
     /// <param name="connectionStore">Short-lived repository credential store.</param>
     /// <param name="cache">In-memory cache for GitHub API responses.</param>
     /// <param name="options">Pipeline web options.</param>
+    /// <param name="pipelineAdminStore">Editable pipeline definition store.</param>
     /// <param name="logger">Controller logger.</param>
     public PipelinesController(
         CyberpilotDbContext dbContext,
@@ -77,6 +53,7 @@ public class PipelinesController : Controller
         IRepositoryConnectionStore connectionStore,
         IMemoryCache cache,
         IOptions<CyberpilotWebOptions> options,
+        IPipelineDefinitionAdminStore pipelineAdminStore,
         ILogger<PipelinesController> logger)
     {
         _dbContext = dbContext;
@@ -87,7 +64,10 @@ public class PipelinesController : Controller
         _connectionStore = connectionStore;
         _cache = cache;
         _options = options.Value;
+        _pipelineAdminStore = pipelineAdminStore;
         _logger = logger;
+        _configHelper = new RepositoryConfigurationHelper(_options, environment, logger);
+        _viewBuilder = new PipelineIssuesViewBuilder(_dbContext, cache, _configHelper, _options, pipelineAdminStore);
     }
 
     /// <summary>
@@ -103,7 +83,7 @@ public class PipelinesController : Controller
             .AsNoTracking()
             .ToArrayAsync();
 
-        return View(BuildDashboard(runs));
+        return View(PipelineIssuesViewBuilder.BuildDashboard(runs));
     }
 
     /// <summary>
@@ -115,7 +95,7 @@ public class PipelinesController : Controller
     {
         try
         {
-            if (TryGetDefaultConfiguredRepository(out var configuredRepository))
+            if (_configHelper.TryGetDefaultConfiguredRepository(out var configuredRepository))
             {
                 return await LoadIssuesViewAsync(configuredRepository.Repository, configuredRepository.Repository, configuredRepository.RepoRoot, configuredRepository.Token);
             }
@@ -124,15 +104,15 @@ public class PipelinesController : Controller
                 $"issues:list:{_options.Repository}",
                 async entry =>
                 {
-                    entry.AbsoluteExpirationRelativeToNow = IssueCacheTtl;
+                    entry.AbsoluteExpirationRelativeToNow = PipelineIssuesViewBuilder.IssueCacheTtl;
                     return await _issueClient.ListOpenIssuesAsync(HttpContext.RequestAborted);
                 }) ?? [];
-            return View(await BuildIssuesViewModelAsync(issues, _options.Repository, _options.Repository, null, null));
+            return View(await _viewBuilder.BuildIssuesViewModelAsync(issues, _options.Repository, _options.Repository, null, null, HttpContext.RequestAborted));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to load GitHub issues for Cyberpilot dashboard.");
-            return View(await BuildIssuesViewModelAsync([], _options.Repository, _options.Repository, null, ex.Message));
+            return View(await _viewBuilder.BuildIssuesViewModelAsync([], _options.Repository, _options.Repository, null, ex.Message, HttpContext.RequestAborted));
         }
     }
 
@@ -147,17 +127,17 @@ public class PipelinesController : Controller
     {
         if (!ModelState.IsValid || !GitHubRepositoryParser.TryNormalize(request.RepositoryUrl, out var repository))
         {
-            return View(nameof(Issues), await BuildIssuesViewModelAsync([], _options.Repository, request.RepositoryUrl, null, "Enter a GitHub repository as owner/name or a github.com URL, plus a token."));
+            return View(nameof(Issues), await _viewBuilder.BuildIssuesViewModelAsync([], _options.Repository, request.RepositoryUrl, null, "Enter a GitHub repository as owner/name or a github.com URL, plus a token.", HttpContext.RequestAborted));
         }
 
         try
         {
-            return await LoadIssuesViewAsync(repository, request.RepositoryUrl, ResolveRepoRoot(_options.RepoRoot), request.Token);
+            return await LoadIssuesViewAsync(repository, request.RepositoryUrl, _configHelper.ResolveRepoRoot(_options.RepoRoot), request.Token);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to load GitHub issues for repository {Repository}.", repository);
-            return View(nameof(Issues), await BuildIssuesViewModelAsync([], repository, request.RepositoryUrl, null, ex.Message));
+            return View(nameof(Issues), await _viewBuilder.BuildIssuesViewModelAsync([], repository, request.RepositoryUrl, null, ex.Message, HttpContext.RequestAborted));
         }
     }
 
@@ -172,9 +152,9 @@ public class PipelinesController : Controller
     {
         if (!ModelState.IsValid
             || !GitHubRepositoryParser.TryNormalize(request.Repository, out var repository)
-            || !TryGetConfiguredRepository(repository, out var configuredRepository))
+            || !_configHelper.TryGetConfiguredRepository(repository, out var configuredRepository))
         {
-            return View(nameof(Issues), await BuildIssuesViewModelAsync([], _options.Repository, request.Repository, null, "Select a configured repository that has a token."));
+            return View(nameof(Issues), await _viewBuilder.BuildIssuesViewModelAsync([], _options.Repository, request.Repository, null, "Select a configured repository that has a token.", HttpContext.RequestAborted));
         }
 
         try
@@ -184,7 +164,7 @@ public class PipelinesController : Controller
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to load GitHub issues for configured repository {Repository}.", configuredRepository.Repository);
-            return View(nameof(Issues), await BuildIssuesViewModelAsync([], configuredRepository.Repository, configuredRepository.Repository, null, ex.Message));
+            return View(nameof(Issues), await _viewBuilder.BuildIssuesViewModelAsync([], configuredRepository.Repository, configuredRepository.Repository, null, ex.Message, HttpContext.RequestAborted));
         }
     }
 
@@ -232,7 +212,7 @@ public class PipelinesController : Controller
         IReadOnlyList<string> labels = [];
         try
         {
-            var issueClient = TryGetConfiguredRepository(run.Repository, out var configuredRepository)
+            var issueClient = _configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository)
                 ? _issueClientFactory.Create(configuredRepository.Repository, configuredRepository.Token)
                 : _issueClient;
 
@@ -240,7 +220,7 @@ public class PipelinesController : Controller
                 $"issue:{run.Repository}:{run.IssueNumber}",
                 async entry =>
                 {
-                    entry.AbsoluteExpirationRelativeToNow = IssueCacheTtl;
+                    entry.AbsoluteExpirationRelativeToNow = PipelineIssuesViewBuilder.IssueCacheTtl;
                     return await issueClient.GetIssueAsync(run.IssueNumber, HttpContext.RequestAborted);
                 });
             labels = issue?.Labels ?? [];
@@ -288,13 +268,15 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Issues));
         }
 
-        if (!BuiltInPipelineCatalog.TryGetDefinition(request.PipelineDefinitionName, out var definition))
+        var customDefinition = await _pipelineAdminStore.FindDefinitionAsync(request.PipelineDefinitionName, HttpContext.RequestAborted);
+        if (!BuiltInPipelineCatalog.TryGetDefinition(request.PipelineDefinitionName, out var definition) && customDefinition is null)
         {
             TempData["PipelineError"] = $"Unsupported pipeline definition '{request.PipelineDefinitionName}'. Available definitions: {BuiltInPipelineCatalog.AvailableDefinitionNames}.";
             return RedirectToAction(nameof(Issues));
         }
 
-        if (!BuiltInPipelineCatalog.TryGetPolicyProfile(request.PolicyProfileName, out var policyProfile))
+        PolicyProfileMetadata? policyProfile = null;
+        if (customDefinition is null && !BuiltInPipelineCatalog.TryGetPolicyProfile(request.PolicyProfileName, out policyProfile))
         {
             TempData["PipelineError"] = $"Unsupported policy profile '{request.PolicyProfileName}'. Available profiles: {BuiltInPipelineCatalog.AvailablePolicyProfileNames}.";
             return RedirectToAction(nameof(Issues));
@@ -308,7 +290,7 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Issues));
         }
 
-        var repoRoot = connection?.RepoRoot ?? ResolveRepoRoot(_options.RepoRoot);
+        var repoRoot = connection?.RepoRoot ?? _configHelper.ResolveRepoRoot(_options.RepoRoot);
 
         var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(run =>
             run.Repository == repository && run.IssueNumber == request.IssueNumber && (run.Status == "Queued" || run.Status == "Running" || run.Status == "Pausing"));
@@ -322,7 +304,7 @@ public class PipelinesController : Controller
         string? issueTitle = null;
         try
         {
-            var issueClient = TryGetConfiguredRepository(repository, out var configuredRepo)
+            var issueClient = _configHelper.TryGetConfiguredRepository(repository, out var configuredRepo)
                 ? _issueClientFactory.Create(configuredRepo.Repository, configuredRepo.Token)
                 : _issueClient;
             var issue = await issueClient.GetIssueAsync(request.IssueNumber, HttpContext.RequestAborted);
@@ -344,9 +326,9 @@ public class PipelinesController : Controller
             StageTimeoutMinutes = request.StageTimeoutMinutes,
             AllowMissingDocs = request.AllowMissingDocs,
             IssueTitle = issueTitle,
-            PipelineDefinitionName = definition!.Name,
-            PipelineDefinitionVersion = definition.Version,
-            PolicyProfileName = policyProfile!.Name,
+            PipelineDefinitionName = definition?.Name ?? customDefinition!.Name,
+            PipelineDefinitionVersion = definition?.Version ?? customDefinition!.Version,
+            PolicyProfileName = customDefinition?.PolicyProfile.Name ?? policyProfile!.Name,
             ContractVersion = PipelineDefinitionDefaults.ContractVersion,
         };
 
@@ -412,9 +394,9 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var repoRoot = ResolveRepoRoot(_options.RepoRoot);
+        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
         string? token = null;
-        if (TryGetConfiguredRepository(run.Repository, out var configuredRepository))
+        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
         {
             repoRoot = configuredRepository.RepoRoot;
             token = configuredRepository.Token;
@@ -452,7 +434,7 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        if (!await IsReviewReworkCandidateAsync(run))
+        if (!await PipelineRunPredicates.IsReviewReworkCandidateAsync(run, _dbContext))
         {
             TempData["PipelineError"] = "Rework from Review is only available for stopped or failed review runs.";
             return RedirectToAction(nameof(Details), new { id });
@@ -469,9 +451,9 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var repoRoot = ResolveRepoRoot(_options.RepoRoot);
+        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
         string? token = null;
-        if (TryGetConfiguredRepository(run.Repository, out var configuredRepository))
+        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
         {
             repoRoot = configuredRepository.RepoRoot;
             token = configuredRepository.Token;
@@ -559,9 +541,9 @@ public class PipelinesController : Controller
             run.StageTimeoutMinutes = request.StageTimeoutMinutes.Value;
         }
 
-        var repoRoot = ResolveRepoRoot(_options.RepoRoot);
+        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
         string? token = null;
-        if (TryGetConfiguredRepository(run.Repository, out var configuredRepository))
+        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
         {
             repoRoot = configuredRepository.RepoRoot;
             token = configuredRepository.Token;
@@ -601,9 +583,9 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var repoRoot = ResolveRepoRoot(_options.RepoRoot);
+        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
         string? token = null;
-        if (TryGetConfiguredRepository(run.Repository, out var configuredRepository))
+        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
         {
             repoRoot = configuredRepository.RepoRoot;
             token = configuredRepository.Token;
@@ -619,7 +601,7 @@ public class PipelinesController : Controller
 
         await EnqueueRunAsync(run, repoRoot, token);
 
-        TempData["PipelineNotice"] = "Delivery stage initiated — the PR will be merged.";
+        TempData["PipelineNotice"] = "Delivery stage initiated ΓÇö the PR will be merged.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -644,15 +626,15 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        if (IsDeliveredRun(run))
+        if (PipelineRunPredicates.IsDeliveredRun(run))
         {
             TempData["PipelineError"] = "Reset Mission is not available after the code has been delivered.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var repoRoot = ResolveRepoRoot(_options.RepoRoot);
+        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
         string? token = null;
-        if (TryGetConfiguredRepository(run.Repository, out var configuredRepository))
+        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
         {
             repoRoot = configuredRepository.RepoRoot;
             token = configuredRepository.Token;
@@ -664,15 +646,15 @@ public class PipelinesController : Controller
         try
         {
             var issue = await issueClient.GetIssueAsync(run.IssueNumber, HttpContext.RequestAborted);
-            await ResetIssueLabelsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
-            var deletedComments = await DeleteAgentCommentsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
+            await GitHubIssueHelper.ResetIssueLabelsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
+            var deletedComments = await GitHubIssueHelper.DeleteAgentCommentsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
             var branchName = run.BranchName;
             if (string.IsNullOrWhiteSpace(branchName))
             {
                 branchName = BranchProvisioner.CreateBranchName(run.IssueNumber, issue?.Title ?? $"issue-{run.IssueNumber}");
             }
 
-            var branchDeleted = await DeleteIssueBranchAsync(repoRoot, branchName, HttpContext.RequestAborted);
+            var branchDeleted = await GitHelper.DeleteIssueBranchAsync(repoRoot, branchName, HttpContext.RequestAborted);
 
             TempData["PipelineNotice"] = branchDeleted
                 ? $"Mission reset. Removed {deletedComments} agent comment(s), cleared SDK stage labels, and deleted branch {branchName}."
@@ -735,7 +717,7 @@ public class PipelinesController : Controller
         {
             run.Status = "Pausing";
             await _dbContext.SaveChangesAsync();
-            TempData["PipelineNotice"] = "Pause requested — the pipeline will pause after the current stage completes.";
+            TempData["PipelineNotice"] = "Pause requested ΓÇö the pipeline will pause after the current stage completes.";
         }
         else
         {
@@ -801,7 +783,7 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        if (IsDeliveredRun(run))
+        if (PipelineRunPredicates.IsDeliveredRun(run))
         {
             TempData["PipelineError"] = "Delivered runs cannot be altered.";
             return RedirectToAction(nameof(Details), new { id });
@@ -836,9 +818,9 @@ public class PipelinesController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        var repoRoot = ResolveRepoRoot(_options.RepoRoot);
+        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
         string? token = null;
-        if (TryGetConfiguredRepository(run.Repository, out var configuredRepository))
+        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
         {
             repoRoot = configuredRepository.RepoRoot;
             token = configuredRepository.Token;
@@ -926,119 +908,12 @@ public class PipelinesController : Controller
     [HttpGet("Guide/{mode:alpha}")]
     public IActionResult Guide(string mode)
     {
-        if (!GuideFiles.TryGetValue(mode, out var guide))
+        if (!PipelineGuideHelper.TryRenderGuide(mode, _environment.ContentRootPath, out var viewModel))
         {
             return NotFound();
         }
 
-        var repositoryRoot = Path.GetFullPath(Path.Combine(_environment.ContentRootPath, ".."));
-        var fullPath = Path.GetFullPath(Path.Combine(repositoryRoot, guide.FileName));
-        if (!fullPath.StartsWith(repositoryRoot, StringComparison.Ordinal) || !System.IO.File.Exists(fullPath))
-        {
-            return NotFound();
-        }
-
-        var markdown = System.IO.File.ReadAllText(fullPath);
-        var modeMarkdown = ExtractModeContent(markdown, guide.SectionHeading);
-        var html = Markdown.ToHtml(modeMarkdown, GuideMarkdownPipeline);
-        return View(new PipelineGuideViewModel(
-            Mode: guide.Mode,
-            Title: guide.Title,
-            Summary: guide.Summary,
-            HtmlContent: html,
-            SourceFileName: guide.FileName));
-    }
-
-    private static string ExtractModeContent(string markdown, string sectionHeading)
-    {
-        var normalized = markdown.Replace("\r\n", "\n", StringComparison.Ordinal);
-        var lines = normalized.Split('\n');
-
-        var introLines = new List<string>();
-        var firstSectionIndex = Array.FindIndex(lines, line => line.StartsWith("## ", StringComparison.Ordinal));
-        var introEnd = firstSectionIndex >= 0 ? firstSectionIndex : lines.Length;
-        for (var index = 0; index < introEnd; index++)
-        {
-            introLines.Add(lines[index]);
-        }
-
-        var modeLines = ExtractSection(lines, sectionHeading);
-        if (modeLines.Count == 0)
-        {
-            modeLines = lines.ToList();
-        }
-
-        var combined = string.Join('\n', introLines).TrimEnd();
-        if (modeLines.Count == 0)
-        {
-            return combined;
-        }
-
-        return string.Concat(combined, "\n\n---\n\n", string.Join('\n', modeLines).Trim());
-    }
-
-    private static List<string> ExtractSection(string[] lines, string sectionHeading)
-    {
-        var sectionTitle = $"## {sectionHeading}";
-        var sectionLines = new List<string>();
-        var inSection = false;
-
-        foreach (var rawLine in lines)
-        {
-            var line = rawLine.TrimEnd();
-            if (!inSection)
-            {
-                if (line.Equals(sectionTitle, StringComparison.OrdinalIgnoreCase))
-                {
-                    inSection = true;
-                    sectionLines.Add(rawLine);
-                }
-
-                continue;
-            }
-
-            if (line.StartsWith("## ", StringComparison.Ordinal))
-            {
-                break;
-            }
-
-            sectionLines.Add(rawLine);
-        }
-
-        return sectionLines;
-    }
-
-    private static PipelineDashboardViewModel BuildDashboard(IReadOnlyList<PipelineRun> runs)
-    {
-        return new PipelineDashboardViewModel { Runs = runs };
-    }
-
-    private async Task<PipelineIssuesViewModel> BuildIssuesViewModelAsync(
-        IReadOnlyList<GitHubIssueSummary> issues,
-        string repository,
-        string repositoryInput,
-        string? connectionId,
-        string? error)
-    {
-        var recentRuns = await _dbContext.PipelineRuns
-            .AsNoTracking()
-            .Where(run => run.Repository == repository)
-            .OrderByDescending(run => run.CreatedAt)
-            .ToArrayAsync(HttpContext.RequestAborted);
-
-        var latestRunsByIssue = recentRuns
-            .GroupBy(run => run.IssueNumber)
-            .Select(group => group.First())
-            .ToArray();
-
-        var sdkActiveIssueNumbers = latestRunsByIssue
-            .Where(run => run.Status is "Queued" or "Running" or "Pausing")
-            .Select(run => run.IssueNumber)
-            .ToHashSet();
-
-        var latestSdkRunIds = latestRunsByIssue.ToDictionary(run => run.IssueNumber, run => run.Id);
-
-        return new PipelineIssuesViewModel(issues, repository, repositoryInput, connectionId, error, GetConfiguredRepositoryChoices(), sdkActiveIssueNumbers, latestSdkRunIds);
+        return View(viewModel);
     }
 
     private async Task<IActionResult> LoadIssuesViewAsync(string repository, string repositoryInput, string repoRoot, string token)
@@ -1048,122 +923,11 @@ public class PipelinesController : Controller
             $"issues:list:{repository}",
             async entry =>
             {
-                entry.AbsoluteExpirationRelativeToNow = IssueCacheTtl;
+                entry.AbsoluteExpirationRelativeToNow = PipelineIssuesViewBuilder.IssueCacheTtl;
                 return await client.ListOpenIssuesAsync(HttpContext.RequestAborted);
             }) ?? [];
         var connectionId = _connectionStore.Save(repository, repoRoot, token);
-        return View(nameof(Issues), await BuildIssuesViewModelAsync(issues, repository, repositoryInput, connectionId, null));
-    }
-
-    private static async Task ResetIssueLabelsAsync(IGitHubIssueClient issueClient, int issueNumber, CancellationToken cancellationToken)
-    {
-        var labels = await issueClient.GetIssueLabelsAsync(issueNumber, cancellationToken);
-        foreach (var label in labels.Where(label => label.StartsWith("sdk/", StringComparison.OrdinalIgnoreCase)))
-        {
-            await issueClient.RemoveIssueLabelAsync(issueNumber, label, cancellationToken);
-        }
-
-        if (!labels.Contains("sdk", StringComparer.OrdinalIgnoreCase))
-        {
-            await issueClient.AddIssueLabelAsync(issueNumber, "sdk", cancellationToken);
-        }
-    }
-
-    private static async Task<int> DeleteAgentCommentsAsync(IGitHubIssueClient issueClient, int issueNumber, CancellationToken cancellationToken)
-    {
-        var comments = await issueClient.ListIssueCommentsAsync(issueNumber, cancellationToken);
-        var deleted = 0;
-        foreach (var comment in comments.Where(comment => IsAgentComment(comment.Body)))
-        {
-            await issueClient.DeleteIssueCommentAsync(comment.Id, cancellationToken);
-            deleted++;
-        }
-
-        return deleted;
-    }
-
-    private static bool IsAgentComment(string body)
-        => AgentCommentMarkers.Any(marker => body.Contains(marker, StringComparison.OrdinalIgnoreCase));
-
-    private static bool IsDeliveredRun(PipelineRun run)
-        => run.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase) && !run.SkipDeliver;
-
-    private static async Task<bool> DeleteIssueBranchAsync(string repoRoot, string branchName, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(branchName) || !Directory.Exists(repoRoot))
-        {
-            return false;
-        }
-
-        var deletedRemote = await GitSucceedsAsync(repoRoot, ["push", "origin", "--delete", branchName], cancellationToken);
-        var currentBranch = (await RunGitAsync(repoRoot, ["branch", "--show-current"], true, cancellationToken)).Trim();
-        if (currentBranch.Equals(branchName, StringComparison.OrdinalIgnoreCase))
-        {
-            var defaultBranch = await ResolveDefaultBranchAsync(repoRoot, cancellationToken);
-            await GitSucceedsAsync(repoRoot, ["switch", defaultBranch], cancellationToken);
-        }
-
-        var deletedLocal = await GitSucceedsAsync(repoRoot, ["branch", "-D", branchName], cancellationToken);
-        return deletedRemote || deletedLocal;
-    }
-
-    private static async Task<string> ResolveDefaultBranchAsync(string repoRoot, CancellationToken cancellationToken)
-    {
-        var remoteHead = (await RunGitAsync(repoRoot, ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], true, cancellationToken)).Trim();
-        if (remoteHead.StartsWith("origin/", StringComparison.OrdinalIgnoreCase))
-        {
-            return remoteHead["origin/".Length..];
-        }
-
-        return "main";
-    }
-
-    private static async Task<bool> GitSucceedsAsync(string repoRoot, IReadOnlyList<string> args, CancellationToken cancellationToken)
-        => (await RunGitProcessAsync(repoRoot, args, true, cancellationToken)) == 0;
-
-    private static async Task<string> RunGitAsync(string repoRoot, IReadOnlyList<string> args, bool allowFailure, CancellationToken cancellationToken)
-    {
-        var (exitCode, output, error) = await RunGitProcessAsync(repoRoot, args, allowFailure, cancellationToken, captureOutput: true);
-        if (exitCode != 0 && !allowFailure)
-        {
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed with exit code {exitCode}: {error}");
-        }
-
-        return output;
-    }
-
-    private static async Task<int> RunGitProcessAsync(string repoRoot, IReadOnlyList<string> args, bool allowFailure, CancellationToken cancellationToken)
-    {
-        var (exitCode, _, error) = await RunGitProcessAsync(repoRoot, args, allowFailure, cancellationToken, captureOutput: false);
-        if (exitCode != 0 && !allowFailure)
-        {
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed with exit code {exitCode}: {error}");
-        }
-
-        return exitCode;
-    }
-
-    private static async Task<(int ExitCode, string Output, string Error)> RunGitProcessAsync(string repoRoot, IReadOnlyList<string> args, bool allowFailure, CancellationToken cancellationToken, bool captureOutput)
-    {
-        var startInfo = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = repoRoot,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-
-        foreach (var arg in args)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
-
-        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start git process.");
-        var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var error = await process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-
-        return (process.ExitCode, captureOutput ? output : string.Empty, error);
+        return View(nameof(Issues), await _viewBuilder.BuildIssuesViewModelAsync(issues, repository, repositoryInput, connectionId, null, HttpContext.RequestAborted));
     }
 
     private ValueTask EnqueueRunAsync(PipelineRun run, string repoRoot, string? token, string? retryReason = null)
@@ -1173,7 +937,7 @@ public class PipelinesController : Controller
             run.IssueNumber,
             run.Repository,
             repoRoot,
-            ResolveAgentPromptRoot(),
+            _configHelper.ResolveAgentPromptRoot(),
             string.IsNullOrWhiteSpace(token) ? null : token,
             run.Model,
             run.SkipDeliver,
@@ -1184,131 +948,7 @@ public class PipelinesController : Controller
             run.PipelineDefinitionVersion,
             run.PolicyProfileName,
             run.ContractVersion,
+            System.IO.File.Exists(_pipelineAdminStore.DefinitionFilePath) ? _pipelineAdminStore.DefinitionFilePath : null,
             string.IsNullOrWhiteSpace(retryReason) ? null : retryReason));
-    }
-
-    private async Task<bool> IsReviewReworkCandidateAsync(PipelineRun run)
-    {
-        if (run.IsRemote || run.Status is not ("Failed" or "Stopped"))
-        {
-            return false;
-        }
-
-        if (run.CurrentStage?.Equals("review", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            return true;
-        }
-
-        var latestBlockedStage = await _dbContext.PipelineStageLogs
-            .Where(log => log.RunId == run.Id && (log.Status == "STOP" || log.Status == "INVALID" || log.Status == "failed"))
-            .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
-            .Select(log => log.StageName)
-            .FirstOrDefaultAsync();
-
-        return latestBlockedStage?.Equals("review", StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    private IReadOnlyList<ConfiguredRepositoryViewModel> GetConfiguredRepositoryChoices()
-    {
-        return _options.Repositories
-            .Select(repository => TryBuildConfiguredRepository(repository, out var configured) ? configured : null)
-            .Where(repository => repository is not null)
-            .Select(repository => new ConfiguredRepositoryViewModel(
-                string.IsNullOrWhiteSpace(repository!.Name) ? repository.Repository : repository.Name,
-                repository.Repository,
-                repository.RepoRoot))
-            .DistinctBy(repository => repository.Repository, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private bool TryGetDefaultConfiguredRepository(out RuntimeConfiguredRepository repository)
-    {
-        repository = default!;
-        var configuredRepositories = _options.Repositories
-            .Select(option => TryBuildConfiguredRepository(option, out var configured) ? configured : null)
-            .Where(configured => configured is not null && !string.IsNullOrWhiteSpace(configured.Token))
-            .Cast<RuntimeConfiguredRepository>()
-            .ToArray();
-
-        if (configuredRepositories.Length == 0)
-        {
-            return false;
-        }
-
-        repository = configuredRepositories.FirstOrDefault(configured =>
-            configured.Repository.Equals(_options.Repository, StringComparison.OrdinalIgnoreCase))
-            ?? configuredRepositories[0];
-        return true;
-    }
-
-    private bool TryGetConfiguredRepository(string repository, out RuntimeConfiguredRepository configuredRepository)
-    {
-        configuredRepository = default!;
-        _logger.LogDebug("TryGetConfiguredRepository: Looking for {Repository} among {Count} configured repositories", repository, _options.Repositories.Count);
-        foreach (var option in _options.Repositories)
-        {
-            if (TryBuildConfiguredRepository(option, out var configured)
-                && configured.Repository.Equals(repository, StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(configured.Token))
-            {
-                _logger.LogDebug("TryGetConfiguredRepository: Found matching configured repository {ConfiguredRepo}", configured.Repository);
-                configuredRepository = configured;
-                return true;
-            }
-        }
-
-        _logger.LogDebug("TryGetConfiguredRepository: No matching configured repository found for {Repository}", repository);
-        return false;
-    }
-
-    private bool TryBuildConfiguredRepository(ConfiguredRepositoryOptions option, out RuntimeConfiguredRepository configuredRepository)
-    {
-        configuredRepository = default!;
-        if (!GitHubRepositoryParser.TryNormalize(option.Repository, out var repository))
-        {
-            return false;
-        }
-
-        configuredRepository = new RuntimeConfiguredRepository(option.Name, repository, ResolveRepoRoot(option.RepoRoot), option.Token);
-        return true;
-    }
-
-    private string ResolveRepoRoot(string? repoRoot)
-    {
-        var value = string.IsNullOrWhiteSpace(repoRoot) ? _options.RepoRoot : repoRoot;
-        return Path.GetFullPath(value);
-    }
-
-    private string ResolveAgentPromptRoot()
-    {
-        var value = string.IsNullOrWhiteSpace(_options.AgentPromptRoot)
-            ? Path.Combine(_environment.ContentRootPath, "..")
-            : _options.AgentPromptRoot;
-        return Path.GetFullPath(value);
-    }
-
-    private sealed record RuntimeConfiguredRepository(string Name, string Repository, string RepoRoot, string Token);
-
-    private sealed record GuideDefinition(string FileName, string Mode, string Title, string Summary, string SectionHeading);
-
-    private string? ResolveRemoteToken(string repository)
-    {
-        _logger.LogDebug("ResolveRemoteToken: Checking for configured repository {Repository}", repository);
-        if (TryGetConfiguredRepository(repository, out var configured) && !string.IsNullOrWhiteSpace(configured.Token))
-        {
-            _logger.LogInformation("ResolveRemoteToken: Found configured repository {Repository}", repository);
-            return configured.Token;
-        }
-
-        _logger.LogDebug("ResolveRemoteToken: {Repository} not found in configured repositories, checking environment variables", repository);
-        var envToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN") ?? Environment.GetEnvironmentVariable("GH_TOKEN");
-        if (!string.IsNullOrWhiteSpace(envToken))
-        {
-            _logger.LogInformation("ResolveRemoteToken: Found token in environment variables for {Repository}", repository);
-            return envToken;
-        }
-
-        _logger.LogWarning("ResolveRemoteToken: No token found for {Repository} in config or environment", repository);
-        return null;
     }
 }

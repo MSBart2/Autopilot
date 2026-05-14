@@ -1,0 +1,49 @@
+@model (Cyberpilot.Web.Models.PipelineAdminStageInputModel Stage, int Index)
+@{
+    var stage = Model.Item1;
+    var index = Model.Item2;
+    var prefix = index < 0 ? "Stages[__index__]" : $"Stages[{index}]";
+    var cardTitle = index < 0 ? "New stage" : $"Stage {index + 1}";
+}
+
+<article class="telemetry-panel pipeline-stage-editor" data-stage-card>
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+        <div>
+            <p class="eyebrow">@cardTitle</p>
+            <h3 class="h5 mb-0">@(string.IsNullOrWhiteSpace(stage.Name) ? "Stage" : stage.Name)</h3>
+        </div>
+        <button class="btn btn-outline-danger btn-sm" type="button" data-remove-stage>Remove</button>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" for="@(prefix).DisplayName">Display name</label>
+            <input class="form-control" id="@(prefix).DisplayName" name="@(prefix).DisplayName" value="@stage.DisplayName" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="@(prefix).Name">Stage key</label>
+            <input class="form-control" id="@(prefix).Name" name="@(prefix).Name" value="@stage.Name" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="@(prefix).PromptFile">Prompt file</label>
+            <input class="form-control" id="@(prefix).PromptFile" name="@(prefix).PromptFile" value="@stage.PromptFile" placeholder="docs.prompt.md" />
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="@(prefix).Label">Stage label</label>
+            <input class="form-control" id="@(prefix).Label" name="@(prefix).Label" value="@stage.Label" placeholder="sdk/docs" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="@(prefix).ContractVersion">Contract version</label>
+            <input class="form-control" id="@(prefix).ContractVersion" name="@(prefix).ContractVersion" value="@stage.ContractVersion" />
+        </div>
+        <div class="col-md-8">
+            <label class="form-label" for="@(prefix).RequiredArtifactsText">Required artifacts</label>
+            <input class="form-control" id="@(prefix).RequiredArtifactsText" name="@(prefix).RequiredArtifactsText" value="@stage.RequiredArtifactsText" placeholder="plan, tests, pull-request" />
+        </div>
+        <div class="col-12">
+            <label class="form-label" for="@(prefix).GatesText">Gates</label>
+            <textarea class="form-control font-monospace" id="@(prefix).GatesText" name="@(prefix).GatesText" rows="3" placeholder="model-available|BeforeStage|true&#10;review-approval|AfterStage|true">@stage.GatesText</textarea>
+            <div class="form-text text-secondary">One gate per line: name|BeforeStage or AfterStage|true or false.</div>
+        </div>
+    </div>
+</article>

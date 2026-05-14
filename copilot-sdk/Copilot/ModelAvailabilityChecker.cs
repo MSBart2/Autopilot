@@ -38,9 +38,9 @@ internal sealed class CopilotModelAvailabilityChecker : IModelAvailabilityChecke
 
             return ModelAvailabilityResult.Available;
         }
-        catch (Exception ex) when (IsModelUnavailable(ex))
+        catch (Exception ex) when (IsModelUnavailable(ex) || IsConnectivityError(ex))
         {
-            return ModelAvailabilityResult.Unavailable(ex.Message);
+            return ModelAvailabilityResult.Unavailable(BuildMessage(ex));
         }
     }
 
@@ -48,5 +48,41 @@ internal sealed class CopilotModelAvailabilityChecker : IModelAvailabilityChecke
     {
         return ex.Message.Contains("Model ", StringComparison.OrdinalIgnoreCase)
             && ex.Message.Contains("not available", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsConnectivityError(Exception ex)
+    {
+        var current = ex;
+        while (current is not null)
+        {
+            if (current is System.Net.Http.HttpRequestException
+                or System.IO.IOException
+                or System.Security.Authentication.AuthenticationException)
+            {
+                return true;
+            }
+
+            current = current.InnerException;
+        }
+
+        return false;
+    }
+
+    private static string BuildMessage(Exception ex)
+    {
+        var parts = new System.Text.StringBuilder();
+        var current = ex;
+        while (current is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(current.Message))
+            {
+                if (parts.Length > 0) parts.Append(" → ");
+                parts.Append(current.Message);
+            }
+
+            current = current.InnerException;
+        }
+
+        return parts.Length > 0 ? parts.ToString() : ex.Message;
     }
 }

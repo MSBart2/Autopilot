@@ -1,0 +1,114 @@
+@model Cyberpilot.Web.Models.PipelineAdminIndexViewModel
+@{
+    ViewData["Title"] = "Pipeline Admin";
+}
+
+<section class="guide-viewport" aria-labelledby="pipeline-admin-title">
+    <aside class="guide-rail">
+        <p class="eyebrow">Admin</p>
+        <h1 id="pipeline-admin-title">Pipeline Admin</h1>
+        <p class="rail-summary">Create and edit file-backed pipeline definitions, stages, gates, transitions, and policies.</p>
+        <div class="guide-source">@Model.DefinitionFilePath</div>
+    </aside>
+
+    <div class="guide-content-wrap">
+        @if (TempData["PipelineAdminNotice"] is string notice)
+        {
+            <div class="alert alert-info" role="alert">@notice</div>
+        }
+
+        <section class="telemetry-panel mb-3">
+            <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+                <div>
+                    <p class="eyebrow">Definitions</p>
+                    <h2 class="h4 mb-0">Custom Pipelines</h2>
+                </div>
+                <a class="btn btn-primary btn-sm" asp-action="NewPipeline">New pipeline</a>
+            </div>
+            @if (Model.Definitions.Count == 0)
+            {
+                <p class="text-secondary mb-0">No custom pipelines yet. Built-in pipelines remain available from the launcher.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Version</th>
+                                <th>Policy</th>
+                                <th>Stages</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var definition in Model.Definitions)
+                            {
+                                <tr>
+                                    <td><strong>@definition.Name</strong></td>
+                                    <td>@definition.Version</td>
+                                    <td>@definition.PolicyProfileName</td>
+                                    <td>@definition.StageCount</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-outline-info btn-sm" asp-action="EditPipeline" asp-route-name="@definition.Name">Edit</a>
+                                        <form class="d-inline" asp-action="DeletePipeline" asp-route-name="@definition.Name" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <button class="btn btn-outline-danger btn-sm" type="submit">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="telemetry-panel">
+            <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
+                <div>
+                    <p class="eyebrow">Policies</p>
+                    <h2 class="h4 mb-0">Custom Policy Profiles</h2>
+                </div>
+                <a class="btn btn-primary btn-sm" asp-action="NewPolicy">New policy</a>
+            </div>
+            @if (Model.PolicyProfiles.Count == 0)
+            {
+                <p class="text-secondary mb-0">No custom policies yet. Pipelines can still use the built-in standard profile.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Strictness</th>
+                                <th>Description</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var policy in Model.PolicyProfiles)
+                            {
+                                <tr>
+                                    <td><strong>@policy.Name</strong></td>
+                                    <td>@policy.Strictness</td>
+                                    <td>@policy.Description</td>
+                                    <td class="text-end">
+                                        <a class="btn btn-outline-info btn-sm" asp-action="EditPolicy" asp-route-name="@policy.Name">Edit</a>
+                                        <form class="d-inline" asp-action="DeletePolicy" asp-route-name="@policy.Name" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <button class="btn btn-outline-danger btn-sm" type="submit">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    </div>
+</section>

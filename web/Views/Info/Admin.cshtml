@@ -1,0 +1,329 @@
+@model Cyberpilot.Web.Models.AdminViewModel
+@{
+    ViewData["Title"] = "Admin";
+}
+
+<section class="guide-viewport">
+    <aside class="command-rail guide-rail">
+        <p class="eyebrow">Configuration</p>
+        <h1>Admin</h1>
+        <p class="guide-summary">Current configuration and appsettings reference for this Cyberpilot instance.</p>
+        <nav class="guide-mode-nav" aria-label="Info pages">
+            <a asp-controller="Info" asp-action="Usage" class="btn btn-outline-primary">Usage</a>
+            <a asp-controller="Info" asp-action="Architecture" class="btn btn-outline-primary">Architecture</a>
+            <a asp-controller="Info" asp-action="Admin" class="btn btn-primary">Admin</a>
+        </nav>
+        <div class="guide-chip-row mt-3">
+            <span class="telemetry-chip">@Model.EnvironmentName</span>
+            @if (Model.EnvironmentName.Equals("Development", StringComparison.OrdinalIgnoreCase))
+            {
+                <span class="telemetry-chip" style="background:rgba(180,83,9,.25);border-color:rgba(180,83,9,.5);">dev
+                    mode</span>
+                }
+            </div>
+        </aside>
+
+        <article class="guide-content-wrap">
+            <div class="guide-content">
+
+                <section id="live-config">
+                    <h2>Current configuration</h2>
+                    <p>Live values loaded from <code>appsettings.json</code> (and any environment overrides) for this
+                        process.</p>
+
+                        <h3>Core settings</h3>
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width:22rem">Key</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>Cyberpilot:Repository</code></td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(Model.Options.Repository))
+                                        {
+                                            <a href="https://github.com/@Model.Options.Repository" target="_blank" rel="noopener">
+                                                @Model.Options.Repository
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-warning">not set</span>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>Cyberpilot:RepoRoot</code></td>
+                                    <td><code>@Model.Options.RepoRoot</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>Cyberpilot:AgentPromptRoot</code></td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(Model.Options.AgentPromptRoot))
+                                        {
+                                            <code>@Model.Options.AgentPromptRoot</code>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">not set (defaults to parent of content root)</span>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>Cyberpilot:MaxStageRetries</code></td>
+                                    <td>@Model.Options.MaxStageRetries</td>
+                                </tr>
+                                <tr>
+                                    <td><code>Cyberpilot:ApproveAll</code></td>
+                                    <td>
+                                        @if (Model.Options.ApproveAll)
+                                        {
+                                            <span class="badge text-bg-warning text-dark">true &mdash; all Copilot tool requests
+                                                auto-approved</span>
+                                            }
+                                else
+                                            {
+                                                <span class="badge text-bg-secondary">false</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>Cyberpilot:EnsureLabels</code></td>
+                                        <td>
+                                            @if (Model.Options.EnsureLabels)
+                                            {
+                                                <span class="badge text-bg-success">true &mdash; SDK labels created automatically</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge text-bg-secondary">false</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <h3>Configured repositories</h3>
+                            @if (!Model.Options.Repositories.Any())
+                            {
+                                <div class="alert alert-secondary" role="alert">
+                                    No configured repositories. Issues can still be loaded manually with a token from the Dispatch page.
+                                </div>
+                            }
+                            else
+                            {
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Repository</th>
+                                            <th>Repo root</th>
+                                            <th>Token</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var repo in Model.Options.Repositories)
+                                        {
+                                            <tr>
+                                                <td>@(string.IsNullOrWhiteSpace(repo.Name) ? "—" : repo.Name)</td>
+                                                <td>
+                                                    @if (!string.IsNullOrWhiteSpace(repo.Repository))
+                                                    {
+                                                        <a href="https://github.com/@repo.Repository" target="_blank"
+                                                           rel="noopener">@repo.Repository</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-warning">not set</span>
+                                                    }
+                                                </td>
+                                                <td><code>@(string.IsNullOrWhiteSpace(repo.RepoRoot) ? "—" : repo.RepoRoot)</code></td>
+                                                <td>
+                                                    @if (!string.IsNullOrWhiteSpace(repo.Token))
+                                                    {
+                                                        <span class="badge text-bg-success">configured</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge text-bg-warning text-dark">not set</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </section>
+
+                        <hr />
+
+                        <section id="appsettings-reference">
+                            <h2>appsettings.json reference</h2>
+                            <p>
+                                All Cyberpilot settings live under the <code>Cyberpilot</code> key. Values can be overridden with
+                                environment
+                                variables using the <code>Cyberpilot__KeyName</code> convention (double underscore as separator).
+                            </p>
+                            <pre><code>{
+                                "ConnectionStrings": {
+                                "CyberpilotDb": "Data Source=cyberpilot.db"   // SQLite path; use full path for production
+                                },
+                                "Cyberpilot": {
+                                "Repository": "owner/name",          // Default repository for the issue launcher
+                                "RepoRoot": "..",                    // Local git clone root for SDK runs
+                                "AgentPromptRoot": "..",             // Root folder containing .github/agents/*.agent.md files
+                                "ApproveAll": false,                 // Auto-approve all Copilot tool permission prompts
+                                "EnsureLabels": true,                // Create sdk/* labels on the repo if they don't exist
+                                "MaxStageRetries": 3,                // Maximum retry attempts per stage per run
+
+                                "Repositories": [                    // Pre-configured repos available in the issue launcher
+                                {
+                                "Name": "My Project",            // Display name shown in the launcher dropdown
+                                "Repository": "owner/name",      // owner/name or full github.com URL
+                                "RepoRoot": "C:\\repos\\myproject", // Absolute path to local git clone
+                                "Token": ""                      // Fine-grained GitHub token with repo access
+                                }
+                                ]
+                                }
+                                }</code></pre>
+
+                                <h3>Setting details</h3>
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Key</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><code>Repository</code></td>
+                                            <td>string</td>
+                                            <td>Default repository for the issue launcher when no configured repositories are set.
+                                                Accepts <code>owner/name</code> or a full GitHub URL.</td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>RepoRoot</code></td>
+                                                <td>string</td>
+                                                <td>
+                                                    Path to the local git clone used by SDK runs. Can be relative (resolved from the working
+                                                    directory) or absolute.
+                                                    Overridden per-repository by entries in <code>Repositories</code>.
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>AgentPromptRoot</code></td>
+                                                <td>string</td>
+                                                <td>
+                                                    Root directory that contains the <code>.github/agents/*.agent.md</code> prompt files.
+                                                    Defaults to the
+                                                    parent of the web content root when not set, which works correctly when the web project
+                                                    is inside the repository.
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>ApproveAll</code></td>
+                                                <td>bool</td>
+                                                <td>
+                                                    When <code>true</code>, SDK runs automatically approve all Copilot tool permission
+                                                    requests without pausing.
+                                                    Useful in CI or trusted local environments. Leave <code>false</code> in production.
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>EnsureLabels</code></td>
+                                                <td>bool</td>
+                                                <td>
+                                                    When <code>true</code> (default), Cyberpilot creates the <code>sdk/*</code> GitHub
+                                                    labels on the target
+                                                    repository before the first run if they are missing.
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>MaxStageRetries</code></td>
+                                                <td>int</td>
+                                                <td>
+                                                    Maximum number of times the operator can retry a single stage on a run. Prevents runaway
+                                                    retries.
+                                                    Defaults to 3. Enforced per stage, not per run.
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>Repositories</code></td>
+                                                <td>array</td>
+                                                <td>
+                                                    List of pre-configured repository/token pairs shown in the issue launcher dropdown. Each
+                                                    entry can
+                                                    override the repo root and token. Tokens are never logged or displayed.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </section>
+
+                                <hr />
+
+                                <section id="database">
+                                    <h2>Database</h2>
+                                    <p>
+                                        Cyberpilot uses <strong>SQLite</strong> by default via Entity Framework Core. The database path is
+                                        configured in
+                                        <code>ConnectionStrings:CyberpilotDb</code>. Migrations run automatically on startup.
+                                    </p>
+                                    <p>
+                                        For production deployments, use an absolute path for the SQLite file or switch to SQL Server by
+                                        replacing the
+                                        connection string and the EF Core provider in <code>Program.cs</code>.
+                                    </p>
+                                    <p>
+                                        A health check endpoint is available at <code>/health</code>. It returns HTTP 200 when the
+                                        application is ready.
+                                    </p>
+                                </section>
+
+                                <hr />
+
+                                <section id="troubleshooting">
+                                    <h2>Troubleshooting</h2>
+                                    <dl class="row">
+                                        <dt class="col-sm-4">Issues page is blank or shows an error</dt>
+                                        <dd class="col-sm-8">
+                                            Check that the GitHub token has <code>issues: read</code> and <code>pull_requests: read</code>
+                                            permissions on
+                                            the target repository. Fine-grained tokens must be scoped to the specific repository.
+                                        </dd>
+                                        <dt class="col-sm-4">Run stays Queued indefinitely</dt>
+                                        <dd class="col-sm-8">
+                                            The background runner was not started or crashed. Check the application logs. The runner starts
+                                            automatically with
+                                            the web host; if the process is healthy you should see log entries as stages execute.
+                                        </dd>
+                                        <dt class="col-sm-4">Stage fails with &ldquo;agent prompt not found&rdquo;</dt>
+                                        <dd class="col-sm-8">
+                                            Verify <code>AgentPromptRoot</code> points to the directory that contains
+                                            <code>.github/agents/*.agent.md</code> files. The path is resolved relative to the working
+                                            directory when not
+                                            absolute.
+                                        </dd>
+                                        <dt class="col-sm-4">GitHub token token expired during a run</dt>
+                                        <dd class="col-sm-8">
+                                            Retry Stage or Continue the run after refreshing the token in <code>appsettings.json</code> (or
+                                            via environment
+                                            variable override). Restart the app to pick up the new token value.
+                                        </dd>
+                                        <dt class="col-sm-4">Reset Mission fails for a branch</dt>
+                                        <dd class="col-sm-8">
+                                            The branch may have already been merged or deleted manually. Reset Mission will still remove
+                                            labels, comments,
+                                            and the database run record even if the branch deletion fails.
+                                        </dd>
+                                    </dl>
+                                </section>
+
+                            </div>
+                        </article>
+                    </section>

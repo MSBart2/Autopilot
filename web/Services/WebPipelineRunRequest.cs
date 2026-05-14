@@ -13,10 +13,12 @@ namespace Cyberpilot.Web.Services;
 /// <param name="SkipDeliver">Whether delivery should be skipped.</param>
 /// <param name="StageTimeout">The per-stage timeout.</param>
 /// <param name="AllowMissingDocs">Whether missing docs may be tolerated.</param>
+/// <param name="StartStage">The optional stage where execution should resume.</param>
 /// <param name="PipelineDefinitionName">The pipeline definition selected for this run.</param>
 /// <param name="PipelineDefinitionVersion">The pipeline definition version selected for this run.</param>
 /// <param name="PolicyProfileName">The policy profile selected for this run.</param>
 /// <param name="ContractVersion">The stage result contract version selected for this run.</param>
+/// <param name="PipelineDefinitionFilePath">The optional JSON pipeline definition file path.</param>
 /// <param name="RetryReason">The operator-provided retry reason for the next matching start stage.</param>
 public sealed record WebPipelineRunRequest(
     string RunId,
@@ -34,4 +36,5 @@ public sealed record WebPipelineRunRequest(
     string? PipelineDefinitionVersion = null,
     string? PolicyProfileName = null,
     string? ContractVersion = null,
+    string? PipelineDefinitionFilePath = null,
     string? RetryReason = null);

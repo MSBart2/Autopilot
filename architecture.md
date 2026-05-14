@@ -58,6 +58,7 @@ Registered services in [web/Program.cs](web/Program.cs):
 | `AddHealthChecks` | Readiness endpoint at `/health/ready` |
 | `CyberpilotDbContext` | SDK-owned migrated SQLite pipeline runs and stage logs |
 | `CyberpilotPipelineService` | Background SDK runner for web-triggered runs |
+| `PipelineDefinitionAdminStore` | File-backed editor for operator-managed JSON pipeline definitions and policy profiles |
 | `ModelPricingService` | Static class in `Cyberpilot.Persistence`; maps model IDs to per-1M-token USD rates and returns `0` for unknown models. Powers cost estimation in both sink implementations. |
 
 **Token capture flow:** `CopilotStageRunner` calls `session.Rpc.Usage.GetMetricsAsync()` after each `SendAndWaitAsync`, stamps `InputTokens` and `OutputTokens` onto the returned `StageResult` (non-fatal — wrapped in try/catch), and both sink implementations (`CyberpilotRunHistoryProgressSink` and `SignalRProgressSink`) write those values plus `EstimatedCostUsd` (via `ModelPricingService.Estimate`) and `RetryCount` to `PipelineStageLog`.
@@ -96,6 +97,7 @@ Controllers:
 |------------|--------|---------|
 | `HomeController` | `/`, `/Home/Index`, `/Home/Error` | Pipeline portal and error view |
 | `PipelinesController` | `/Pipelines`, `/Pipelines/Issues`, `/Pipelines/{id}`, `/Pipelines/{id}/Continue`, `/Pipelines/{id}/RetryStage`, `/Pipelines/{id}/ResetMission`, `/Pipelines/Guide/{mode}` | Pipeline modes, stages, run history, issue launcher, run details, run continuation, stage retry, replay reset, and Markdown guides |
+| `PipelineAdminController` | `/PipelineAdmin`, `/PipelineAdmin/Pipelines/*`, `/PipelineAdmin/Policies/*` | Operator admin views for creating and editing custom JSON pipeline definitions, stages, transitions, gates, and policy profiles |
 | ASP.NET health checks | `/health/ready` | Readiness check |
 
 ## Pipeline Assets
@@ -106,7 +108,7 @@ Cloud mode uses `.github/workflows/cloud-*.md` source files compiled to `.lock.y
 
 SDK mode uses [copilot-sdk/Pipeline/SdkCyberpilotRunner.cs](copilot-sdk/Pipeline/SdkCyberpilotRunner.cs) to run stage prompts through Copilot SDK sessions. The command-line executable lives in [copilot-sdk-exe/](copilot-sdk-exe) and references the SDK library. It shares the same agent prompt files as local mode.
 
-SDK pipeline routing is definition-driven. Built-in definitions live under [copilot-sdk/Pipeline/](copilot-sdk/Pipeline) and include the full `cyberpilot-default` flow plus focused variants such as `bugfix` and `docs-only`. The runner can also load additional JSON definitions through `--pipeline-definition-file`; file-backed definitions are combined with built-ins and validated before issue, label, model, or stage side effects.
+SDK pipeline routing is definition-driven. Built-in definitions live under [copilot-sdk/Pipeline/](copilot-sdk/Pipeline) and include the full `cyberpilot-default` flow plus focused variants such as `bugfix` and `docs-only`. The runner can also load additional JSON definitions through `--pipeline-definition-file`; file-backed definitions are combined with built-ins and validated before issue, label, model, or stage side effects. The web admin surface writes operator-managed definitions to `web/App_Data/pipeline-definitions.json` by default, exposes them in the issue launcher, and passes that file path to queued SDK runs when present.
 
 Web-triggered SDK runs can separate the controller repository from the target repository. `Cyberpilot:AgentPromptRoot` points at the repository containing [.github/agents/](.github/agents), while each configured repository's `RepoRoot` points at the clone where code changes happen. This allows one Cyberpilot installation to drive issue-to-PR work across repositories that do not contain Cyberpilot's agent files.
 

@@ -23,6 +23,7 @@ builder.Services.AddScoped<IGitHubIssueClientFactory, GitHubIssueClientFactory>(
 builder.Services.AddScoped<IGitCommandRunner, GitCommandRunner>();
 builder.Services.AddScoped<ILocalRepositoryValidator, LocalRepositoryValidator>();
 builder.Services.AddScoped<IRepositoryProfileDetector, RepositoryProfileDetector>();
+builder.Services.AddScoped<IPipelineDefinitionAdminStore, PipelineDefinitionAdminStore>();
 builder.Services.AddHttpClient("GitHubApi");
 builder.Services.AddScoped<IGitHubIssueClient>(serviceProvider =>
 {

@@ -20,6 +20,7 @@ public interface IRepositoryConnectionStore
     /// Saves a repository token and returns an opaque identifier for subsequent form posts.
     /// </summary>
     /// <param name="repository">The repository in owner/name form.</param>
+    /// <param name="repoRoot">The local git repository root for SDK execution.</param>
     /// <param name="token">The GitHub token.</param>
     /// <returns>The connection identifier.</returns>
     string Save(string repository, string repoRoot, string token);
