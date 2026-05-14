@@ -257,6 +257,75 @@ public sealed class PipelineDefinitionTests
         Assert.Equal("standard", definition.PolicyProfile.Name);
     }
 
+    [Fact]
+    public void PipelineDefinitionSelector_CustomProvider_SelectsDefinition()
+    {
+        var customDefinition = new PipelineDefinition(
+            "custom-docs",
+            new PipelineDefinitionVersion("1.0"),
+            new PolicyProfile("standard", PolicyStrictness.Standard),
+            [DefaultPipelineDefinitionProvider.Definition.PipelineStage("docs"), DefaultPipelineDefinitionProvider.Definition.PipelineStage("deliver")],
+            [new StageTransition("docs", "deliver", "GO")]);
+        var provider = new FakePipelineDefinitionProvider(customDefinition);
+        var options = new Cyberpilot.Options.CyberpilotOptions(
+            1,
+            Directory.GetCurrentDirectory(),
+            "owner/repo",
+            "test-model",
+            false,
+            false,
+            false,
+            false,
+            TimeSpan.FromMinutes(10),
+            true,
+            false,
+            null,
+            null,
+            false,
+            PipelineDefinitionName: "custom-docs");
+
+        var selected = PipelineDefinitionSelector.TrySelect(options, provider, out var definition, out var error);
+
+        Assert.True(selected);
+        Assert.Null(error);
+        Assert.Equal("custom-docs", definition!.Name);
+        Assert.Equal<string>(["docs", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+    }
+
+    [Fact]
+    public void JsonPipelineDefinitionProvider_LoadsDefinitionFile()
+    {
+        var filePath = WritePipelineDefinitionFile("json-docs");
+        try
+        {
+            var loaded = JsonPipelineDefinitionProvider.TryLoad(filePath, out var provider, out var error);
+
+            Assert.True(loaded);
+            Assert.Null(error);
+            Assert.NotNull(provider);
+            Assert.True(provider!.TryGet("json-docs", out var definition));
+            Assert.Equal("json-docs", definition!.Name);
+            Assert.Equal("1.0", definition.Version.Value);
+            Assert.Equal("standard", definition.PolicyProfile.Name);
+            Assert.Equal<string>(["docs", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+            Assert.Contains(definition.Transitions, transition => transition is { FromStage: "docs", ToStage: "deliver", Condition: "GO" });
+        }
+        finally
+        {
+            File.Delete(filePath);
+        }
+    }
+
+    [Fact]
+    public void JsonPipelineDefinitionProvider_MissingFile_ReturnsError()
+    {
+        var loaded = JsonPipelineDefinitionProvider.TryLoad(Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.json"), out var provider, out var error);
+
+        Assert.False(loaded);
+        Assert.Null(provider);
+        Assert.Contains("was not found", error);
+    }
+
     [Theory]
     [InlineData("lenient", "Lenient")]
     [InlineData("standard", "Standard")]
@@ -368,4 +437,53 @@ public sealed class PipelineDefinitionTests
 
     private static StageDefinition Stage(string name, string label)
         => new(name.ToUpperInvariant(), name, $"{name}.agent.md", label);
+
+    private static string WritePipelineDefinitionFile(string definitionName)
+    {
+        var filePath = Path.Combine(Path.GetTempPath(), $"cyberpilot-pipeline-{Guid.NewGuid():N}.json");
+        File.WriteAllText(filePath, $$"""
+                        {
+                            "definitions": [
+                                {
+                                    "name": "{{definitionName}}",
+                                    "version": "1.0",
+                                    "policyProfile": { "name": "standard", "strictness": "standard" },
+                                    "stages": [
+                                        {
+                                            "displayName": "DOCS",
+                                            "name": "docs",
+                                            "promptFile": "docs.agent.md",
+                                            "label": "sdk/docs",
+                                            "contract": { "version": "1.0", "requiredArtifacts": ["documentation-summary"] }
+                                        },
+                                        {
+                                            "displayName": "LAND",
+                                            "name": "deliver",
+                                            "promptFile": "deliver.agent.md",
+                                            "label": "sdk/delivering",
+                                            "contract": { "version": "1.0", "requiredArtifacts": ["landing-report"] }
+                                        }
+                                    ],
+                                    "transitions": [
+                                        { "fromStage": "docs", "toStage": "deliver", "condition": "GO" }
+                                    ]
+                                }
+                            ]
+                        }
+                        """);
+        return filePath;
+    }
+
+    private sealed class FakePipelineDefinitionProvider(PipelineDefinition definition) : IPipelineDefinitionProvider
+    {
+        public string AvailableNames => definition.Name;
+
+        public bool TryGet(string name, out PipelineDefinition? selectedDefinition)
+        {
+            selectedDefinition = definition.Name.Equals(name, StringComparison.OrdinalIgnoreCase)
+                ? definition
+                : null;
+            return selectedDefinition is not null;
+        }
+    }
 }

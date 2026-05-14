@@ -41,7 +41,14 @@ internal sealed class SdkCyberpilotRunner(
             return await CheckModelAsync(cancellationToken);
         }
 
-        if (!PipelineDefinitionSelector.TrySelect(options, out var definition, out var definitionError))
+        if (!TryCreatePipelineDefinitionProvider(out var provider, out var providerError))
+        {
+            progressSink.OnDispatch(DispatchType.Halt, providerError ?? "Pipeline definition provider could not be loaded.");
+            console.WriteFailure(providerError ?? "Pipeline definition provider could not be loaded.");
+            return 12;
+        }
+
+        if (!PipelineDefinitionSelector.TrySelect(options, provider!, out var definition, out var definitionError))
         {
             progressSink.OnDispatch(DispatchType.Halt, definitionError ?? "Unsupported pipeline definition.");
             console.WriteFailure(definitionError ?? "Unsupported pipeline definition.");
@@ -87,6 +94,27 @@ internal sealed class SdkCyberpilotRunner(
 
         var engine = new PipelineEngine(pipelineContext, labels, branchCoordinator, stageExecutor, new PipelineGateRunner(BuiltInPipelineGates.Create(modelChecker, labels, issueClient)), progressSink, console);
         return await engine.ExecuteAsync(cancellationToken);
+    }
+
+    private bool TryCreatePipelineDefinitionProvider(out IPipelineDefinitionProvider? provider, out string? error)
+    {
+        var builtInProvider = new BuiltInPipelineDefinitionProvider();
+        if (string.IsNullOrWhiteSpace(options.PipelineDefinitionFilePath))
+        {
+            provider = builtInProvider;
+            error = null;
+            return true;
+        }
+
+        if (!JsonPipelineDefinitionProvider.TryLoad(options.PipelineDefinitionFilePath, out var fileProvider, out error))
+        {
+            provider = null;
+            return false;
+        }
+
+        provider = new CompositePipelineDefinitionProvider([fileProvider!, builtInProvider]);
+        error = null;
+        return true;
     }
 
     private async Task<int> CheckModelAsync(CancellationToken cancellationToken)

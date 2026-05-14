@@ -662,3 +662,24 @@ Added the first implementation-focused process variant:
 - Kept review rework behavior intact with `review -> implement` on `changes_requested`.
 - Added SDK definition-selection and runner tests proving `bugfix` skips triage/docs and runs each intended stage once.
 - Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Fifty-Fourth Slice Status
+
+Prepared definition selection for file/config-backed providers:
+
+- Added an SDK `IPipelineDefinitionProvider` abstraction plus a built-in provider adapter.
+- Routed `PipelineDefinitionSelector` through the provider abstraction while preserving the existing default built-in behavior.
+- Added a selector overload that accepts a provider, giving future file/config-backed definitions a narrow integration point.
+- Added SDK coverage proving a custom provider definition can be selected and validated without changing the runner path.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.
+
+### Fifty-Fifth Slice Status
+
+Added JSON-backed pipeline definition files:
+
+- Added `--pipeline-definition-file <path>` to the SDK options and help text.
+- Added a JSON pipeline definition provider that can load one or more definitions from a file.
+- Combined file definitions with built-ins in the SDK runner, with file definitions taking precedence and load failures halting before issue/model/stage side effects.
+- Kept built-in definitions as the default path when no file is supplied.
+- Added SDK tests for option parsing, provider loading, missing-file diagnostics, and runner execution from a JSON definition file.
+- Validated with `dotnet build .\Cyberpilot.sln`, SDK tests, web unit tests, and web integration tests.

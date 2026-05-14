@@ -137,6 +137,21 @@ public sealed class CyberpilotOptionsTests
     }
 
     [Fact]
+    public void Parse_PipelineDefinitionFileOption_SetsDefinitionFilePath()
+    {
+        var options = CyberpilotOptions.Parse(
+            [
+                "--check-model",
+                "--pipeline-definition-file",
+                "pipelines/custom.json",
+                "--repo-root",
+                RepoRoot,
+            ]);
+
+        Assert.Equal("pipelines/custom.json", options.PipelineDefinitionFilePath);
+    }
+
+    [Fact]
     public void Parse_EmptyPipelineDefinitionOption_Throws()
     {
         Assert.Throws<ArgumentException>(() =>
@@ -209,6 +224,7 @@ public sealed class CyberpilotOptionsTests
         Assert.Contains("--model", CyberpilotOptions.HelpText);
         Assert.Contains("--config", CyberpilotOptions.HelpText);
         Assert.Contains("--pipeline-definition", CyberpilotOptions.HelpText);
+        Assert.Contains("--pipeline-definition-file", CyberpilotOptions.HelpText);
         Assert.Contains("docs-only", CyberpilotOptions.HelpText);
         Assert.Contains("--policy-profile", CyberpilotOptions.HelpText);
         Assert.Contains("security-critical", CyberpilotOptions.HelpText);

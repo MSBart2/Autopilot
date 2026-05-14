@@ -158,6 +158,36 @@ public sealed class SdkCyberpilotRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_PipelineDefinitionFile_RunsSelectedFileDefinition()
+    {
+        var filePath = WritePipelineDefinitionFile("json-docs");
+        try
+        {
+            var labels = new FakeLabelService();
+            var stageRunner = new RecordingStageRunner(_ => new StageResult("GO", "approved", true, null));
+            var output = new StringWriter();
+            var options = CreateOptions(122, true) with
+            {
+                PipelineDefinitionName = "json-docs",
+                PipelineDefinitionFilePath = filePath,
+            };
+            var runner = new SdkCyberpilotRunner(options, new FakeIssueClient(), labels, new FakeBranchProvisioner(), new FakePromptBuilder(), stageRunner, new FakeModelChecker(ModelAvailabilityResult.Available), new TextWriterProgressSink(output, TextWriter.Null), output);
+
+            var exitCode = await runner.RunAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal<string>(["docs", "deliver"], stageRunner.StageNames);
+            Assert.Contains("sdk/docs", labels.StageLabels);
+            Assert.Contains("sdk/delivering", labels.StageLabels);
+            Assert.Contains("sdk/done", labels.StageLabels);
+        }
+        finally
+        {
+            File.Delete(filePath);
+        }
+    }
+
+    [Fact]
     public async Task RunAsync_TriageStop_ReturnsExit2()
     {
         var labels = new FakeLabelService();
@@ -505,6 +535,42 @@ public sealed class SdkCyberpilotRunnerTests
     private static CyberpilotOptions CreateOptions(int issueNumber, bool approveAll)
     {
         return new CyberpilotOptions(issueNumber, Directory.GetCurrentDirectory(), "rbmathis/Cyberpilot", "test-model", false, false, false, false, TimeSpan.FromMinutes(10), approveAll, false, null, null, false);
+    }
+
+    private static string WritePipelineDefinitionFile(string definitionName)
+    {
+        var filePath = Path.Combine(Path.GetTempPath(), $"cyberpilot-runner-pipeline-{Guid.NewGuid():N}.json");
+        File.WriteAllText(filePath, $$"""
+                        {
+                            "definitions": [
+                                {
+                                    "name": "{{definitionName}}",
+                                    "version": "1.0",
+                                    "policyProfile": { "name": "standard", "strictness": "standard" },
+                                    "stages": [
+                                        {
+                                            "displayName": "DOCS",
+                                            "name": "docs",
+                                            "promptFile": "docs.agent.md",
+                                            "label": "sdk/docs",
+                                            "contract": { "version": "1.0", "requiredArtifacts": ["documentation-summary"] }
+                                        },
+                                        {
+                                            "displayName": "LAND",
+                                            "name": "deliver",
+                                            "promptFile": "deliver.agent.md",
+                                            "label": "sdk/delivering",
+                                            "contract": { "version": "1.0", "requiredArtifacts": ["landing-report"] }
+                                        }
+                                    ],
+                                    "transitions": [
+                                        { "fromStage": "docs", "toStage": "deliver", "condition": "GO" }
+                                    ]
+                                }
+                            ]
+                        }
+                        """);
+        return filePath;
     }
 
     private sealed class FakeIssueClient : IGitHubIssueClient

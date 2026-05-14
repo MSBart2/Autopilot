@@ -4,13 +4,18 @@ namespace Cyberpilot.Pipeline;
 
 internal static class PipelineDefinitionSelector
 {
+    private static readonly IPipelineDefinitionProvider DefaultProvider = new BuiltInPipelineDefinitionProvider();
+
     public static bool TrySelect(CyberpilotOptions options, out PipelineDefinition? definition, out string? error)
+        => TrySelect(options, DefaultProvider, out definition, out error);
+
+    public static bool TrySelect(CyberpilotOptions options, IPipelineDefinitionProvider provider, out PipelineDefinition? definition, out string? error)
     {
         definition = null;
 
-        if (!BuiltInPipelineDefinitions.TryGet(options.PipelineDefinitionName, out var selectedDefinition))
+        if (!provider.TryGet(options.PipelineDefinitionName, out var selectedDefinition))
         {
-            error = $"Unsupported pipeline definition '{options.PipelineDefinitionName}'. Available definitions: {BuiltInPipelineDefinitions.AvailableNames}.";
+            error = $"Unsupported pipeline definition '{options.PipelineDefinitionName}'. Available definitions: {provider.AvailableNames}.";
             return false;
         }
 

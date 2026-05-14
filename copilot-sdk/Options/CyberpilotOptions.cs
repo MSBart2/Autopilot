@@ -22,7 +22,8 @@ internal sealed record CyberpilotOptions(
     string PipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName,
     string PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
     string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
-    Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null)
+    Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null,
+    string? PipelineDefinitionFilePath = null)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);
@@ -45,6 +46,8 @@ internal sealed record CyberpilotOptions(
             "                       Wait time for each Copilot stage. Defaults to 10.",
             "  --pipeline-definition <name>",
             $"                       Pipeline definition to run. Available: {BuiltInPipelineCatalog.AvailableDefinitionNames}.",
+            "  --pipeline-definition-file <path>",
+            "                       Load additional JSON pipeline definitions from a file.",
             "  --pipeline-version <version>",
             "                       Pipeline definition version. Defaults to 1.0.",
             "  --policy-profile <name>",
@@ -81,6 +84,7 @@ internal sealed record CyberpilotOptions(
         var pipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName;
         var pipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion;
         var policyProfileName = PipelineDefinitionDefaults.PolicyProfileName;
+        string? pipelineDefinitionFilePath = null;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -105,6 +109,9 @@ internal sealed record CyberpilotOptions(
                     break;
                 case "--pipeline-definition":
                     pipelineDefinitionName = RequireNonEmptyValue(args, ref index, arg);
+                    break;
+                case "--pipeline-definition-file":
+                    pipelineDefinitionFilePath = RequireNonEmptyValue(args, ref index, arg);
                     break;
                 case "--pipeline-version":
                     pipelineDefinitionVersion = RequireNonEmptyValue(args, ref index, arg);
@@ -167,7 +174,8 @@ internal sealed record CyberpilotOptions(
             false,
             PipelineDefinitionName: pipelineDefinitionName,
             PipelineDefinitionVersion: pipelineDefinitionVersion,
-            PolicyProfileName: policyProfileName);
+            PolicyProfileName: policyProfileName,
+            PipelineDefinitionFilePath: pipelineDefinitionFilePath);
     }
 
     private static TimeSpan ParsePositiveMinutes(string value, string optionName)
