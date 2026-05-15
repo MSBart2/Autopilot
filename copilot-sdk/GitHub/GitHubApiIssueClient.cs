@@ -7,6 +7,7 @@ namespace Cyberpilot.GitHub;
 /// <summary>
 /// Uses GitHub REST API calls for issue, label, and comment operations.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2234:Pass System.Uri objects instead of strings", Justification = "Relative URI strings are intentional with a fixed BaseAddress on the HttpClient.")]
 public sealed class GitHubApiIssueClient : IGitHubIssueClient
 {
     private readonly HttpClient httpClient;

@@ -18,6 +18,12 @@ namespace Cyberpilot.Web.Models;
 /// <param name="Evidence">Structured evidence rows for the run.</param>
 public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<PipelineStageLog> Logs, IReadOnlyList<string> Labels, GitHubIssueSummary? Issue = null, IReadOnlyList<PipelineDispatch>? Dispatches = null, IReadOnlyList<PipelineApproval>? Approvals = null, IReadOnlyList<PipelineEvidence>? Evidence = null)
 {
+    /// <summary>Gets the latest plan stage output formatted as a first-class review artifact.</summary>
+    public PipelinePlanReviewViewModel? PlanReview => PipelinePlanReviewViewModel.Create(Run, Logs, Evidence ?? []);
+
+    /// <summary>Gets whether this run has plan output that can be shown for deliberate review.</summary>
+    public bool HasPlanReview => PlanReview is not null;
+
     /// <summary>Initializes a details view model without labels.</summary>
     public PipelineRunDetailsViewModel(PipelineRun run, IReadOnlyList<PipelineStageLog> logs)
         : this(run, logs, []) { }
@@ -140,6 +146,217 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
 
         return int.MaxValue;
     }
+}
+
+/// <summary>
+/// Displays the plan stage output as a deliberate review artifact in the Run Room.
+/// </summary>
+/// <param name="Status">The latest plan stage status.</param>
+/// <param name="Decision">The latest plan stage decision.</param>
+/// <param name="BranchName">The branch prepared by the plan stage, when available.</param>
+/// <param name="Summary">The most concise available plan summary.</param>
+/// <param name="FullPlanText">The full plan text or transcript available for detailed review.</param>
+/// <param name="Artifacts">Structured artifacts produced by the plan stage.</param>
+/// <param name="Evidence">Evidence rows produced by the plan stage.</param>
+/// <param name="RequiredActions">Actions the operator or agent must address before continuing.</param>
+/// <param name="CreatedAt">When the displayed plan log was created.</param>
+/// <param name="CompletedAt">When the displayed plan log completed, when available.</param>
+/// <param name="ContractVersion">The stage result contract version, when available.</param>
+public sealed record PipelinePlanReviewViewModel(
+    string Status,
+    string Decision,
+    string? BranchName,
+    string Summary,
+    string? FullPlanText,
+    IReadOnlyList<PipelinePlanArtifactViewModel> Artifacts,
+    IReadOnlyList<PipelineEvidenceViewModel> Evidence,
+    IReadOnlyList<string> RequiredActions,
+    DateTime CreatedAt,
+    DateTime? CompletedAt,
+    string? ContractVersion)
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    /// <summary>Gets whether a branch name is available for this plan.</summary>
+    public bool HasBranch => !string.IsNullOrWhiteSpace(BranchName);
+
+    /// <summary>Gets whether the plan has detailed text to expand.</summary>
+    public bool HasFullPlanText => !string.IsNullOrWhiteSpace(FullPlanText);
+
+    /// <summary>Gets whether the plan has structured artifacts to display.</summary>
+    public bool HasArtifacts => Artifacts.Count > 0;
+
+    /// <summary>Gets whether the plan has supporting evidence rows.</summary>
+    public bool HasEvidence => Evidence.Count > 0;
+
+    /// <summary>Gets whether the plan has required follow-up actions.</summary>
+    public bool HasRequiredActions => RequiredActions.Count > 0;
+
+    /// <summary>
+    /// Creates a plan review model from the latest persisted plan stage log.
+    /// </summary>
+    /// <param name="run">The owning pipeline run.</param>
+    /// <param name="logs">The stage logs for the run.</param>
+    /// <param name="evidence">The evidence rows for the run.</param>
+    /// <returns>A plan review model, or <see langword="null" /> when no plan output exists.</returns>
+    public static PipelinePlanReviewViewModel? Create(PipelineRun run, IReadOnlyList<PipelineStageLog> logs, IReadOnlyList<PipelineEvidence> evidence)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(logs);
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        var planLog = logs
+            .Where(log => log.StageName.Equals("plan", StringComparison.OrdinalIgnoreCase)
+                && (!string.IsNullOrWhiteSpace(log.StageResultJson) || !string.IsNullOrWhiteSpace(log.Output)))
+            .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
+            .FirstOrDefault();
+        if (planLog is null)
+        {
+            return null;
+        }
+
+        var result = TryReadStageResult(planLog.StageResultJson);
+        var artifacts = BuildArtifacts(result, evidence);
+        var planArtifact = artifacts.FirstOrDefault(artifact => artifact.IsPlanComment);
+        var branchName = FirstNonEmpty(
+            artifacts.FirstOrDefault(artifact => artifact.IsBranch)?.Value,
+            run.BranchName);
+        var summary = FirstNonEmpty(
+            planArtifact?.Value,
+            evidence.FirstOrDefault(item => item.StageName.Equals("plan", StringComparison.OrdinalIgnoreCase)
+                && item.Kind.Equals("stage-artifact", StringComparison.OrdinalIgnoreCase)
+                && item.Name.Equals("plan-comment", StringComparison.OrdinalIgnoreCase))?.Summary,
+            planLog.Output,
+            "Plan output was captured, but no structured summary was provided.")!;
+
+        var planEvidence = evidence
+            .Where(item => item.StageName.Equals("plan", StringComparison.OrdinalIgnoreCase)
+                && !item.Kind.Equals("stage-artifact", StringComparison.OrdinalIgnoreCase)
+                && !item.Kind.Equals("usage-metrics", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.Kind)
+            .ThenBy(item => item.CreatedAt)
+            .Select(PipelineEvidenceViewModel.FromEvidence)
+            .ToArray();
+
+        return new PipelinePlanReviewViewModel(
+            planLog.Status,
+            result?.Decision ?? "unknown",
+            branchName,
+            NormalizeDisplayText(summary),
+            NormalizeDisplayText(FirstNonEmpty(planArtifact?.Value, planLog.Output) ?? string.Empty),
+            artifacts,
+            planEvidence,
+            result?.RequiredActions ?? [],
+            planLog.StartedAt,
+            planLog.CompletedAt,
+            result?.ContractVersion ?? planLog.StageResultContractVersion);
+    }
+
+    private static IReadOnlyList<PipelinePlanArtifactViewModel> BuildArtifacts(StageResult? result, IReadOnlyList<PipelineEvidence> evidence)
+    {
+        if (result?.Artifacts is { Count: > 0 })
+        {
+            return result.Artifacts
+                .Select(PipelinePlanArtifactViewModel.FromArtifact)
+                .ToArray();
+        }
+
+        return evidence
+            .Where(item => item.StageName.Equals("plan", StringComparison.OrdinalIgnoreCase)
+                && item.Kind.Equals("stage-artifact", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.CreatedAt)
+            .Select(PipelinePlanArtifactViewModel.FromEvidence)
+            .ToArray();
+    }
+
+    private static StageResult? TryReadStageResult(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<StageResult>(json, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string NormalizeDisplayText(string value)
+        => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+}
+
+/// <summary>
+/// Displays one structured plan artifact in the Run Room.
+/// </summary>
+/// <param name="Name">The artifact machine name.</param>
+/// <param name="Label">The artifact display label.</param>
+/// <param name="Value">The artifact value or summary, when available.</param>
+/// <param name="Uri">A URI pointing to the artifact, when available.</param>
+/// <param name="MediaType">The artifact media type, when available.</param>
+public sealed record PipelinePlanArtifactViewModel(string Name, string Label, string? Value, string? Uri, string? MediaType)
+{
+    /// <summary>Gets whether this artifact represents the implementation plan comment.</summary>
+    public bool IsPlanComment => Name.Equals("plan-comment", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Gets whether this artifact represents the prepared branch.</summary>
+    public bool IsBranch => Name.Equals("branch", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Gets whether this artifact has displayable value text.</summary>
+    public bool HasValue => !string.IsNullOrWhiteSpace(Value);
+
+    /// <summary>Gets whether this artifact has a detail link.</summary>
+    public bool HasUri => !string.IsNullOrWhiteSpace(Uri);
+
+    /// <summary>Creates a display model from a structured stage artifact.</summary>
+    /// <param name="artifact">The structured stage artifact.</param>
+    /// <returns>The artifact display model.</returns>
+    public static PipelinePlanArtifactViewModel FromArtifact(StageArtifact artifact)
+    {
+        ArgumentNullException.ThrowIfNull(artifact);
+
+        return new PipelinePlanArtifactViewModel(
+            artifact.Name,
+            BuildLabel(artifact.Name),
+            string.IsNullOrWhiteSpace(artifact.Value) ? null : artifact.Value.Trim(),
+            string.IsNullOrWhiteSpace(artifact.Uri) ? null : artifact.Uri.Trim(),
+            string.IsNullOrWhiteSpace(artifact.MediaType) ? null : artifact.MediaType.Trim());
+    }
+
+    /// <summary>Creates a display model from a persisted evidence artifact row.</summary>
+    /// <param name="evidence">The persisted evidence row.</param>
+    /// <returns>The artifact display model.</returns>
+    public static PipelinePlanArtifactViewModel FromEvidence(PipelineEvidence evidence)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        return new PipelinePlanArtifactViewModel(
+            evidence.Name,
+            BuildLabel(evidence.Name),
+            string.IsNullOrWhiteSpace(evidence.Summary) ? null : evidence.Summary.Trim(),
+            string.IsNullOrWhiteSpace(evidence.Uri) ? null : evidence.Uri.Trim(),
+            string.IsNullOrWhiteSpace(evidence.MediaType) ? null : evidence.MediaType.Trim());
+    }
+
+    private static string BuildLabel(string name)
+        => name switch
+        {
+            "plan-comment" => "Plan",
+            "branch" => "Branch",
+            _ when string.IsNullOrWhiteSpace(name) => "Artifact",
+            _ => string.Join(' ', name.Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => char.ToUpperInvariant(part[0]) + part[1..])),
+        };
 }
 
 /// <summary>

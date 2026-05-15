@@ -112,7 +112,12 @@ public sealed class PrPollerService(
         client.DefaultRequestHeaders.UserAgent.TryParseAdd("Cyberpilot-PrPoller");
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
 
-        // Strategy 1: Timeline cross-references
+        return await TryFindViaTimelineAsync(client, owner, repo, issueNumber, ct)
+            ?? await TryFindViaOpenPullRequestsAsync(client, owner, repo, issueNumber, ct);
+    }
+
+    private async Task<string?> TryFindViaTimelineAsync(HttpClient client, string owner, string repo, int issueNumber, CancellationToken ct)
+    {
         var timelineUrl = $"https://api.github.com/repos/{owner}/{repo}/issues/{issueNumber}/timeline?per_page=100";
         var response = await client.GetAsync(timelineUrl, ct);
 
@@ -143,16 +148,20 @@ public sealed class PrPollerService(
             }
         }
 
-        // Strategy 2: Search open PRs that mention the issue via closing keywords
+        return null;
+    }
+
+    private async Task<string?> TryFindViaOpenPullRequestsAsync(HttpClient client, string owner, string repo, int issueNumber, CancellationToken ct)
+    {
         var pullsUrl = $"https://api.github.com/repos/{owner}/{repo}/pulls?state=open&sort=updated&direction=desc&per_page=30";
-        response = await client.GetAsync(pullsUrl, ct);
+        var response = await client.GetAsync(pullsUrl, ct);
 
         if (!response.IsSuccessStatusCode)
         {
             return null;
         }
 
-        json = await response.Content.ReadAsStringAsync(ct);
+        var json = await response.Content.ReadAsStringAsync(ct);
         using var pullsDoc = JsonDocument.Parse(json);
 
         var pattern = $"#{issueNumber}";
@@ -161,13 +170,11 @@ public sealed class PrPollerService(
             var body = pr.TryGetProperty("body", out var bodyProp) ? bodyProp.GetString() ?? "" : "";
             var title = pr.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? "" : "";
 
-            if (body.Contains(pattern, StringComparison.OrdinalIgnoreCase)
+            if ((body.Contains(pattern, StringComparison.OrdinalIgnoreCase)
                 || title.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+                && pr.TryGetProperty("html_url", out var prUrlProp))
             {
-                if (pr.TryGetProperty("html_url", out var prUrlProp))
-                {
-                    return prUrlProp.GetString();
-                }
+                return prUrlProp.GetString();
             }
         }
 

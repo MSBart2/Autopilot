@@ -28,7 +28,7 @@ internal sealed class CopilotModelAvailabilityChecker : IModelAvailabilityChecke
                 Cwd = repoRoot,
             });
 
-            await client.StartAsync();
+            await client.StartAsync(cancellationToken);
             await using var session = await client.CreateSessionAsync(new SessionConfig
             {
                 Model = model,

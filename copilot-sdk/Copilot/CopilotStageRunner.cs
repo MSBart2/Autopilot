@@ -13,7 +13,7 @@ internal sealed class CopilotStageRunner(string repoRoot, string model, ICyberpi
             Cwd = repoRoot,
         });
 
-        await client.StartAsync();
+        await client.StartAsync(cancellationToken);
         await using var session = await client.CreateSessionAsync(new SessionConfig
         {
             Model = model,
@@ -52,9 +52,9 @@ internal sealed class CopilotStageRunner(string repoRoot, string model, ICyberpi
             inputTokens  = (int?)metrics.LastCallInputTokens;
             outputTokens = (int?)metrics.LastCallOutputTokens;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            error.WriteLine($"[warn] Token usage capture failed: {ex.Message}");
+            await error.WriteLineAsync($"[warn] Token usage capture failed: {ex.Message}");
         }
 
         return StageResult.Parse(content ?? string.Empty) with { InputTokens = inputTokens, OutputTokens = outputTokens };

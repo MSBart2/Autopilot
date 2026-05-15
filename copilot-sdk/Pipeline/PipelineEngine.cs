@@ -38,108 +38,32 @@ internal sealed class PipelineEngine(
         context.BranchName = routing.BranchName;
         context.PrUrl = routing.PrUrl;
 
-        if (ShouldRun(start, "triage", out var triageStage))
+        if (ShouldRun(start, "triage", out _))
         {
-            await labels.SetStageAsync(Options.IssueNumber, triageStage.Label, cancellationToken);
-            var triage = await RunStageAsync(triageStage, "Classify the issue and publish the mandatory triage handoff comment.", cancellationToken);
-            if (StageStatus.IsStop(triage))
-            {
-                progressSink.OnDispatch(DispatchType.Routing, "Triage returned STOP — the detective flagged this issue for human review before proceeding");
-                console.WriteWarning("Triage returned STOP. Holding for human intervention.");
-                await labels.ClearStageAsync(Options.IssueNumber, cancellationToken);
-                return 2;
-            }
-
-            if (!StageStatus.IsGo(triage) && !StageStatus.IsDuplicate(triage))
-            {
-                progressSink.OnDispatch(DispatchType.Routing, $"Triage returned unexpected status '{triage.Status}' — halting pipeline");
-                return await HaltAsync($"Triage returned unexpected status '{triage.Status}'.", cancellationToken);
-            }
-
-            if (StageStatus.IsDuplicate(triage))
-            {
-                progressSink.OnDispatch(DispatchType.Routing, "Triage identified a duplicate — marking complete without implementation");
-                console.WriteSuccess("Duplicate confirmed. Marking SDK pipeline complete without implementation.");
-                await labels.SetStageAsync(Options.IssueNumber, "sdk/done", cancellationToken);
-                return 0;
-            }
-
-            progressSink.OnDispatch(DispatchType.Routing, "Triage cleared — case approved, dispatching to Plan stage");
-
-            var pauseResult = await CheckPauseAsync("triage", cancellationToken);
-            if (pauseResult.HasValue) return pauseResult.Value;
+            var result = await RunTriageStageAsync(cancellationToken);
+            if (result.HasValue) return result.Value;
         }
 
         context.BranchName = await branchCoordinator.EnsureBranchAsync(start, cancellationToken);
 
-        if (ShouldRun(start, "plan", out var planStage))
+        if (ShouldRun(start, "plan", out _))
         {
-            await labels.SetStageAsync(Options.IssueNumber, planStage.Label, cancellationToken);
-            var plan = await RunStageAsync(planStage, $"Create the implementation plan and issue comments for branch `{context.BranchName}`. The controller has already created or reused the branch; do not create a different branch.", cancellationToken);
-            if (!StageStatus.IsGo(plan))
-            {
-                progressSink.OnDispatch(DispatchType.Routing, $"Plan returned '{plan.Status}' — halting pipeline");
-                return await HaltAsync($"Plan returned '{plan.Status}'.", cancellationToken);
-            }
-
-            progressSink.OnDispatch(DispatchType.Routing, "Blueprint delivered — plan approved, dispatching to Implement stage");
-
-            var pauseResult = await CheckPauseAsync("plan", cancellationToken);
-            if (pauseResult.HasValue) return pauseResult.Value;
+            var result = await RunPlanStageAsync(cancellationToken);
+            if (result.HasValue) return result.Value;
         }
 
-        if (ShouldRun(start, "implement", out var implementStage))
+        if (ShouldRun(start, "implement", out _))
         {
-            await labels.SetStageAsync(Options.IssueNumber, implementStage.Label, cancellationToken);
-            var implement = await RunStageAsync(implementStage, "Execute the plan, validate the changes, commit, push, create the PR, and post the build-complete issue comment.", cancellationToken);
-            if (!StageStatus.IsGo(implement))
-            {
-                progressSink.OnDispatch(DispatchType.Routing, $"Implement returned '{implement.Status}' — halting pipeline");
-                return await HaltAsync($"Implement returned '{implement.Status}'.", cancellationToken);
-            }
-
-            progressSink.OnDispatch(DispatchType.Routing, "Implementation complete — code committed and PR created, entering Review");
-
-            var pauseResult = await CheckPauseAsync("implement", cancellationToken);
-            if (pauseResult.HasValue) return pauseResult.Value;
+            var result = await RunImplementStageAsync(cancellationToken);
+            if (result.HasValue) return result.Value;
         }
 
         StageDefinition? docsStage = null;
-        if (ShouldRun(start, "review", out var reviewStage))
+        if (ShouldRun(start, "review", out _))
         {
-            progressSink.OnDispatch(DispatchType.ReviewLoop, "Entering review loop — architecture, security, quality, and test coverage checks");
-
-            var review = await RunReviewLoopAsync(cancellationToken);
-            if (!StageStatus.IsGo(review))
-            {
-                progressSink.OnDispatch(DispatchType.Routing, $"Review returned '{review.Status}' — halting pipeline");
-                return await HaltAsync($"Review returned '{review.Status}'.", cancellationToken);
-            }
-
-            if (!StageDecision.IsApproved(review))
-            {
-                progressSink.OnDispatch(DispatchType.Halt, "Review did not approve the changes — halting for human intervention");
-                console.WriteWarning("Review did not return an approval. Halting before docs/deliver.");
-                return 4;
-            }
-
-            var approvedTarget = TransitionTarget("review", "approved");
-            if (approvedTarget.Name.Equals("docs", StringComparison.OrdinalIgnoreCase))
-            {
-                docsStage = approvedTarget;
-                progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Docs stage");
-            }
-            else if (approvedTarget.Name.Equals("deliver", StringComparison.OrdinalIgnoreCase))
-            {
-                progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Deliver stage");
-            }
-            else
-            {
-                return await HaltAsync($"Review approved transition targets unsupported stage '{approvedTarget.Name}'.", cancellationToken);
-            }
-
-            var pauseResult = await CheckPauseAsync("review", cancellationToken);
-            if (pauseResult.HasValue) return pauseResult.Value;
+            var (reviewExit, reviewDocsStage) = await RunReviewStageAsync(cancellationToken);
+            if (reviewExit.HasValue) return reviewExit.Value;
+            docsStage = reviewDocsStage;
         }
 
         if (docsStage is null && ShouldRun(start, "docs", out var selectedDocsStage))
@@ -149,28 +73,140 @@ internal sealed class PipelineEngine(
 
         if (docsStage is not null && ShouldRun(start, docsStage))
         {
-            await labels.SetStageAsync(Options.IssueNumber, docsStage.Label, cancellationToken);
-            var docs = await RunStageAsync(docsStage, "Update XML/markdown documentation and post the human verification walkthrough. Continue even if there are no docs changes.", cancellationToken);
-            if (!StageStatus.IsGo(docs))
-            {
-                if (!Options.AllowMissingDocs)
-                {
-                    progressSink.OnDispatch(DispatchType.Routing, $"Docs returned '{docs.Status}' — halting pipeline");
-                    return await HaltAsync($"Docs returned '{docs.Status}'. Rerun with --allow-missing-docs to continue anyway.", cancellationToken);
-                }
-
-                progressSink.OnDispatch(DispatchType.Routing, $"Docs returned '{docs.Status}' but --allow-missing-docs is set — continuing to delivery");
-                console.WriteWarning($"Docs returned '{docs.Status}', but --allow-missing-docs is set. Continuing.");
-            }
-            else
-            {
-                progressSink.OnDispatch(DispatchType.Routing, "Documentation updated — dispatching to Deliver stage");
-            }
-
-            var pauseResult = await CheckPauseAsync("docs", cancellationToken);
-            if (pauseResult.HasValue) return pauseResult.Value;
+            var result = await RunDocsStageAsync(docsStage, cancellationToken);
+            if (result.HasValue) return result.Value;
         }
 
+        return await RunDeliverStageAsync(cancellationToken);
+    }
+
+    private async Task<int?> RunTriageStageAsync(CancellationToken cancellationToken)
+    {
+        var triageStage = Stage("triage");
+        await labels.SetStageAsync(Options.IssueNumber, triageStage.Label, cancellationToken);
+        var triage = await RunStageAsync(triageStage, "Classify the issue and publish the mandatory triage handoff comment.", cancellationToken);
+
+        if (StageStatus.IsStop(triage))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, "Triage returned STOP — the detective flagged this issue for human review before proceeding");
+            console.WriteWarning("Triage returned STOP. Holding for human intervention.");
+            await labels.ClearStageAsync(Options.IssueNumber, cancellationToken);
+            return 2;
+        }
+
+        if (StageStatus.IsDuplicate(triage))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, "Triage identified a duplicate — marking complete without implementation");
+            console.WriteSuccess("Duplicate confirmed. Marking SDK pipeline complete without implementation.");
+            await labels.SetStageAsync(Options.IssueNumber, "sdk/done", cancellationToken);
+            return 0;
+        }
+
+        if (!StageStatus.IsGo(triage))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, $"Triage returned unexpected status '{triage.Status}' — halting pipeline");
+            return await HaltAsync($"Triage returned unexpected status '{triage.Status}'.", cancellationToken);
+        }
+
+        progressSink.OnDispatch(DispatchType.Routing, "Triage cleared — case approved, dispatching to Plan stage");
+        return await CheckPauseAsync("triage", cancellationToken);
+    }
+
+    private async Task<int?> RunPlanStageAsync(CancellationToken cancellationToken)
+    {
+        var planStage = Stage("plan");
+        await labels.SetStageAsync(Options.IssueNumber, planStage.Label, cancellationToken);
+        var plan = await RunStageAsync(planStage, $"Create the implementation plan and issue comments for branch `{context.BranchName}`. The controller has already created or reused the branch; do not create a different branch.", cancellationToken);
+
+        if (!StageStatus.IsGo(plan))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, $"Plan returned '{plan.Status}' — halting pipeline");
+            return await HaltAsync($"Plan returned '{plan.Status}'.", cancellationToken);
+        }
+
+        progressSink.OnDispatch(DispatchType.Routing, "Blueprint delivered — plan approved, dispatching to Implement stage");
+        return await CheckPauseAsync("plan", cancellationToken);
+    }
+
+    private async Task<int?> RunImplementStageAsync(CancellationToken cancellationToken)
+    {
+        var implementStage = Stage("implement");
+        await labels.SetStageAsync(Options.IssueNumber, implementStage.Label, cancellationToken);
+        var implement = await RunStageAsync(implementStage, "Execute the plan, validate the changes, commit, push, create the PR, and post the build-complete issue comment.", cancellationToken);
+
+        if (!StageStatus.IsGo(implement))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, $"Implement returned '{implement.Status}' — halting pipeline");
+            return await HaltAsync($"Implement returned '{implement.Status}'.", cancellationToken);
+        }
+
+        progressSink.OnDispatch(DispatchType.Routing, "Implementation complete — code committed and PR created, entering Review");
+        return await CheckPauseAsync("implement", cancellationToken);
+    }
+
+    private async Task<(int? ExitCode, StageDefinition? DocsStage)> RunReviewStageAsync(CancellationToken cancellationToken)
+    {
+        StageDefinition? docsStage = null;
+        progressSink.OnDispatch(DispatchType.ReviewLoop, "Entering review loop — architecture, security, quality, and test coverage checks");
+
+        var review = await RunReviewLoopAsync(cancellationToken);
+        if (!StageStatus.IsGo(review))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, $"Review returned '{review.Status}' — halting pipeline");
+            return (await HaltAsync($"Review returned '{review.Status}'.", cancellationToken), null);
+        }
+
+        if (!StageDecision.IsApproved(review))
+        {
+            progressSink.OnDispatch(DispatchType.Halt, "Review did not approve the changes — halting for human intervention");
+            console.WriteWarning("Review did not return an approval. Halting before docs/deliver.");
+            return (4, null);
+        }
+
+        var approvedTarget = TransitionTarget("review", "approved");
+        if (approvedTarget.Name.Equals("docs", StringComparison.OrdinalIgnoreCase))
+        {
+            docsStage = approvedTarget;
+            progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Docs stage");
+        }
+        else if (approvedTarget.Name.Equals("deliver", StringComparison.OrdinalIgnoreCase))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Deliver stage");
+        }
+        else
+        {
+            return (await HaltAsync($"Review approved transition targets unsupported stage '{approvedTarget.Name}'.", cancellationToken), null);
+        }
+
+        return (await CheckPauseAsync("review", cancellationToken), docsStage);
+    }
+
+    private async Task<int?> RunDocsStageAsync(StageDefinition docsStage, CancellationToken cancellationToken)
+    {
+        await labels.SetStageAsync(Options.IssueNumber, docsStage.Label, cancellationToken);
+        var docs = await RunStageAsync(docsStage, "Update XML/markdown documentation and post the human verification walkthrough. Continue even if there are no docs changes.", cancellationToken);
+
+        if (!StageStatus.IsGo(docs))
+        {
+            if (!Options.AllowMissingDocs)
+            {
+                progressSink.OnDispatch(DispatchType.Routing, $"Docs returned '{docs.Status}' — halting pipeline");
+                return await HaltAsync($"Docs returned '{docs.Status}'. Rerun with --allow-missing-docs to continue anyway.", cancellationToken);
+            }
+
+            progressSink.OnDispatch(DispatchType.Routing, $"Docs returned '{docs.Status}' but --allow-missing-docs is set — continuing to delivery");
+            console.WriteWarning($"Docs returned '{docs.Status}', but --allow-missing-docs is set. Continuing.");
+        }
+        else
+        {
+            progressSink.OnDispatch(DispatchType.Routing, "Documentation updated — dispatching to Deliver stage");
+        }
+
+        return await CheckPauseAsync("docs", cancellationToken);
+    }
+
+    private async Task<int> RunDeliverStageAsync(CancellationToken cancellationToken)
+    {
         if (Options.SkipDeliver)
         {
             progressSink.OnDispatch(DispatchType.Skip, "Skip-deliver enabled — pipeline complete, PR ready for manual merge");

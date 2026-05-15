@@ -125,38 +125,13 @@ public sealed record PipelineIssuesViewModel(
     /// </summary>
     public CyberpilotStatus GetStatus(GitHubIssueSummary issue)
     {
-        // Find the most relevant label for each prefix
-        static string? FindLabel(IReadOnlyList<string> labels, string prefix)
-            => labels.FirstOrDefault(l => l.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        var cloudStatus = ClassifyLabel(FindLabel(issue.Labels, "cloud/"), "cloud/", CyberpilotRunnerType.Cloud);
+        var localStatus = ClassifyLabel(FindLabel(issue.Labels, "local/"), "local/", CyberpilotRunnerType.Local);
+        var sdkStatus = ClassifyLabel(FindLabel(issue.Labels, "sdk/"), "sdk/", CyberpilotRunnerType.Sdk);
 
-        static string StageFrom(string label, string prefix)
-            => label[prefix.Length..]; // e.g. "cloud/triage" → "triage"
-
-        static bool IsTerminal(string stage)
-            => stage.Equals("done", StringComparison.OrdinalIgnoreCase)
-            || stage.Equals("failed", StringComparison.OrdinalIgnoreCase);
-
-        CyberpilotStatus? Classify(string? rawLabel, string prefix, CyberpilotRunnerType runner)
-        {
-            if (rawLabel is null) return null;
-            var stage = StageFrom(rawLabel, prefix);
-            return new CyberpilotStatus(
-                runner,
-                stage,
-                IsActive: !IsTerminal(stage),
-                IsDone: stage.Equals("done", StringComparison.OrdinalIgnoreCase),
-                IsFailed: stage.Equals("failed", StringComparison.OrdinalIgnoreCase));
-        }
-
-        var cloudStatus = Classify(FindLabel(issue.Labels, "cloud/"), "cloud/", CyberpilotRunnerType.Cloud);
-        var localStatus = Classify(FindLabel(issue.Labels, "local/"), "local/", CyberpilotRunnerType.Local);
-        var sdkStatus = Classify(FindLabel(issue.Labels, "sdk/"), "sdk/", CyberpilotRunnerType.Sdk);
-
-        // DB-active SDK run (no label yet, e.g. failed before first label write)
         if (sdkStatus is null && SdkActiveIssueNumbers.Contains(issue.Number))
             sdkStatus = new CyberpilotStatus(CyberpilotRunnerType.Sdk, "queued", true, false, false);
 
-        // Return active runs first (Cloud > Local > SDK), then terminal states
         return (cloudStatus, localStatus, sdkStatus) switch
         {
             ({ IsActive: true }, _, _) => cloudStatus!,
@@ -170,6 +145,25 @@ public sealed record PipelineIssuesViewModel(
             (_, _, { IsFailed: true }) => sdkStatus!,
             _ => CyberpilotStatus.None,
         };
+    }
+
+    private static string? FindLabel(IReadOnlyList<string> labels, string prefix)
+        => labels.FirstOrDefault(l => l.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsTerminalStage(string stage)
+        => stage.Equals("done", StringComparison.OrdinalIgnoreCase)
+        || stage.Equals("failed", StringComparison.OrdinalIgnoreCase);
+
+    private static CyberpilotStatus? ClassifyLabel(string? rawLabel, string prefix, CyberpilotRunnerType runner)
+    {
+        if (rawLabel is null) return null;
+        var stage = rawLabel[prefix.Length..];
+        return new CyberpilotStatus(
+            runner,
+            stage,
+            IsActive: !IsTerminalStage(stage),
+            IsDone: stage.Equals("done", StringComparison.OrdinalIgnoreCase),
+            IsFailed: stage.Equals("failed", StringComparison.OrdinalIgnoreCase));
     }
 }
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Cyberpilot.Persistence;
 using Cyberpilot.Pipeline;
 using Cyberpilot.Web.Models;
@@ -81,6 +82,122 @@ public class PipelineRunDetailsViewModelTests
 
         Assert.Empty(vm.ApprovalItems);
         Assert.False(vm.HasPendingApprovals);
+    }
+
+    [Fact]
+    public void PlanReview_WithStructuredPlanLog_FormatsPlanArtifact()
+    {
+        var run = new PipelineRun
+        {
+            IssueNumber = 1,
+            Repository = "r",
+            Model = "m",
+            BranchName = "feat/issue-1-plan-review",
+        };
+        var stageResult = new StageResult(
+            "GO",
+            "unknown",
+            true,
+            null,
+            ContractVersion: "1.0",
+            Artifacts:
+            [
+                new StageArtifact("plan-comment", "Update the Run Room to render plan output as a review artifact.", MediaType: "text/markdown"),
+                new StageArtifact("branch", "feat/issue-1-plan-review"),
+            ],
+            RequiredActions: ["Approve the plan before implementation."]);
+        var logs = new[]
+        {
+            new PipelineStageLog
+            {
+                RunId = run.Id,
+                StageName = "plan",
+                Status = "GO",
+                StageResultJson = JsonSerializer.Serialize(stageResult),
+                StageResultContractVersion = "1.0",
+                Output = "Full plan transcript",
+                StartedAt = DateTime.Parse("2026-05-13T09:00:00Z").ToUniversalTime(),
+                CompletedAt = DateTime.Parse("2026-05-13T09:05:00Z").ToUniversalTime(),
+            },
+        };
+        var evidence = new[]
+        {
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "plan",
+                Kind = "policy-rationale",
+                Name = "policy-rationale",
+                Summary = "Plan requires maintainer approval.",
+            },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, logs, [], Evidence: evidence);
+
+        var planReview = Assert.IsType<PipelinePlanReviewViewModel>(vm.PlanReview);
+        Assert.True(vm.HasPlanReview);
+        Assert.Equal("GO", planReview.Status);
+        Assert.Equal("feat/issue-1-plan-review", planReview.BranchName);
+        Assert.Equal("Update the Run Room to render plan output as a review artifact.", planReview.Summary);
+        Assert.Equal("1.0", planReview.ContractVersion);
+        Assert.Equal(["Approve the plan before implementation."], planReview.RequiredActions);
+        Assert.Collection(
+            planReview.Artifacts,
+            artifact =>
+            {
+                Assert.Equal("Plan", artifact.Label);
+                Assert.True(artifact.IsPlanComment);
+                Assert.Equal("text/markdown", artifact.MediaType);
+            },
+            artifact =>
+            {
+                Assert.Equal("Branch", artifact.Label);
+                Assert.True(artifact.IsBranch);
+            });
+        Assert.Single(planReview.Evidence);
+        Assert.Contains("maintainer approval", planReview.Evidence.Single().Summary);
+    }
+
+    [Fact]
+    public void PlanReview_WithoutPlanLog_ReturnsNull()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var logs = new[]
+        {
+            new PipelineStageLog { RunId = run.Id, StageName = "triage", Status = "GO" },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, logs);
+
+        Assert.Null(vm.PlanReview);
+        Assert.False(vm.HasPlanReview);
+    }
+
+    [Fact]
+    public void PlanReview_WithMalformedStageResult_FallsBackToOutput()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var logs = new[]
+        {
+            new PipelineStageLog
+            {
+                RunId = run.Id,
+                StageName = "plan",
+                Status = "STOP",
+                StageResultJson = "{not valid json",
+                Output = "Planner produced a human-readable fallback.",
+                StartedAt = DateTime.Parse("2026-05-13T09:00:00Z").ToUniversalTime(),
+            },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, logs);
+
+        var planReview = Assert.IsType<PipelinePlanReviewViewModel>(vm.PlanReview);
+        Assert.Equal("STOP", planReview.Status);
+        Assert.Equal("unknown", planReview.Decision);
+        Assert.Equal("Planner produced a human-readable fallback.", planReview.Summary);
+        Assert.Equal("Planner produced a human-readable fallback.", planReview.FullPlanText);
+        Assert.Empty(planReview.Artifacts);
     }
 
     [Fact]

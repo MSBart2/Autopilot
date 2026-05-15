@@ -11,4 +11,9 @@
     <RunAnalyzers>false</RunAnalyzers>
     <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
   </PropertyGroup>
+
+  <!-- CA2007: ConfigureAwait is not meaningful in ASP.NET Core / console apps without a synchronization context -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CA2007</NoWarn>
+  </PropertyGroup>
 </Project>

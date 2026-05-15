@@ -39,7 +39,8 @@ public sealed partial class BranchProvisioner : IBranchProvisioner
     /// <returns>The branch name.</returns>
     public static string CreateBranchName(int issueNumber, string issueTitle)
     {
-        var slug = SlugRegex().Replace(issueTitle.ToLowerInvariant(), "-").Trim('-');
+        ArgumentNullException.ThrowIfNull(issueTitle);
+        var slug = SlugRegex().Replace(issueTitle.ToLowerInvariant(), "-").Trim('-'); // CA1308: ToLowerInvariant is correct for git branch slug generation
         if (slug.Length == 0)
         {
             slug = "work";

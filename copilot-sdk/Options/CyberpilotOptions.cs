@@ -68,24 +68,59 @@ internal sealed record CyberpilotOptions(
             return new CyberpilotOptions(0, string.Empty, null, DefaultModel, false, false, false, false, DefaultStageTimeout, false, false, null, null, true);
         }
 
-        int? issueNumber = null;
-        string? repoRoot = null;
-        string? repository = null;
-        var model = DefaultModel;
-        var skipDeliver = false;
-        var ensureLabels = false;
-        var checkLabelsOnly = false;
-        var checkModelOnly = false;
-        var stageTimeout = DefaultStageTimeout;
-        var approveAll = false;
-        var allowMissingDocs = false;
-        string? databaseConnectionString = null;
-        string? configPath = null;
-        var pipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName;
-        var pipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion;
-        var policyProfileName = PipelineDefinitionDefaults.PolicyProfileName;
-        string? pipelineDefinitionFilePath = null;
+        var parsed = ParseArguments(args);
 
+        if ((parsed.IssueNumber is null or <= 0) && !parsed.CheckLabelsOnly && !parsed.CheckModelOnly)
+        {
+            throw new ArgumentException("Provide a positive issue number. Try: dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- run issue 135");
+        }
+
+        return new CyberpilotOptions(
+            parsed.IssueNumber ?? 0,
+            RepoRootFinder.Find(parsed.RepoRoot),
+            parsed.Repository,
+            parsed.Model,
+            parsed.SkipDeliver,
+            parsed.EnsureLabels,
+            parsed.CheckLabelsOnly,
+            parsed.CheckModelOnly,
+            parsed.StageTimeout,
+            parsed.ApproveAll,
+            parsed.AllowMissingDocs,
+            parsed.DatabaseConnectionString,
+            parsed.ConfigPath,
+            false,
+            PipelineDefinitionName: parsed.PipelineDefinitionName,
+            PipelineDefinitionVersion: parsed.PipelineDefinitionVersion,
+            PolicyProfileName: parsed.PolicyProfileName,
+            PipelineDefinitionFilePath: parsed.PipelineDefinitionFilePath);
+    }
+
+    private sealed record ParsedArgs(
+        int? IssueNumber = null,
+        string? RepoRoot = null,
+        string? Repository = null,
+        string Model = DefaultModel,
+        bool SkipDeliver = false,
+        bool EnsureLabels = false,
+        bool CheckLabelsOnly = false,
+        bool CheckModelOnly = false,
+        TimeSpan StageTimeout = default,
+        bool ApproveAll = false,
+        bool AllowMissingDocs = false,
+        string? DatabaseConnectionString = null,
+        string? ConfigPath = null,
+        string PipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName,
+        string PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
+        string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
+        string? PipelineDefinitionFilePath = null)
+    {
+        public static ParsedArgs Default => new() { StageTimeout = DefaultStageTimeout };
+    }
+
+    private static ParsedArgs ParseArguments(string[] args)
+    {
+        var parsed = ParsedArgs.Default;
         for (var index = 0; index < args.Length; index++)
         {
             var arg = args[index];
@@ -96,86 +131,62 @@ internal sealed record CyberpilotOptions(
                 case "cyberpilot":
                     continue;
                 case "--repo-root":
-                    repoRoot = RequireValue(args, ref index, arg);
+                    parsed = parsed with { RepoRoot = RequireValue(args, ref index, arg) };
                     break;
                 case "--repo":
-                    repository = RequireValue(args, ref index, arg);
+                    parsed = parsed with { Repository = RequireValue(args, ref index, arg) };
                     break;
                 case "--model":
-                    model = RequireValue(args, ref index, arg);
+                    parsed = parsed with { Model = RequireValue(args, ref index, arg) };
                     break;
                 case "--stage-timeout-minutes":
-                    stageTimeout = ParsePositiveMinutes(RequireValue(args, ref index, arg), arg);
+                    parsed = parsed with { StageTimeout = ParsePositiveMinutes(RequireValue(args, ref index, arg), arg) };
                     break;
                 case "--pipeline-definition":
-                    pipelineDefinitionName = RequireNonEmptyValue(args, ref index, arg);
+                    parsed = parsed with { PipelineDefinitionName = RequireNonEmptyValue(args, ref index, arg) };
                     break;
                 case "--pipeline-definition-file":
-                    pipelineDefinitionFilePath = RequireNonEmptyValue(args, ref index, arg);
+                    parsed = parsed with { PipelineDefinitionFilePath = RequireNonEmptyValue(args, ref index, arg) };
                     break;
                 case "--pipeline-version":
-                    pipelineDefinitionVersion = RequireNonEmptyValue(args, ref index, arg);
+                    parsed = parsed with { PipelineDefinitionVersion = RequireNonEmptyValue(args, ref index, arg) };
                     break;
                 case "--policy-profile":
-                    policyProfileName = RequireNonEmptyValue(args, ref index, arg);
+                    parsed = parsed with { PolicyProfileName = RequireNonEmptyValue(args, ref index, arg) };
                     break;
                 case "--skip-deliver":
-                    skipDeliver = true;
+                    parsed = parsed with { SkipDeliver = true };
                     break;
                 case "--ensure-labels":
-                    ensureLabels = true;
+                    parsed = parsed with { EnsureLabels = true };
                     break;
                 case "--check-labels":
-                    checkLabelsOnly = true;
+                    parsed = parsed with { CheckLabelsOnly = true };
                     break;
                 case "--check-model":
-                    checkModelOnly = true;
+                    parsed = parsed with { CheckModelOnly = true };
                     break;
                 case "--approve-all":
-                    approveAll = true;
+                    parsed = parsed with { ApproveAll = true };
                     break;
                 case "--allow-missing-docs":
-                    allowMissingDocs = true;
+                    parsed = parsed with { AllowMissingDocs = true };
                     break;
                 case "--db":
-                    databaseConnectionString = RequireValue(args, ref index, arg);
+                    parsed = parsed with { DatabaseConnectionString = RequireValue(args, ref index, arg) };
                     break;
                 case "--config":
-                    configPath = RequireValue(args, ref index, arg);
+                    parsed = parsed with { ConfigPath = RequireValue(args, ref index, arg) };
                     break;
                 default:
-                    if (int.TryParse(arg, out var parsed))
+                    if (int.TryParse(arg, out var issueNumber))
                     {
-                        issueNumber = parsed;
+                        parsed = parsed with { IssueNumber = issueNumber };
                     }
                     break;
             }
         }
-
-        if ((issueNumber is null or <= 0) && !checkLabelsOnly && !checkModelOnly)
-        {
-            throw new ArgumentException("Provide a positive issue number. Try: dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- run issue 135");
-        }
-
-        return new CyberpilotOptions(
-            issueNumber ?? 0,
-            RepoRootFinder.Find(repoRoot),
-            repository,
-            model,
-            skipDeliver,
-            ensureLabels,
-            checkLabelsOnly,
-            checkModelOnly,
-            stageTimeout,
-            approveAll,
-            allowMissingDocs,
-            databaseConnectionString,
-            configPath,
-            false,
-            PipelineDefinitionName: pipelineDefinitionName,
-            PipelineDefinitionVersion: pipelineDefinitionVersion,
-            PolicyProfileName: policyProfileName,
-            PipelineDefinitionFilePath: pipelineDefinitionFilePath);
+        return parsed;
     }
 
     private static TimeSpan ParsePositiveMinutes(string value, string optionName)

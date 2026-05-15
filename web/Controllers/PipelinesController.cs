@@ -268,39 +268,20 @@ public partial class PipelinesController : Controller
             return RedirectToAction(nameof(Issues));
         }
 
-        var customDefinition = await _pipelineAdminStore.FindDefinitionAsync(request.PipelineDefinitionName, HttpContext.RequestAborted);
-        if (!BuiltInPipelineCatalog.TryGetDefinition(request.PipelineDefinitionName, out var definition) && customDefinition is null)
+        var startError = await ValidateStartRequestAsync(request, repository);
+        if (startError is not null)
         {
-            TempData["PipelineError"] = $"Unsupported pipeline definition '{request.PipelineDefinitionName}'. Available definitions: {BuiltInPipelineCatalog.AvailableDefinitionNames}.";
-            return RedirectToAction(nameof(Issues));
+            TempData["PipelineError"] = startError.Message;
+            return RedirectToAction(startError.Action, startError.ActionArgs);
         }
 
-        PolicyProfileMetadata? policyProfile = null;
-        if (customDefinition is null && !BuiltInPipelineCatalog.TryGetPolicyProfile(request.PolicyProfileName, out policyProfile))
-        {
-            TempData["PipelineError"] = $"Unsupported policy profile '{request.PolicyProfileName}'. Available profiles: {BuiltInPipelineCatalog.AvailablePolicyProfileNames}.";
-            return RedirectToAction(nameof(Issues));
-        }
+        var customDefinition = await _pipelineAdminStore.FindDefinitionAsync(request.PipelineDefinitionName, HttpContext.RequestAborted);
+        BuiltInPipelineCatalog.TryGetDefinition(request.PipelineDefinitionName, out var definition);
+        BuiltInPipelineCatalog.TryGetPolicyProfile(request.PolicyProfileName, out var policyProfile);
 
         var connection = _connectionStore.Get(request.ConnectionId);
-        if (!string.IsNullOrWhiteSpace(request.ConnectionId)
-            && (connection is null || !connection.Repository.Equals(repository, StringComparison.OrdinalIgnoreCase)))
-        {
-            TempData["PipelineError"] = "The repository token expired. Load issues again before starting Cyberpilot.";
-            return RedirectToAction(nameof(Issues));
-        }
-
         var repoRoot = connection?.RepoRoot ?? _configHelper.ResolveRepoRoot(_options.RepoRoot);
 
-        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(run =>
-            run.Repository == repository && run.IssueNumber == request.IssueNumber && (run.Status == "Queued" || run.Status == "Running" || run.Status == "Pausing"));
-        if (hasActiveRun)
-        {
-            TempData["PipelineError"] = $"{repository} issue #{request.IssueNumber} already has an active Cyberpilot run.";
-            return RedirectToAction(nameof(Issues));
-        }
-
-        // Best-effort fetch of the issue title for dashboard display.
         string? issueTitle = null;
         try
         {
@@ -340,6 +321,44 @@ public partial class PipelinesController : Controller
         return RedirectToAction(nameof(Details), new { id = run.Id });
     }
 
+    private sealed record StartValidationError(string Message, string Action, object? ActionArgs = null);
+
+    private async Task<StartValidationError?> ValidateStartRequestAsync(PipelineStartRequest request, string repository)
+    {
+        var customDefinition = await _pipelineAdminStore.FindDefinitionAsync(request.PipelineDefinitionName, HttpContext.RequestAborted);
+        if (!BuiltInPipelineCatalog.TryGetDefinition(request.PipelineDefinitionName, out _) && customDefinition is null)
+        {
+            return new StartValidationError(
+                $"Unsupported pipeline definition '{request.PipelineDefinitionName}'. Available definitions: {BuiltInPipelineCatalog.AvailableDefinitionNames}.",
+                nameof(Issues));
+        }
+
+        if (customDefinition is null && !BuiltInPipelineCatalog.TryGetPolicyProfile(request.PolicyProfileName, out _))
+        {
+            return new StartValidationError(
+                $"Unsupported policy profile '{request.PolicyProfileName}'. Available profiles: {BuiltInPipelineCatalog.AvailablePolicyProfileNames}.",
+                nameof(Issues));
+        }
+
+        var connection = _connectionStore.Get(request.ConnectionId);
+        if (!string.IsNullOrWhiteSpace(request.ConnectionId)
+            && (connection is null || !connection.Repository.Equals(repository, StringComparison.OrdinalIgnoreCase)))
+        {
+            return new StartValidationError("The repository token expired. Load issues again before starting Cyberpilot.", nameof(Issues));
+        }
+
+        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(run =>
+            run.Repository == repository && run.IssueNumber == request.IssueNumber && (run.Status == "Queued" || run.Status == "Running" || run.Status == "Pausing"));
+        if (hasActiveRun)
+        {
+            return new StartValidationError(
+                $"{repository} issue #{request.IssueNumber} already has an active Cyberpilot run.",
+                nameof(Issues));
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Requeues a terminal pipeline run so processing can continue from the run details page.
     /// </summary>
@@ -350,57 +369,21 @@ public partial class PipelinesController : Controller
     public async Task<IActionResult> Continue(string id)
     {
         var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
-        if (run is null)
-        {
-            return NotFound();
-        }
+        if (run is null) return NotFound();
 
         if (run.Status is "Queued" or "Running" or "Pausing")
-        {
-            TempData["PipelineError"] = "This run is already active.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "This run is already active.");
 
         if (run.Status is not ("Failed" or "Stopped" or "Paused" or "Cancelled"))
-        {
-            TempData["PipelineError"] = "This run cannot be continued from its current status.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "This run cannot be continued from its current status.");
 
-        var hasPendingApproval = await _dbContext.PipelineApprovals.AnyAsync(approval =>
-            approval.RunId == run.Id && approval.Status == nameof(ApprovalStatus.Pending));
-        if (hasPendingApproval)
-        {
-            TempData["PipelineError"] = "Resolve pending approvals before continuing this run.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+        var approvalError = await CheckApprovalBlockersAsync(run.Id, id);
+        if (approvalError is not null) return approvalError;
 
-        var hasRejectedApproval = await _dbContext.PipelineApprovals.AnyAsync(approval =>
-            approval.RunId == run.Id && approval.Status == nameof(ApprovalStatus.Rejected));
-        if (hasRejectedApproval)
-        {
-            TempData["PipelineError"] = "Rejected approvals must be addressed with a targeted retry or rework before this run can continue.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+        var conflictError = await CheckConflictingRunAsync(run, id);
+        if (conflictError is not null) return conflictError;
 
-        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
-            item.Id != run.Id
-            && item.Repository == run.Repository
-            && item.IssueNumber == run.IssueNumber
-            && (item.Status == "Queued" || item.Status == "Running" || item.Status == "Pausing"));
-        if (hasActiveRun)
-        {
-            TempData["PipelineError"] = $"{run.Repository} issue #{run.IssueNumber} already has an active Cyberpilot run.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
-        string? token = null;
-        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
-        {
-            repoRoot = configuredRepository.RepoRoot;
-            token = configuredRepository.Token;
-        }
+        var (repoRoot, token) = ResolveRepoConfig(run.Repository);
 
         run.Status = "Queued";
         run.CompletedAt = null;
@@ -423,41 +406,18 @@ public partial class PipelinesController : Controller
     public async Task<IActionResult> ReworkFromReview(string id)
     {
         var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
-        if (run is null)
-        {
-            return NotFound();
-        }
+        if (run is null) return NotFound();
 
         if (run.Status is "Queued" or "Running" or "Pausing")
-        {
-            TempData["PipelineError"] = "This run is already active.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "This run is already active.");
 
         if (!await PipelineRunPredicates.IsReviewReworkCandidateAsync(run, _dbContext))
-        {
-            TempData["PipelineError"] = "Rework from Review is only available for stopped or failed review runs.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "Rework from Review is only available for stopped or failed review runs.");
 
-        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
-            item.Id != run.Id
-            && item.Repository == run.Repository
-            && item.IssueNumber == run.IssueNumber
-            && (item.Status == "Queued" || item.Status == "Running" || item.Status == "Pausing"));
-        if (hasActiveRun)
-        {
-            TempData["PipelineError"] = $"{run.Repository} issue #{run.IssueNumber} already has an active Cyberpilot run.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+        var conflictError = await CheckConflictingRunAsync(run, id);
+        if (conflictError is not null) return conflictError;
 
-        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
-        string? token = null;
-        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
-        {
-            repoRoot = configuredRepository.RepoRoot;
-            token = configuredRepository.Token;
-        }
+        var (repoRoot, token) = ResolveRepoConfig(run.Repository);
 
         run.Status = "Queued";
         run.CompletedAt = null;
@@ -483,71 +443,31 @@ public partial class PipelinesController : Controller
     public async Task<IActionResult> RetryStage(string id, RetryStageRequest request)
     {
         var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
-        if (run is null)
-        {
-            return NotFound();
-        }
-
-        if (!ModelState.IsValid)
-        {
-            return RedirectToAction(nameof(Details), new { id });
-        }
+        if (run is null) return NotFound();
+        if (!ModelState.IsValid) return RedirectToAction(nameof(Details), new { id });
 
         if (run.Status is "Queued" or "Running" or "Pausing")
-        {
-            TempData["PipelineError"] = "This run is already active.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "This run is already active.");
 
         if (run.Status is not ("Failed" or "Stopped" or "Paused" or "Cancelled"))
-        {
-            TempData["PipelineError"] = "This run cannot be retried from its current status.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "This run cannot be retried from its current status.");
 
-        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
-            item.Id != run.Id
-            && item.Repository == run.Repository
-            && item.IssueNumber == run.IssueNumber
-            && (item.Status == "Queued" || item.Status == "Running" || item.Status == "Pausing"));
-        if (hasActiveRun)
-        {
-            TempData["PipelineError"] = $"{run.Repository} issue #{run.IssueNumber} already has an active Cyberpilot run.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+        var conflictError = await CheckConflictingRunAsync(run, id);
+        if (conflictError is not null) return conflictError;
 
         if (!PipelineRunDetailsViewModel.ValidStageNames.Any(s => s.Equals(request.StageName, StringComparison.OrdinalIgnoreCase)))
-        {
-            TempData["PipelineError"] = $"'{request.StageName}' is not a recognized pipeline stage.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, $"'{request.StageName}' is not a recognized pipeline stage.");
 
         // ToLower() is used here because EF Core cannot translate StringComparison enum overloads to SQL.
         var stageLogCount = await _dbContext.PipelineStageLogs.CountAsync(log =>
             log.RunId == id && log.StageName.ToLower() == request.StageName.ToLower());
         if (stageLogCount >= _options.MaxStageRetries)
-        {
-            TempData["PipelineError"] = $"Maximum retry attempts reached for the '{request.StageName}' stage.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, $"Maximum retry attempts reached for the '{request.StageName}' stage.");
 
-        if (!string.IsNullOrWhiteSpace(request.Model))
-        {
-            run.Model = request.Model;
-        }
+        if (!string.IsNullOrWhiteSpace(request.Model)) run.Model = request.Model;
+        if (request.StageTimeoutMinutes.HasValue) run.StageTimeoutMinutes = request.StageTimeoutMinutes.Value;
 
-        if (request.StageTimeoutMinutes.HasValue)
-        {
-            run.StageTimeoutMinutes = request.StageTimeoutMinutes.Value;
-        }
-
-        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
-        string? token = null;
-        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
-        {
-            repoRoot = configuredRepository.RepoRoot;
-            token = configuredRepository.Token;
-        }
+        var (repoRoot, token) = ResolveRepoConfig(run.Repository);
 
         run.Status = "Queued";
         run.CurrentStage = request.StageName;
@@ -572,24 +492,12 @@ public partial class PipelinesController : Controller
     public async Task<IActionResult> DeliverNow(string id)
     {
         var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
-        if (run is null)
-        {
-            return NotFound();
-        }
+        if (run is null) return NotFound();
 
         if (run.Status != "Completed" || !run.SkipDeliver)
-        {
-            TempData["PipelineError"] = "Deliver is only available for completed runs that skipped delivery.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "Deliver is only available for completed runs that skipped delivery.");
 
-        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
-        string? token = null;
-        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
-        {
-            repoRoot = configuredRepository.RepoRoot;
-            token = configuredRepository.Token;
-        }
+        var (repoRoot, token) = ResolveRepoConfig(run.Repository);
 
         run.SkipDeliver = false;
         run.Status = "Queued";
@@ -601,7 +509,7 @@ public partial class PipelinesController : Controller
 
         await EnqueueRunAsync(run, repoRoot, token);
 
-        TempData["PipelineNotice"] = "Delivery stage initiated ΓÇö the PR will be merged.";
+        TempData["PipelineNotice"] = "Delivery stage initiated — the PR will be merged.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -615,30 +523,15 @@ public partial class PipelinesController : Controller
     public async Task<IActionResult> ResetMission(string id)
     {
         var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
-        if (run is null)
-        {
-            return NotFound();
-        }
+        if (run is null) return NotFound();
 
         if (run.Status is "Queued" or "Running" or "Pausing")
-        {
-            TempData["PipelineError"] = "Cancel or finish the active run before resetting the mission.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "Cancel or finish the active run before resetting the mission.");
 
         if (PipelineRunPredicates.IsDeliveredRun(run))
-        {
-            TempData["PipelineError"] = "Reset Mission is not available after the code has been delivered.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "Reset Mission is not available after the code has been delivered.");
 
-        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
-        string? token = null;
-        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
-        {
-            repoRoot = configuredRepository.RepoRoot;
-            token = configuredRepository.Token;
-        }
+        var (repoRoot, token) = ResolveRepoConfig(run.Repository);
 
         var issueClient = string.IsNullOrWhiteSpace(token)
             ? _issueClient
@@ -766,65 +659,30 @@ public partial class PipelinesController : Controller
     public async Task<IActionResult> ResumeApproval(string id, string approvalId)
     {
         var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
-        if (run is null)
-        {
-            return NotFound();
-        }
+        if (run is null) return NotFound();
 
         var approval = await _dbContext.PipelineApprovals.FirstOrDefaultAsync(item => item.Id == approvalId && item.RunId == id);
-        if (approval is null)
-        {
-            return NotFound();
-        }
+        if (approval is null) return NotFound();
 
         if (run.Status is "Queued" or "Running" or "Pausing")
-        {
-            TempData["PipelineError"] = "This run is already active.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "This run is already active.");
 
         if (PipelineRunPredicates.IsDeliveredRun(run))
-        {
-            TempData["PipelineError"] = "Delivered runs cannot be altered.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "Delivered runs cannot be altered.");
 
         if (run.Status is not ("Failed" or "Stopped" or "Paused" or "Cancelled"))
-        {
-            TempData["PipelineError"] = "This run cannot be resumed from its current status.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "This run cannot be resumed from its current status.");
 
         if (!approval.Status.Equals("Approved", StringComparison.OrdinalIgnoreCase))
-        {
-            TempData["PipelineError"] = "Only approved approval requests can resume a run.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, "Only approved approval requests can resume a run.");
 
         if (!PipelineRunDetailsViewModel.ValidStageNames.Any(stage => stage.Equals(approval.ResumeStageName, StringComparison.OrdinalIgnoreCase)))
-        {
-            TempData["PipelineError"] = $"'{approval.ResumeStageName}' is not a recognized approval resume stage.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+            return RedirectWithError(nameof(Details), new { id }, $"'{approval.ResumeStageName}' is not a recognized approval resume stage.");
 
-        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
-            item.Id != run.Id
-            && item.Repository == run.Repository
-            && item.IssueNumber == run.IssueNumber
-            && (item.Status == "Queued" || item.Status == "Running" || item.Status == "Pausing"));
-        if (hasActiveRun)
-        {
-            TempData["PipelineError"] = $"{run.Repository} issue #{run.IssueNumber} already has an active Cyberpilot run.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
+        var conflictError = await CheckConflictingRunAsync(run, id);
+        if (conflictError is not null) return conflictError;
 
-        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
-        string? token = null;
-        if (_configHelper.TryGetConfiguredRepository(run.Repository, out var configuredRepository))
-        {
-            repoRoot = configuredRepository.RepoRoot;
-            token = configuredRepository.Token;
-        }
+        var (repoRoot, token) = ResolveRepoConfig(run.Repository);
 
         run.Status = "Queued";
         run.CurrentStage = approval.ResumeStageName;
@@ -914,6 +772,50 @@ public partial class PipelinesController : Controller
         }
 
         return View(viewModel);
+    }
+
+    private IActionResult RedirectWithError(string action, object routeValues, string error)
+    {
+        TempData["PipelineError"] = error;
+        return RedirectToAction(action, routeValues);
+    }
+
+    private (string RepoRoot, string? Token) ResolveRepoConfig(string repository)
+    {
+        var repoRoot = _configHelper.ResolveRepoRoot(_options.RepoRoot);
+        string? token = null;
+        if (_configHelper.TryGetConfiguredRepository(repository, out var configured))
+        {
+            repoRoot = configured.RepoRoot;
+            token = configured.Token;
+        }
+        return (repoRoot, token);
+    }
+
+    private async Task<IActionResult?> CheckConflictingRunAsync(PipelineRun run, string id)
+    {
+        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(item =>
+            item.Id != run.Id
+            && item.Repository == run.Repository
+            && item.IssueNumber == run.IssueNumber
+            && (item.Status == "Queued" || item.Status == "Running" || item.Status == "Pausing"));
+        if (!hasActiveRun) return null;
+        return RedirectWithError(nameof(Details), new { id }, $"{run.Repository} issue #{run.IssueNumber} already has an active Cyberpilot run.");
+    }
+
+    private async Task<IActionResult?> CheckApprovalBlockersAsync(string runId, string id)
+    {
+        var hasPendingApproval = await _dbContext.PipelineApprovals.AnyAsync(approval =>
+            approval.RunId == runId && approval.Status == nameof(ApprovalStatus.Pending));
+        if (hasPendingApproval)
+            return RedirectWithError(nameof(Details), new { id }, "Resolve pending approvals before continuing this run.");
+
+        var hasRejectedApproval = await _dbContext.PipelineApprovals.AnyAsync(approval =>
+            approval.RunId == runId && approval.Status == nameof(ApprovalStatus.Rejected));
+        if (hasRejectedApproval)
+            return RedirectWithError(nameof(Details), new { id }, "Rejected approvals must be addressed with a targeted retry or rework before this run can continue.");
+
+        return null;
     }
 
     private async Task<IActionResult> LoadIssuesViewAsync(string repository, string repositoryInput, string repoRoot, string token)

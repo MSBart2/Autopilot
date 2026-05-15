@@ -5,6 +5,8 @@ namespace Cyberpilot;
 /// <summary>
 /// Represents the final result of an Cyberpilot SDK pipeline run.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1054:URI-like parameters should not be strings", Justification = "PrUrl is stored and transferred as a string; Uri conversion is unnecessary overhead.")]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "PrUrl is stored and transferred as a string; Uri conversion is unnecessary overhead.")]
 public sealed record CyberpilotRunResult(
     int ExitCode,
     string FinalStage,
