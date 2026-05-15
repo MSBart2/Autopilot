@@ -35,6 +35,15 @@ internal sealed class PipelineBranchCoordinator(
             return new BranchRoutingResult(start, null, null);
         }
 
+        // If the caller already knows the PR head branch (e.g., "Review & Deliver" launched from the UI), use it directly.
+        if (!string.IsNullOrWhiteSpace(options.PrHeadBranch))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, $"PR head branch '{options.PrHeadBranch}' supplied — fast-forwarding to Review");
+            console.WriteSuccess($"Using supplied PR branch {options.PrHeadBranch}. Skipping triage/plan/implement.");
+            var reviewStage = definition.Stage("review");
+            return new BranchRoutingResult(new PipelineStart(definition.IndexOf(reviewStage.Name), reviewStage, true), options.PrHeadBranch, null);
+        }
+
         try
         {
             var existingPr = await issueClient.FindPullRequestForIssueAsync(options.IssueNumber, cancellationToken);

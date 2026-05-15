@@ -37,4 +37,5 @@ public sealed record WebPipelineRunRequest(
     string? PolicyProfileName = null,
     string? ContractVersion = null,
     string? PipelineDefinitionFilePath = null,
-    string? RetryReason = null);
+    string? RetryReason = null,
+    string? PrHeadBranch = null);

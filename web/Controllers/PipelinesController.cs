@@ -119,18 +119,28 @@ public partial class PipelinesController : Controller
     private async Task<IActionResult> LoadIssuesViewAsync(string repository, string repositoryInput, string repoRoot, string token)
     {
         var client = _issueClientFactory.Create(repository, token);
-        var issues = await _cache.GetOrCreateAsync(
+        var issuesTask = _cache.GetOrCreateAsync(
             $"issues:list:{repository}",
             async entry =>
             {
                 entry.AbsoluteExpirationRelativeToNow = PipelineIssuesViewBuilder.IssueCacheTtl;
                 return await client.ListOpenIssuesAsync(HttpContext.RequestAborted);
-            }) ?? [];
+            });
+        var pullRequestsTask = _cache.GetOrCreateAsync(
+            $"prs:list:{repository}",
+            async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = PipelineIssuesViewBuilder.IssueCacheTtl;
+                return await client.ListOpenPullRequestsAsync(HttpContext.RequestAborted);
+            });
+        await Task.WhenAll(issuesTask, pullRequestsTask);
+        var issues = await issuesTask ?? [];
+        var pullRequests = await pullRequestsTask ?? [];
         var connectionId = _connectionStore.Save(repository, repoRoot, token);
-        return View(nameof(Issues), await _viewBuilder.BuildIssuesViewModelAsync(issues, repository, repositoryInput, connectionId, null, HttpContext.RequestAborted));
+        return View(nameof(Issues), await _viewBuilder.BuildIssuesViewModelAsync(issues, pullRequests, repository, repositoryInput, connectionId, null, HttpContext.RequestAborted));
     }
 
-    private ValueTask EnqueueRunAsync(PipelineRun run, string repoRoot, string? token, string? retryReason = null)
+    private ValueTask EnqueueRunAsync(PipelineRun run, string repoRoot, string? token, string? retryReason = null, string? prHeadBranch = null)
     {
         return _queue.EnqueueAsync(new WebPipelineRunRequest(
             run.Id,
@@ -149,6 +159,7 @@ public partial class PipelinesController : Controller
             run.PolicyProfileName,
             run.ContractVersion,
             System.IO.File.Exists(_pipelineAdminStore.DefinitionFilePath) ? _pipelineAdminStore.DefinitionFilePath : null,
-            string.IsNullOrWhiteSpace(retryReason) ? null : retryReason));
+            string.IsNullOrWhiteSpace(retryReason) ? null : retryReason,
+            string.IsNullOrWhiteSpace(prHeadBranch) ? null : prHeadBranch));
     }
 }

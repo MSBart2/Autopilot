@@ -1327,6 +1327,9 @@ public class PipelinesControllerTests
             return Task.FromResult(issues);
         }
 
+        public Task<IReadOnlyList<GitHubIssueSummary>> ListOpenPullRequestsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<GitHubIssueSummary>>([]);
+
         public Task RemoveIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default)
         {
             RemovedLabels.Add(label);

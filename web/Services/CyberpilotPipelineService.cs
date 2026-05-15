@@ -148,7 +148,8 @@ public sealed class CyberpilotPipelineService(
                 PipelineDefinitionVersion: request.PipelineDefinitionVersion,
                 PolicyProfileName: request.PolicyProfileName,
                 TargetRepositoryProfileSummary: profile.ToSummary(),
-                PipelineDefinitionFilePath: request.PipelineDefinitionFilePath), sink, cancellationToken);
+                PipelineDefinitionFilePath: request.PipelineDefinitionFilePath,
+                PrHeadBranch: request.PrHeadBranch), sink, cancellationToken);
 
             run.Status = result.Status;
             run.BranchName = result.BranchName;

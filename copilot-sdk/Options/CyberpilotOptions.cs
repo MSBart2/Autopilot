@@ -23,7 +23,8 @@ internal sealed record CyberpilotOptions(
     string PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
     string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
     Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null,
-    string? PipelineDefinitionFilePath = null)
+    string? PipelineDefinitionFilePath = null,
+    string? PrHeadBranch = null)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);

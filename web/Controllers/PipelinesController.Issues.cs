@@ -24,14 +24,24 @@ public partial class PipelinesController
                 return await LoadIssuesViewAsync(configuredRepository.Repository, configuredRepository.Repository, configuredRepository.RepoRoot, configuredRepository.Token);
             }
 
-            var issues = await _cache.GetOrCreateAsync(
+            var issuesTask = _cache.GetOrCreateAsync(
                 $"issues:list:{_options.Repository}",
                 async entry =>
                 {
                     entry.AbsoluteExpirationRelativeToNow = PipelineIssuesViewBuilder.IssueCacheTtl;
                     return await _issueClient.ListOpenIssuesAsync(HttpContext.RequestAborted);
-                }) ?? [];
-            return View(await _viewBuilder.BuildIssuesViewModelAsync(issues, _options.Repository, _options.Repository, null, null, HttpContext.RequestAborted));
+                });
+            var pullRequestsTask = _cache.GetOrCreateAsync(
+                $"prs:list:{_options.Repository}",
+                async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = PipelineIssuesViewBuilder.IssueCacheTtl;
+                    return await _issueClient.ListOpenPullRequestsAsync(HttpContext.RequestAborted);
+                });
+            await Task.WhenAll(issuesTask, pullRequestsTask);
+            var issues = await issuesTask ?? [];
+            var pullRequests = await pullRequestsTask ?? [];
+            return View(await _viewBuilder.BuildIssuesViewModelAsync(issues, pullRequests, _options.Repository, _options.Repository, null, null, HttpContext.RequestAborted));
         }
         catch (Exception ex)
         {
@@ -216,5 +226,76 @@ public partial class PipelinesController
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Starts a review → docs → deliver run for an open pull request.
+    /// </summary>
+    /// <param name="prNumber">The pull request number.</param>
+    /// <param name="request">The PR review start request.</param>
+    /// <returns>A redirect to the run details page.</returns>
+    [HttpPost("PRs/{prNumber:int}/Start")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> StartPrReview(int prNumber, PrReviewStartRequest request)
+    {
+        request.PrNumber = prNumber;
+
+        if (!ModelState.IsValid || string.IsNullOrWhiteSpace(request.HeadBranch))
+        {
+            TempData["PipelineError"] = "Pull request review request was invalid.";
+            return RedirectToAction(nameof(Issues));
+        }
+
+        if (!GitHubRepositoryParser.TryNormalize(request.Repository, out var repository))
+        {
+            TempData["PipelineError"] = "Pull request review request had an invalid repository.";
+            return RedirectToAction(nameof(Issues));
+        }
+
+        var hasActiveRun = await _dbContext.PipelineRuns.AnyAsync(run =>
+            run.Repository == repository && run.IssueNumber == prNumber && (run.Status == "Queued" || run.Status == "Running" || run.Status == "Pausing"));
+        if (hasActiveRun)
+        {
+            TempData["PipelineError"] = $"{repository} PR #{prNumber} already has an active Cyberpilot run.";
+            return RedirectToAction(nameof(Issues));
+        }
+
+        var connection = _connectionStore.Get(request.ConnectionId);
+        var (repoRoot, token) = ResolveRepoConfig(repository);
+        if (connection is not null && connection.Repository.Equals(repository, StringComparison.OrdinalIgnoreCase))
+        {
+            token = connection.Token;
+            repoRoot = connection.RepoRoot;
+        }
+
+        BuiltInPipelineCatalog.TryGetDefinition(PipelineDefinitionDefaults.DefinitionName, out var definition);
+        BuiltInPipelineCatalog.TryGetPolicyProfile(PipelineDefinitionDefaults.PolicyProfileName, out var policyProfile);
+
+        var run = new Cyberpilot.Persistence.PipelineRun
+        {
+            IssueNumber = prNumber,
+            Repository = repository,
+            Model = request.Model,
+            Status = "Queued",
+            TriggeredBy = User.Identity?.Name,
+            SkipDeliver = false,
+            StageTimeoutMinutes = request.StageTimeoutMinutes,
+            AllowMissingDocs = false,
+            IssueTitle = $"PR #{prNumber}: {request.HeadBranch}",
+            BranchName = request.HeadBranch,
+            CurrentStage = "review",
+            PipelineDefinitionName = definition?.Name ?? PipelineDefinitionDefaults.DefinitionName,
+            PipelineDefinitionVersion = definition?.Version ?? PipelineDefinitionDefaults.DefinitionVersion,
+            PolicyProfileName = policyProfile?.Name ?? PipelineDefinitionDefaults.PolicyProfileName,
+            ContractVersion = PipelineDefinitionDefaults.ContractVersion,
+        };
+
+        _dbContext.PipelineRuns.Add(run);
+        await _dbContext.SaveChangesAsync();
+
+        await EnqueueRunAsync(run, repoRoot, token, prHeadBranch: request.HeadBranch);
+
+        TempData["PipelineNotice"] = $"Review → Docs → Deliver started for PR #{prNumber} on branch {request.HeadBranch}.";
+        return RedirectToAction(nameof(Details), new { id = run.Id });
     }
 }

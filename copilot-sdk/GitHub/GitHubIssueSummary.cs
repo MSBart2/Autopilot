@@ -13,7 +13,9 @@ public sealed record GitHubIssueSummary(
     DateTimeOffset UpdatedAt,
     string State,
     bool HasActivePipelineRun,
-    string Body = "");
+    string Body = "",
+    bool IsPullRequest = false,
+    string? HeadBranch = null);
 
 internal static class GitHubIssueSummaryJson
 {
@@ -62,6 +64,38 @@ internal static class GitHubIssueSummaryJson
         var state = item.TryGetProperty("state", out var stateValue) ? stateValue.GetString() ?? "OPEN" : "OPEN";
 
         return new GitHubIssueSummary(number, title, url, labels, updatedAt, state, HasActiveLabel(labels), body);
+    }
+
+    public static GitHubIssueSummary ParsePullRequest(JsonElement item)
+    {
+        var labels = new List<string>();
+        if (item.TryGetProperty("labels", out var labelArray) && labelArray.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var label in labelArray.EnumerateArray())
+            {
+                var labelName = label.ValueKind == JsonValueKind.String
+                    ? label.GetString() ?? string.Empty
+                    : label.TryGetProperty("name", out var name) ? name.GetString() ?? string.Empty : string.Empty;
+                labels.Add(labelName);
+            }
+        }
+
+        var updatedAt = DateTimeOffset.MinValue;
+        if (item.TryGetProperty("updated_at", out var updatedAtSnake) || item.TryGetProperty("updatedAt", out updatedAtSnake))
+        {
+            DateTimeOffset.TryParse(updatedAtSnake.GetString(), out updatedAt);
+        }
+
+        var number = item.TryGetProperty("number", out var numberValue) ? numberValue.GetInt32() : 0;
+        var title = item.TryGetProperty("title", out var titleValue) ? titleValue.GetString() ?? string.Empty : string.Empty;
+        var url = item.TryGetProperty("html_url", out var htmlUrl) ? htmlUrl.GetString() ?? string.Empty :
+            item.TryGetProperty("url", out var urlValue) ? urlValue.GetString() ?? string.Empty : string.Empty;
+        var state = item.TryGetProperty("state", out var stateValue) ? stateValue.GetString() ?? "OPEN" : "OPEN";
+        var headBranch = item.TryGetProperty("head", out var head) && head.TryGetProperty("ref", out var headRef)
+            ? headRef.GetString()
+            : item.TryGetProperty("headRefName", out var headRefName) ? headRefName.GetString() : null;
+
+        return new GitHubIssueSummary(number, title, url, labels, updatedAt, state, false, string.Empty, IsPullRequest: true, HeadBranch: headBranch);
     }
 
     private static bool HasActiveLabel(IReadOnlyList<string> labels)

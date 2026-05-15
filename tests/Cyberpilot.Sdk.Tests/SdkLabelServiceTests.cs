@@ -151,6 +151,11 @@ public sealed class SdkLabelServiceTests
             return Task.FromResult<IReadOnlyList<GitHubIssueSummary>>([]);
         }
 
+        public Task<IReadOnlyList<GitHubIssueSummary>> ListOpenPullRequestsAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<GitHubIssueSummary>>([]);
+        }
+
         public Task RemoveIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default)
         {
             RemovedLabels.Add(label);

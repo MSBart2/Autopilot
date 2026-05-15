@@ -115,7 +115,24 @@ public sealed class GitHubApiIssueClient : IGitHubIssueClient
         using var response = await httpClient.GetAsync($"repos/{repository}/issues?state=open&per_page=50", cancellationToken);
         await EnsureSuccessAsync(response);
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
-        return GitHubIssueSummaryJson.ParseMany(json).Where(issue => !issue.Labels.Contains("pull request", StringComparer.OrdinalIgnoreCase)).ToArray();
+        // The GitHub REST API returns PRs alongside issues. Items with a "pull_request" property are PRs.
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.EnumerateArray()
+            .Where(item => !item.TryGetProperty("pull_request", out _))
+            .Select(GitHubIssueSummaryJson.ParseIssue)
+            .ToArray();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<GitHubIssueSummary>> ListOpenPullRequestsAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.GetAsync($"repos/{repository}/pulls?state=open&per_page=50", cancellationToken);
+        if (!response.IsSuccessStatusCode) return [];
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return document.RootElement.EnumerateArray()
+            .Select(GitHubIssueSummaryJson.ParsePullRequest)
+            .ToArray();
     }
 
     /// <inheritdoc />

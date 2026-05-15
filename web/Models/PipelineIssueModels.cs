@@ -69,6 +69,7 @@ public sealed class PipelineDashboardViewModel
 /// Displays open issues that can launch Cyberpilot.
 /// </summary>
 /// <param name="Issues">The open issues.</param>
+/// <param name="PullRequests">The open pull requests that can be reviewed and delivered.</param>
 /// <param name="Repository">The configured repository.</param>
 /// <param name="RepositoryInput">The repository input shown in the launcher form.</param>
 /// <param name="ConnectionId">The short-lived credential connection identifier.</param>
@@ -80,6 +81,7 @@ public sealed class PipelineDashboardViewModel
 /// <param name="PolicyProfiles">Policy profiles available for SDK runs.</param>
 public sealed record PipelineIssuesViewModel(
     IReadOnlyList<GitHubIssueSummary> Issues,
+    IReadOnlyList<GitHubIssueSummary> PullRequests,
     string Repository,
     string RepositoryInput,
     string? ConnectionId,
@@ -100,11 +102,11 @@ public sealed record PipelineIssuesViewModel(
         IReadOnlyList<ConfiguredRepositoryViewModel> configuredRepositories,
         IReadOnlySet<int> sdkActiveIssueNumbers,
         IReadOnlyDictionary<int, string> latestSdkRunIds)
-        : this(issues, repository, repositoryInput, connectionId, error, configuredRepositories, sdkActiveIssueNumbers, latestSdkRunIds, [], []) { }
+        : this(issues, [], repository, repositoryInput, connectionId, error, configuredRepositories, sdkActiveIssueNumbers, latestSdkRunIds, [], []) { }
 
     /// <summary>Initializes a view model without SDK run data.</summary>
     public PipelineIssuesViewModel(IReadOnlyList<GitHubIssueSummary> issues, string repository, string? error)
-        : this(issues, repository, repository, null, error, [], new HashSet<int>(), new Dictionary<int, string>(), [], []) { }
+        : this(issues, [], repository, repository, null, error, [], new HashSet<int>(), new Dictionary<int, string>(), [], []) { }
 
     /// <summary>Gets the curated list of Copilot models available for selection.</summary>
     public static IReadOnlyList<string> AvailableModels { get; } =
@@ -200,6 +202,39 @@ public sealed class PipelineConfiguredIssueLoadRequest
     [Required]
     [StringLength(300)]
     public string Repository { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Captures a request to run review → docs → deliver on an open pull request.
+/// </summary>
+public sealed class PrReviewStartRequest
+{
+    /// <summary>Gets or sets the PR number.</summary>
+    [Range(1, int.MaxValue)]
+    public int PrNumber { get; set; }
+
+    /// <summary>Gets or sets the PR head branch name.</summary>
+    [Required]
+    [StringLength(300)]
+    public string HeadBranch { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the repository in owner/name form.</summary>
+    [Required]
+    [StringLength(300)]
+    public string Repository { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the short-lived credential connection identifier.</summary>
+    [StringLength(80)]
+    public string? ConnectionId { get; set; }
+
+    /// <summary>Gets or sets the Copilot model.</summary>
+    [Required]
+    [StringLength(120)]
+    public string Model { get; set; } = "claude-sonnet-4.6";
+
+    /// <summary>Gets or sets the per-stage timeout in minutes.</summary>
+    [Range(1, 120)]
+    public int StageTimeoutMinutes { get; set; } = 20;
 }
 
 /// <summary>

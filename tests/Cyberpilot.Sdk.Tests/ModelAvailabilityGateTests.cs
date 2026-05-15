@@ -91,6 +91,7 @@ public sealed class ModelAvailabilityGateTests
         public Task<string> GetIssueStateAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult("OPEN");
         public Task<IReadOnlySet<string>> GetRepositoryLabelsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
         public Task<IReadOnlyList<Cyberpilot.GitHub.GitHubIssueSummary>> ListOpenIssuesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<Cyberpilot.GitHub.GitHubIssueSummary>>([]);
+        public Task<IReadOnlyList<Cyberpilot.GitHub.GitHubIssueSummary>> ListOpenPullRequestsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<Cyberpilot.GitHub.GitHubIssueSummary>>([]);
         public Task<Cyberpilot.GitHub.GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<Cyberpilot.GitHub.GitHubPullRequestInfo?>(null);
         public Task RemoveIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;

@@ -38,6 +38,9 @@ public sealed class UnconfiguredGitHubIssueClient(string message) : IGitHubIssue
     public Task<IReadOnlyList<GitHubIssueSummary>> ListOpenIssuesAsync(CancellationToken cancellationToken = default) => throw CreateException();
 
     /// <inheritdoc />
+    public Task<IReadOnlyList<GitHubIssueSummary>> ListOpenPullRequestsAsync(CancellationToken cancellationToken = default) => throw CreateException();
+
+    /// <inheritdoc />
     public Task RemoveIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default) => throw CreateException();
 
     /// <inheritdoc />

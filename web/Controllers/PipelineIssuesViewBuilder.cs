@@ -62,6 +62,48 @@ internal sealed class PipelineIssuesViewBuilder
 
         return new PipelineIssuesViewModel(
             issues,
+            [],
+            repository,
+            repositoryInput,
+            connectionId,
+            error,
+            _configHelper.GetConfiguredRepositoryChoices(),
+            sdkActiveIssueNumbers,
+            latestSdkRunIds,
+            await _pipelineAdminStore.GetDefinitionOptionsAsync(cancellationToken),
+            await _pipelineAdminStore.GetPolicyOptionsAsync(cancellationToken));
+    }
+
+    public async Task<PipelineIssuesViewModel> BuildIssuesViewModelAsync(
+        IReadOnlyList<GitHubIssueSummary> issues,
+        IReadOnlyList<GitHubIssueSummary> pullRequests,
+        string repository,
+        string repositoryInput,
+        string? connectionId,
+        string? error,
+        CancellationToken cancellationToken = default)
+    {
+        var recentRuns = await _dbContext.PipelineRuns
+            .AsNoTracking()
+            .Where(run => run.Repository == repository)
+            .OrderByDescending(run => run.CreatedAt)
+            .ToArrayAsync(cancellationToken);
+
+        var latestRunsByIssue = recentRuns
+            .GroupBy(run => run.IssueNumber)
+            .Select(group => group.First())
+            .ToArray();
+
+        var sdkActiveIssueNumbers = latestRunsByIssue
+            .Where(run => run.Status is "Queued" or "Running" or "Pausing")
+            .Select(run => run.IssueNumber)
+            .ToHashSet();
+
+        var latestSdkRunIds = latestRunsByIssue.ToDictionary(run => run.IssueNumber, run => run.Id);
+
+        return new PipelineIssuesViewModel(
+            issues,
+            pullRequests,
             repository,
             repositoryInput,
             connectionId,

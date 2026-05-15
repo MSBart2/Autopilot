@@ -57,6 +57,10 @@ public interface IGitHubIssueClient
     /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The open issue summaries.</returns>
     Task<IReadOnlyList<GitHubIssueSummary>> ListOpenIssuesAsync(CancellationToken cancellationToken = default);
+    /// <summary>Lists open pull requests.</summary>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
+    /// <returns>The open pull request summaries with <see cref="GitHubIssueSummary.IsPullRequest"/> set to true.</returns>
+    Task<IReadOnlyList<GitHubIssueSummary>> ListOpenPullRequestsAsync(CancellationToken cancellationToken = default);
     /// <summary>Finds an open pull request linked to the given issue number.</summary>
     /// <param name="issueNumber">The issue number.</param>
     /// <param name="cancellationToken">A token that cancels the operation.</param>
@@ -131,6 +135,16 @@ internal sealed class GitHubIssueClient(IGitHubCli cli) : IGitHubIssueClient
     {
         var result = await cli.RunAsync(["issue", "list", "--state", "open", "--limit", "50", "--json", "number,title,url,labels,updatedAt"], cancellationToken: cancellationToken);
         return GitHubIssueSummaryJson.ParseMany(result);
+    }
+
+    public async Task<IReadOnlyList<GitHubIssueSummary>> ListOpenPullRequestsAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await cli.RunAsync(["pr", "list", "--state", "open", "--limit", "50", "--json", "number,title,url,headRefName,labels,updatedAt"], allowFailure: true, cancellationToken);
+        if (string.IsNullOrWhiteSpace(result)) return [];
+        using var doc = JsonDocument.Parse(result);
+        return doc.RootElement.EnumerateArray()
+            .Select(GitHubIssueSummaryJson.ParsePullRequest)
+            .ToArray();
     }
 
     public async Task RemoveIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default)

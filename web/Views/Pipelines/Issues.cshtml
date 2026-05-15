@@ -232,6 +232,72 @@ else
                 </div>
             }
 
+@if (Model.PullRequests.Any())
+{
+    <h2 class="mt-5 mb-3">Open Pull Requests</h2>
+    <p class="text-muted small mb-3">Run review → docs → deliver on a human-authored PR.</p>
+    <div class="dispatch-grid">
+        @foreach (var pr in Model.PullRequests)
+        {
+            var prRunId = Model.LatestSdkRunIds.TryGetValue(pr.Number, out var rid) ? rid : null;
+            var prActive = Model.SdkActiveIssueNumbers.Contains(pr.Number);
+
+            <article class="issue-card dispatch-card border-purple is-tagged">
+                <div class="issue-card-header">
+                    <a href="@pr.Url" class="issue-number" target="_blank" rel="noopener">
+                        PR #@pr.Number
+                    </a>
+                    <span class="badge text-bg-secondary d-flex align-items-center gap-1">
+                        @if (prActive)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"
+                                  style="width:.6rem;height:.6rem;border-width:.15em"></span>
+                        }
+                        @(prActive ? "reviewing" : "Pull Request")
+                    </span>
+                </div>
+                <div class="issue-card-body">
+                    <a href="@pr.Url" class="issue-title" target="_blank" rel="noopener">@pr.Title</a>
+                    @if (!string.IsNullOrWhiteSpace(pr.HeadBranch))
+                    {
+                        <div class="mt-1">
+                            <span class="badge text-bg-light border font-monospace text-truncate" style="max-width:100%" title="@pr.HeadBranch">@pr.HeadBranch</span>
+                        </div>
+                    }
+                    <p class="issue-updated">Updated @pr.UpdatedAt.ToLocalTime().ToString("g")</p>
+                    @if (prRunId is not null)
+                    {
+                        <a asp-action="Details" asp-route-id="@prRunId" class="btn btn-outline-primary btn-sm mt-1 w-100">
+                            View run details
+                        </a>
+                    }
+                </div>
+                <div class="issue-card-footer">
+                    <form asp-action="StartPrReview" asp-route-prNumber="@pr.Number" method="post"
+                          class="d-flex flex-column gap-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="PrNumber" value="@pr.Number" />
+                        <input type="hidden" name="HeadBranch" value="@pr.HeadBranch" />
+                        <input type="hidden" name="Repository" value="@Model.Repository" />
+                        <input type="hidden" name="ConnectionId" value="@Model.ConnectionId" />
+                        <input type="hidden" name="StageTimeoutMinutes" value="20" />
+                        <select class="form-select form-select-sm" name="Model" aria-label="Model" @(prActive ? "disabled" : null)>
+                            @foreach (var m in Cyberpilot.Web.Models.PipelineIssuesViewModel.AvailableModels)
+                            {
+                                <option value="@m" selected="@(m == "claude-sonnet-4.6" ? "selected" : null)">@m</option>
+                            }
+                        </select>
+                        <button class="btn btn-sm btn-secondary w-100" type="submit" @(prActive ? "disabled" : null)
+                                title="@(prActive ? "A run is already in progress" : "Review, document, and deliver this PR")">
+                            Review → Docs → Deliver
+                        </button>
+                    </form>
+                </div>
+            </article>
+        }
+    </div>
+}
+
             @section Styles {
             }
 
