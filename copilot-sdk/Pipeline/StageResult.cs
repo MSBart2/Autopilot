@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace Cyberpilot.Pipeline;
 
@@ -52,13 +51,12 @@ public sealed record StageResult(
     /// <returns>The parsed stage result.</returns>
     public static StageResult Parse(string content)
     {
-        var jsonMatches = Regex.Matches(content, "```json\\s*(?<json>\\{.*?\\})\\s*```", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-        if (jsonMatches.Count == 0)
+        var json = ExtractLastJsonBlock(content);
+        if (json is null)
         {
             return Invalid("No fenced JSON result block found.");
         }
 
-        var json = jsonMatches[^1].Groups["json"].Value;
         try
         {
             using var document = JsonDocument.Parse(json);
@@ -99,6 +97,62 @@ public sealed record StageResult(
         {
             return Invalid($"Malformed JSON result: {ex.Message}");
         }
+    }
+
+    private static string? ExtractLastJsonBlock(string content)
+    {
+        const string FenceOpen = "```json";
+        var searchStart = 0;
+        string? lastJson = null;
+
+        while (true)
+        {
+            var fenceStart = content.IndexOf(FenceOpen, searchStart, StringComparison.OrdinalIgnoreCase);
+            if (fenceStart < 0) break;
+
+            var contentStart = fenceStart + FenceOpen.Length;
+            while (contentStart < content.Length && content[contentStart] is ' ' or '\t' or '\r' or '\n')
+                contentStart++;
+
+            if (contentStart < content.Length && content[contentStart] == '{')
+            {
+                var extracted = ExtractJsonObject(content, contentStart);
+                if (extracted is not null)
+                    lastJson = extracted;
+            }
+
+            searchStart = fenceStart + FenceOpen.Length;
+        }
+
+        return lastJson;
+    }
+
+    private static string? ExtractJsonObject(string content, int start)
+    {
+        if (start >= content.Length || content[start] != '{') return null;
+
+        var depth = 0;
+        var inString = false;
+        var escaped = false;
+
+        for (var i = start; i < content.Length; i++)
+        {
+            var c = content[i];
+
+            if (escaped) { escaped = false; continue; }
+            if (c == '\\' && inString) { escaped = true; continue; }
+            if (c == '"') { inString = !inString; continue; }
+            if (inString) continue;
+
+            if (c == '{') depth++;
+            else if (c == '}')
+            {
+                depth--;
+                if (depth == 0) return content[start..(i + 1)];
+            }
+        }
+
+        return null;
     }
 
     private static string? ReadString(JsonElement element, string name)

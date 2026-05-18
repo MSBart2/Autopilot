@@ -12,7 +12,9 @@ internal sealed class GitHubCli(string repoRoot, string? repository) : IGitHubCl
     public async Task<string> RunAsync(IReadOnlyList<string> args, bool allowFailure = false, CancellationToken cancellationToken = default)
     {
         var allArgs = new List<string>(args);
-        if (!string.IsNullOrWhiteSpace(repository))
+        // gh api resolves owner/repo from `:owner/:repo` placeholders and does not accept --repo
+        var isApiCommand = args.Count > 0 && string.Equals(args[0], "api", StringComparison.OrdinalIgnoreCase);
+        if (!isApiCommand && !string.IsNullOrWhiteSpace(repository))
         {
             allArgs.Add("--repo");
             allArgs.Add(repository);
