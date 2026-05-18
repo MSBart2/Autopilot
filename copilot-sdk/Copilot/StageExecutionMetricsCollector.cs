@@ -8,6 +8,7 @@ internal sealed class StageExecutionMetricsCollector(string configuredModel)
     private readonly HashSet<string> providerCallIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> apiCallIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> toolNames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string?> toolArgs = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<FailedToolCallRecord> failedToolCalls = [];
     private int? inputTokens;
     private int? outputTokens;
@@ -55,6 +56,8 @@ internal sealed class StageExecutionMetricsCollector(string configuredModel)
         if (!string.IsNullOrWhiteSpace(data.ToolCallId) && !string.IsNullOrWhiteSpace(data.ToolName))
         {
             toolNames[data.ToolCallId] = data.ToolName;
+            toolArgs[data.ToolCallId] = data.Arguments is null ? null
+                : System.Text.Json.JsonSerializer.Serialize(data.Arguments);
         }
     }
 
@@ -63,10 +66,13 @@ internal sealed class StageExecutionMetricsCollector(string configuredModel)
         if (!data.Success)
         {
             FailedToolCallCount++;
-            toolNames.TryGetValue(data.ToolCallId ?? string.Empty, out var toolName);
+            var callId = data.ToolCallId ?? string.Empty;
+            toolNames.TryGetValue(callId, out var toolName);
+            toolArgs.TryGetValue(callId, out var args);
             failedToolCalls.Add(new FailedToolCallRecord(
-                data.ToolCallId ?? string.Empty,
+                callId,
                 toolName,
+                args,
                 data.Error?.Code,
                 data.Error?.Message));
         }

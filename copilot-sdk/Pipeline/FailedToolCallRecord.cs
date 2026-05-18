@@ -5,10 +5,12 @@ namespace Cyberpilot.Pipeline;
 /// </summary>
 /// <param name="ToolCallId">The unique identifier for the tool call.</param>
 /// <param name="ToolName">The name of the tool that failed, when known.</param>
+/// <param name="ToolArgs">The serialized arguments passed to the tool, when known.</param>
 /// <param name="ErrorCode">The machine-readable error code, when reported.</param>
 /// <param name="ErrorMessage">The human-readable error message, when reported.</param>
 public sealed record FailedToolCallRecord(
     string ToolCallId,
     string? ToolName,
+    string? ToolArgs,
     string? ErrorCode,
     string? ErrorMessage);

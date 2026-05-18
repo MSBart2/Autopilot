@@ -41,6 +41,10 @@ public sealed class PipelineToolFailure
     [StringLength(2000)]
     public string? ErrorMessage { get; set; }
 
+    /// <summary>Gets or sets the serialized tool arguments, when available.</summary>
+    [StringLength(2000)]
+    public string? ToolArgs { get; set; }
+
     /// <summary>Gets or sets when this failure record was created.</summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -76,6 +80,9 @@ public sealed class PipelineToolFailure
                 ErrorMessage = string.IsNullOrWhiteSpace(failure.ErrorMessage) ? null : failure.ErrorMessage.Length > 2000
                     ? string.Concat(failure.ErrorMessage.AsSpan(0, 1997), "...")
                     : failure.ErrorMessage,
+                ToolArgs = string.IsNullOrWhiteSpace(failure.ToolArgs) ? null : failure.ToolArgs.Length > 2000
+                    ? string.Concat(failure.ToolArgs.AsSpan(0, 1997), "...")
+                    : failure.ToolArgs,
             })
             .ToArray() ?? [];
     }
