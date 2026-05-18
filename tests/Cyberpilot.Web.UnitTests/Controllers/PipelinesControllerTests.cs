@@ -1338,6 +1338,8 @@ public class PipelinesControllerTests
 
         public Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<GitHubPullRequestInfo?>(null);
+
+        public Task ClosePullRequestAsync(int pullRequestNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class TestIssueClientFactory : IGitHubIssueClientFactory

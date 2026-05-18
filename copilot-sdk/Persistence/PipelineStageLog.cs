@@ -127,4 +127,7 @@ public sealed class PipelineStageLog
 
     /// <summary>Gets or sets structured artifact rows related to this stage log.</summary>
     public ICollection<PipelineArtifact> Artifacts { get; set; } = [];
+
+    /// <summary>Gets or sets tool failure records related to this stage log.</summary>
+    public ICollection<PipelineToolFailure> ToolFailures { get; set; } = [];
 }

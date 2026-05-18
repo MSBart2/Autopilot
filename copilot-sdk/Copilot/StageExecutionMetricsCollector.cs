@@ -7,6 +7,8 @@ internal sealed class StageExecutionMetricsCollector(string configuredModel)
 {
     private readonly HashSet<string> providerCallIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> apiCallIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> toolNames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<FailedToolCallRecord> failedToolCalls = [];
     private int? inputTokens;
     private int? outputTokens;
     private int? cacheReadTokens;
@@ -50,6 +52,10 @@ internal sealed class StageExecutionMetricsCollector(string configuredModel)
     public void RecordToolExecutionStart(ToolExecutionStartData data)
     {
         ToolCallCount++;
+        if (!string.IsNullOrWhiteSpace(data.ToolCallId) && !string.IsNullOrWhiteSpace(data.ToolName))
+        {
+            toolNames[data.ToolCallId] = data.ToolName;
+        }
     }
 
     public void RecordToolExecutionComplete(ToolExecutionCompleteData data)
@@ -57,6 +63,12 @@ internal sealed class StageExecutionMetricsCollector(string configuredModel)
         if (!data.Success)
         {
             FailedToolCallCount++;
+            toolNames.TryGetValue(data.ToolCallId ?? string.Empty, out var toolName);
+            failedToolCalls.Add(new FailedToolCallRecord(
+                data.ToolCallId ?? string.Empty,
+                toolName,
+                data.Error?.Code,
+                data.Error?.Message));
         }
     }
 
@@ -104,7 +116,8 @@ internal sealed class StageExecutionMetricsCollector(string configuredModel)
             ReachedIdle,
             WasAborted,
             providerCallIds.Count == 0 ? null : providerCallIds.Order().ToArray(),
-            apiCallIds.Count == 0 ? null : apiCallIds.Order().ToArray());
+            apiCallIds.Count == 0 ? null : apiCallIds.Order().ToArray(),
+            failedToolCalls.Count == 0 ? null : failedToolCalls.AsReadOnly());
     }
 
     private static int? AddTokens(int? current, double? value)

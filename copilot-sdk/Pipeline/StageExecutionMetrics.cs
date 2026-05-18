@@ -19,6 +19,7 @@ namespace Cyberpilot.Pipeline;
 /// <param name="WasAborted">Whether the session idle event reported an aborted session.</param>
 /// <param name="ProviderCallIds">Provider request identifiers observed in usage or error events.</param>
 /// <param name="ApiCallIds">API call identifiers observed in usage events.</param>
+/// <param name="FailedToolCalls">Per-call failure details for failed tool executions, when available.</param>
 public sealed record StageExecutionMetrics(
     string? Model = null,
     int? InputTokens = null,
@@ -35,4 +36,5 @@ public sealed record StageExecutionMetrics(
     bool ReachedIdle = false,
     bool WasAborted = false,
     IReadOnlyList<string>? ProviderCallIds = null,
-    IReadOnlyList<string>? ApiCallIds = null);
+    IReadOnlyList<string>? ApiCallIds = null,
+    IReadOnlyList<FailedToolCallRecord>? FailedToolCalls = null);

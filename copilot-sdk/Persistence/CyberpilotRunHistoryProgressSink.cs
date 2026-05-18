@@ -56,6 +56,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
                 : result.ContractVersion;
             dbContext.PipelineArtifacts.AddRange(PipelineArtifact.FromStageResult(runId, stage.Name, currentLog, result));
             dbContext.PipelineEvidence.AddRange(PipelineEvidence.FromStageResult(runId, stage.Name, currentLog, result));
+            dbContext.PipelineToolFailures.AddRange(PipelineToolFailure.FromStageResult(runId, stage.Name, currentLog, result));
         }
 
         dbContext.SaveChanges();

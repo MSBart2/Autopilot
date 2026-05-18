@@ -129,4 +129,7 @@ public sealed class PipelineRun
 
     /// <summary>Gets or sets structured artifacts produced by this run.</summary>
     public ICollection<PipelineArtifact> Artifacts { get; set; } = [];
+
+    /// <summary>Gets or sets tool failure records for this run.</summary>
+    public ICollection<PipelineToolFailure> ToolFailures { get; set; } = [];
 }

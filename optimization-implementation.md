@@ -70,17 +70,68 @@ Remaining ~151 failures are not captured — most likely pre-hook write denials 
 - [ ] Investigate the PowerShell multi-arg errors — determine which commands trigger them and whether tightening the tool description prevents them.
 - [ ] Determine whether failures are retried by the model (wasted turns) or silently skipped.
 
+### Implementation steps
+
+#### Step 1: Failure reason logging
+
+**Goal:** Make every failed tool call inspectable — error code, error message, tool name.
+
+**Why first:** 90%+ of failures have no logged reason today. Without this, all other fix attempts are guesswork. Logging failure reasons is a prerequisite for confirming any fix worked.
+
+**What to build:**
+- Track `ToolCallId → ToolName` in `StageExecutionMetricsCollector` by saving start event data.
+- On `RecordToolExecutionComplete` with `Success = false`, capture `ToolName`, `Error.Code`, and `Error.Message`.
+- Add a `PipelineToolCallFailure` EF entity: `RunId`, `StageName`, `ToolCallId`, `ToolName`, `ErrorCode`, `ErrorMessage`, `CreatedAt`.
+- Persist failures via `CyberpilotRunHistoryProgressSink` after each stage.
+- Add EF migration.
+
+**Done when:** Failed tool calls include a reason code queryable from `cyberpilot.db`. Run a benchmark issue and confirm no invisible failures remain.
+
+---
+
+#### Step 2: Fix review self-review block
+
+**Root cause confirmed:** Review stage agent calls `gh pr review --approve` on a PR it authored. GitHub rejects this with `Can not approve your own pull request`.
+
+**Fix:** Add a pre-tool hook denial in `StageToolPolicyHooks.EvaluatePreToolUse` to block any `gh pr review` call that includes `--approve` or `--request-changes`. Return a clear denial reason so the model doesn't retry.
+
+**Done when:** Zero self-review errors in a benchmark review stage.
+
+---
+
+#### Step 3: Fix PowerShell multi-arg errors
+
+**Root cause confirmed:** Agent passes shell commands as multiple positional args (e.g. `["git", "status"]`) instead of a single command string. PowerShell responds with `accepts 1 arg(s), received N`.
+
+**Fix:** Improve the `powershell` tool description to explicitly state the command must be a single string. Evaluate whether a pre-tool hook can detect and reject split-arg inputs before they reach PowerShell.
+
+**Done when:** Zero `accepts N arg(s), received N` errors in a benchmark run.
+
+---
+
+#### Step 4: Retry hint on repeated tool failures
+
+Add a post-tool hook that injects `AdditionalContext` when the same tool fails twice in a row, suggesting the model try an alternative approach. Requires tracking last-failed tool name in `StageToolPolicyHooks`.
+
+---
+
+#### Step 5: TLS retry backoff for GitHub API
+
+Add 2–3 attempt retry with exponential backoff in `GitHubCli` or `GitHubApiIssueClient` for transient TLS handshake errors on GitHub GraphQL calls.
+
+---
+
 ### Candidate fixes
 
 | Root cause | Candidate fix | Status |
 | --- | --- | --- |
-| Failure reasons not logged | Log `ToolExecutionCompleteData.Error` (code + message) per failed call | Not started |
-| Review agent tries to approve its own PR | Remove or gate the PR approval step in the review stage prompt | Not started |
-| Agent passes multi-word commands as separate PowerShell args | Improve PowerShell tool description to require a single command string | Not started |
-| Model retries a failing tool in a loop | Add post-tool hook to detect repeat failures and surface a hint | Not started |
+| Failure reasons not logged | Log `ToolExecutionCompleteData.Error` (code + message) per failed call | **Step 1** |
+| Review agent tries to approve its own PR | Block `gh pr review --approve/request-changes` in pre-tool hook | **Step 2** |
+| Agent passes multi-word commands as separate PowerShell args | Improve PowerShell tool description; detect split-arg in pre-hook | **Step 3** |
+| Model retries a failing tool in a loop | Post-tool hook: inject retry hint on repeat failure | **Step 4** |
+| GitHub API TLS timeouts | Add retry with backoff for transient network failures | **Step 5** |
 | Tool times out on slow operations | Add per-tool timeout config with a sensible default | Not started |
 | Read-only stage agent attempts file writes | Confirm pre-hook denial messages reach the model; add denial hint in prompt | Not started |
-| GitHub API TLS timeouts | Add retry with backoff for transient network failures | Not started |
 
 ### Success criteria
 
