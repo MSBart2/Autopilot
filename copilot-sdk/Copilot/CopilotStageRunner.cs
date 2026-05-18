@@ -31,7 +31,7 @@ internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSin
         });
 
         var streamed = new StringBuilder();
-        var metricsCollector = new StageExecutionMetricsCollector(model);
+        var metricsCollector = new StageExecutionMetricsCollector(model, stage.Name);
         using var subscription = session.On(evt =>
         {
             switch (evt)

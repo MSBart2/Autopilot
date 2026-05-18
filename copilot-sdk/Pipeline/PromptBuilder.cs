@@ -5,7 +5,12 @@ internal interface IPromptBuilder
 	Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, PipelineExecutionContext? context = null, CancellationToken cancellationToken = default);
 }
 
-internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int issueNumber, string? targetRepositoryProfileSummary = null) : IPromptBuilder
+internal sealed class PromptBuilder(
+	string repoRoot,
+	string agentPromptRoot,
+	int issueNumber,
+	string? targetRepositoryProfileSummary = null,
+	CyberpilotRuntimePreferences? runtimePreferences = null) : IPromptBuilder
 {
 	public async Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, PipelineExecutionContext? context = null, CancellationToken cancellationToken = default)
 	{
@@ -19,6 +24,7 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 		var reportingGuidance = BuildReportingGuidance(stage.Name);
 		var repositoryProfileContext = BuildRepositoryProfileContext(targetRepositoryProfileSummary);
 		var harnessContext = BuildHarnessContext(stage.Name, context);
+		var commandGuidance = BuildCommandGuidance(runtimePreferences);
 
 		return $$"""
 			You are running as the Cyberpilot SDK cyberpilot controller.
@@ -69,6 +75,11 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 			Use these status values when applicable: GO, STOP, DUPLICATE.
 			Use these review decision values when applicable: approved, changes_requested, comment.
 			When status is STOP or the result needs human correction, populate `required_actions` with concrete next steps.
+			The final fenced `json` block must contain exactly one valid JSON object. Do not put prose, markdown, or another fenced block inside the final JSON fence.
+			If an artifact contains markdown, store it as a normal JSON string: escape line breaks as `\n`, escape double quotes, and never paste raw multi-line markdown directly into the JSON block.
+			Do not include nested triple-backtick fences inside artifact strings. If you must quote code in an artifact, use indented code blocks or short inline snippets instead.
+			After the final fenced `json` block, do not write any additional text.
+			{{commandGuidance}}
 			{{repositoryProfileContext}}
 			{{reportingGuidance}}
 
@@ -195,6 +206,43 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 			Use this detected target-repository context when choosing validation, documentation, and implementation commands:
 			{{profileSummary.Trim()}}
 			""";
+	}
+
+	private static string BuildCommandGuidance(CyberpilotRuntimePreferences? preferences)
+	{
+		var commandStyle = ResolveCommandStyle(preferences?.CommandStyle ?? CommandStylePreference.Auto);
+		return commandStyle switch
+		{
+			CommandStylePreference.Windows => """
+
+				## Command Style
+
+				This run prefers Windows/PowerShell-native command syntax:
+				- Use PowerShell commands and pipelines (`Get-ChildItem`, `Select-String`, `Select-Object -Last 20`) instead of Unix utilities (`ls`, `grep`, `tail`, `head`, `cat`) unless you first verify the utility exists.
+				- Use Windows paths with backslashes when constructing file paths.
+				- Use `2>&1 | Select-Object -Last <n>` for compact command output instead of `| tail -n <n>`.
+				""",
+			CommandStylePreference.Linux => """
+
+				## Command Style
+
+				This run prefers Linux/POSIX shell command syntax:
+				- Use POSIX shell utilities (`ls`, `grep`, `tail`, `head`, `cat`) and forward-slash paths when constructing commands.
+				- Use `2>&1 | tail -n <n>` for compact command output.
+				- Avoid PowerShell-specific cmdlets unless you first verify PowerShell is available.
+				""",
+			_ => string.Empty,
+		};
+	}
+
+	private static CommandStylePreference ResolveCommandStyle(CommandStylePreference commandStyle)
+	{
+		if (commandStyle != CommandStylePreference.Auto)
+		{
+			return commandStyle;
+		}
+
+		return OperatingSystem.IsWindows() ? CommandStylePreference.Windows : CommandStylePreference.Linux;
 	}
 
 	private static string BuildReportingGuidance(string stageName)

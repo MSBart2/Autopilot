@@ -165,6 +165,80 @@ public sealed class StageResultTests
     }
 
     [Fact]
+    public void Parse_FinalMalformedJson_DoesNotFallBackToEarlierValidBlock()
+    {
+        var result = StageResult.Parse("""
+            ```json
+            {"status":"GO"}
+            ```
+
+            ```json
+            {"status":
+            ```
+            """);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("INVALID", result.Status);
+        Assert.Contains("Malformed JSON", result.Error);
+    }
+
+    [Fact]
+    public void Parse_ArtifactValueWithEmbeddedMarkdownFence_ReturnsArtifact()
+    {
+        var result = StageResult.Parse("""
+            ```json
+            {
+              "status": "GO",
+              "artifacts": {
+                "triage-comment": "## Case File\n```markdown\n# Handoff\n- Evidence: solid\n```\nCase closed."
+              }
+            }
+            ```
+            """);
+
+        Assert.True(result.IsValid);
+        var artifact = Assert.Single(result.Artifacts!);
+        Assert.Equal("triage-comment", artifact.Name);
+        Assert.Contains("```markdown", artifact.Value);
+        Assert.Contains("Case closed.", artifact.Value);
+    }
+
+    [Fact]
+    public void Parse_ArtifactValueWithBracesInsideString_ReturnsArtifact()
+    {
+        var result = StageResult.Parse("""
+            ```json
+            {
+              "status": "GO",
+              "artifacts": {
+                "plan-comment": "Touch Program.cs only if config contains {FeatureFlags: {Weather: true}}."
+              }
+            }
+            ```
+            """);
+
+        Assert.True(result.IsValid);
+        var artifact = Assert.Single(result.Artifacts!);
+        Assert.Equal("plan-comment", artifact.Name);
+        Assert.Contains("{FeatureFlags", artifact.Value);
+    }
+
+    [Fact]
+    public void Parse_TrailingTextAfterBalancedObjectInFinalFence_IgnoresTrailingText()
+    {
+        var result = StageResult.Parse("""
+            ```json
+            {"status":"GO", "decision":"approved"}
+            Markdown that should not be here but should not break the balanced object repair.
+            ```
+            """);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("GO", result.Status);
+        Assert.Equal("approved", result.Decision);
+    }
+
+    [Fact]
     public void Empty_HasCorrectDefaults()
     {
         var result = StageResult.Empty;

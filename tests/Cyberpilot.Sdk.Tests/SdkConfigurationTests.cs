@@ -1,4 +1,5 @@
 using Cyberpilot.Options;
+using Cyberpilot.Pipeline;
 
 namespace Cyberpilot.Sdk.Tests;
 
@@ -108,6 +109,50 @@ public sealed class SdkConfigurationTests
         var resolved = SdkConfiguration.Load(configPath, tempDir.Path).ApplyTo(options);
 
         Assert.Equal("other/repo", resolved.Repository);
+    }
+
+    [Fact]
+    public void Load_WithRuntimePreferences_ReadsCommandStyleAndToolArtifactCapture()
+    {
+        using var tempDir = new TempDirectory();
+        var configPath = Path.Combine(tempDir.Path, "appsettings.json");
+        File.WriteAllText(configPath,
+            """
+            {
+              "Cyberpilot": {
+                "CommandStyle": "windows",
+                "CaptureToolOutputArtifacts": true
+              }
+            }
+            """);
+
+        var configuration = SdkConfiguration.Load(configPath, tempDir.Path);
+
+        Assert.Equal(CommandStylePreference.Windows, configuration.RuntimePreferences.CommandStyle);
+        Assert.True(configuration.RuntimePreferences.CaptureToolOutputArtifacts);
+    }
+
+    [Fact]
+    public void ApplyTo_MergesRuntimePreferencesFromConfiguration()
+    {
+        using var tempDir = new TempDirectory();
+        var configPath = Path.Combine(tempDir.Path, "appsettings.json");
+        File.WriteAllText(configPath,
+            """
+            {
+              "Cyberpilot": {
+                "Repository": "owner/repo",
+                "CommandStyle": "linux",
+                "CaptureToolOutputArtifacts": true
+              }
+            }
+            """);
+        var options = new CyberpilotOptions(42, tempDir.Path, "owner/repo", CyberpilotOptions.DefaultModel, false, false, false, false, CyberpilotOptions.DefaultStageTimeout, false, false, null, configPath, false);
+
+        var resolved = SdkConfiguration.Load(configPath, tempDir.Path).ApplyTo(options);
+
+        Assert.Equal(CommandStylePreference.Linux, resolved.CommandStyle);
+        Assert.True(resolved.CaptureToolOutputArtifacts);
     }
 
     private sealed class TempDirectory : IDisposable

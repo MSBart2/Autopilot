@@ -123,6 +123,22 @@ public sealed class CyberpilotOptionsTests
     }
 
     [Fact]
+    public void Parse_RuntimePreferenceOptions_SetCommandStyleAndToolArtifactCapture()
+    {
+        var options = CyberpilotOptions.Parse([
+            "42",
+            "--repo-root",
+            RepoRoot,
+            "--command-style",
+            "windows",
+            "--capture-tool-output-artifacts",
+        ]);
+
+        Assert.Equal(CommandStylePreference.Windows, options.CommandStyle);
+        Assert.True(options.CaptureToolOutputArtifacts);
+    }
+
+    [Fact]
     public void Parse_DefaultPipelineDefinition_UsesDefaultDefinitionMetadata()
     {
         var options = CyberpilotOptions.Parse(["--check-model", "--repo-root", RepoRoot]);
@@ -242,6 +258,8 @@ public sealed class CyberpilotOptionsTests
         Assert.Contains("--config", CyberpilotOptions.HelpText);
         Assert.Contains("--pipeline-definition", CyberpilotOptions.HelpText);
         Assert.Contains("--pipeline-definition-file", CyberpilotOptions.HelpText);
+        Assert.Contains("--command-style", CyberpilotOptions.HelpText);
+        Assert.Contains("--capture-tool-output-artifacts", CyberpilotOptions.HelpText);
         Assert.Contains("docs-only", CyberpilotOptions.HelpText);
         Assert.Contains("--policy-profile", CyberpilotOptions.HelpText);
         Assert.Contains("security-critical", CyberpilotOptions.HelpText);

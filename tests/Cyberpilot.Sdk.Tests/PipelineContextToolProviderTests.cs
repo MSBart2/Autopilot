@@ -39,7 +39,7 @@ public sealed class PipelineContextToolProviderTests
     [Fact]
     public async Task GetPullRequestDetailsAsync_ReturnsCompactDetailsAndPersistsRawOutputReference()
     {
-        var context = CreateContext();
+        var context = CreateContext(captureToolOutputArtifacts: true);
         context.PrUrl = "https://github.com/owner/repo/pull/17";
         var raw = """
             {
@@ -94,7 +94,7 @@ public sealed class PipelineContextToolProviderTests
     [Fact]
     public async Task GetPullRequestDiffSummaryAsync_ReturnsLimitedFilesAndDetailedOutputReference()
     {
-        var context = CreateContext();
+        var context = CreateContext(captureToolOutputArtifacts: true);
         context.PrUrl = "https://github.com/owner/repo/pull/17";
         var raw = """
             {
@@ -126,7 +126,21 @@ public sealed class PipelineContextToolProviderTests
         Assert.Contains("c.cs", artifact.Value);
     }
 
-    private static PipelineExecutionContext CreateContext()
+    [Fact]
+    public async Task GetPullRequestDetailsAsync_ByDefaultDoesNotPersistRawOutputReference()
+    {
+        var context = CreateContext();
+        context.PrUrl = "https://github.com/owner/repo/pull/17";
+        var provider = new PipelineContextToolProvider(context, Stage("review"), new FakeGitHubCli("""{"number":17}"""));
+
+        var response = await provider.GetPullRequestDetailsAsync();
+
+        Assert.True(response.Success);
+        Assert.Null(response.DetailedOutput);
+        Assert.Empty(context.GetToolArtifacts("review"));
+    }
+
+    private static PipelineExecutionContext CreateContext(bool captureToolOutputArtifacts = false)
     {
         return new PipelineExecutionContext(
             new CyberpilotOptions(
@@ -143,7 +157,8 @@ public sealed class PipelineContextToolProviderTests
                 false,
                 null,
                 null,
-                false),
+                false,
+                RuntimePreferences: new CyberpilotRuntimePreferences(CaptureToolOutputArtifacts: captureToolOutputArtifacts)),
             DefaultPipelineDefinitionProvider.Definition);
     }
 

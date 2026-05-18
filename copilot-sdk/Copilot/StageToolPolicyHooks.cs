@@ -83,7 +83,7 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
         var shaped = Truncate(redacted, MaxToolResultLength);
         var changed = !string.Equals(raw, shaped, StringComparison.Ordinal);
 
-        if (!string.IsNullOrWhiteSpace(shaped))
+        if (context.Options.CaptureToolOutputArtifacts && !string.IsNullOrWhiteSpace(shaped))
         {
             var artifactName = $"tool-hook-{SanitizeName(input.ToolName)}";
             var uri = $"cyberpilot://tool-output/{Uri.EscapeDataString(stage.Name)}/{Uri.EscapeDataString(input.ToolName)}/{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
@@ -93,7 +93,11 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
         return new PostToolUseHookOutput
         {
             ModifiedResult = changed ? shaped : null,
-            AdditionalContext = changed ? "Tool output was redacted or truncated by Cyberpilot stage policy. Full shaped output is recorded as a run artifact." : null,
+            AdditionalContext = changed
+                ? context.Options.CaptureToolOutputArtifacts
+                    ? "Tool output was redacted or truncated by Cyberpilot stage policy. Full shaped output is recorded as a run artifact."
+                    : "Tool output was redacted or truncated by Cyberpilot stage policy. Enable tool output artifact capture to persist shaped output for diagnostics."
+                : null,
         };
     }
 

@@ -77,6 +77,23 @@
                                     <td>@Model.Options.MaxStageRetries</td>
                                 </tr>
                                 <tr>
+                                    <td><code>Cyberpilot:CommandStyle</code></td>
+                                    <td><code>@Model.Options.CommandStyle</code></td>
+                                </tr>
+                                <tr>
+                                    <td><code>Cyberpilot:CaptureToolOutputArtifacts</code></td>
+                                    <td>
+                                        @if (Model.Options.CaptureToolOutputArtifacts)
+                                        {
+                                            <span class="badge text-bg-info text-dark">true &mdash; diagnostic tool output artifacts captured</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge text-bg-secondary">false</span>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
                                     <td><code>Cyberpilot:ApproveAll</code></td>
                                     <td>
                                         @if (Model.Options.ApproveAll)
@@ -178,6 +195,8 @@
                                 "ApproveAll": false,                 // Auto-approve all Copilot tool permission prompts
                                 "EnsureLabels": true,                // Create sdk/* labels on the repo if they don't exist
                                 "MaxStageRetries": 3,                // Maximum retry attempts per stage per run
+                                "CommandStyle": "Auto",              // Auto, Windows, or Linux command guidance for agents
+                                "CaptureToolOutputArtifacts": false, // Capture verbose tool output artifacts for diagnostics
 
                                 "Repositories": [                    // Pre-configured repos available in the issue launcher
                                 {
@@ -250,6 +269,26 @@
                                                     Maximum number of times the operator can retry a single stage on a run. Prevents runaway
                                                     retries.
                                                     Defaults to 3. Enforced per stage, not per run.
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>CommandStyle</code></td>
+                                                <td>enum</td>
+                                                <td>
+                                                    Preferred command syntax guidance for SDK stage prompts. Use <code>Auto</code> to match
+                                                    the host OS,
+                                                    <code>Windows</code> for PowerShell-native guidance, or <code>Linux</code> for
+                                                    POSIX shell guidance.
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>CaptureToolOutputArtifacts</code></td>
+                                                <td>bool</td>
+                                                <td>
+                                                    When <code>true</code>, Cyberpilot persists shaped tool outputs as diagnostic
+                                                    <code>tool-hook-*</code>
+                                                    and deterministic <code>tool-output-*</code> artifacts. Leave <code>false</code> for
+                                                    normal runs to keep the artifact ledger focused on stage-owned outputs.
                                                 </td>
                                             </tr>
                                             <tr>

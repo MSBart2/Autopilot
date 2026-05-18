@@ -1,3 +1,5 @@
+using Cyberpilot.Pipeline;
+
 namespace Cyberpilot.Web.Services;
 
 /// <summary>
@@ -25,6 +27,12 @@ public sealed class CyberpilotWebOptions
 
     /// <summary>Gets or sets the maximum number of retry attempts allowed per stage per run. Defaults to 3.</summary>
     public int MaxStageRetries { get; set; } = 3;
+
+    /// <summary>Gets or sets the preferred command syntax guidance for agents.</summary>
+    public CommandStylePreference CommandStyle { get; set; } = CommandStylePreference.Auto;
+
+    /// <summary>Gets or sets whether shaped tool output should be persisted as diagnostic artifacts.</summary>
+    public bool CaptureToolOutputArtifacts { get; set; }
 
     /// <summary>Gets or sets the JSON file path for operator-managed pipeline definitions.</summary>
     public string PipelineDefinitionFilePath { get; set; } = Path.Combine("App_Data", "pipeline-definitions.json");

@@ -121,8 +121,13 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
         }
     }
 
-    private ToolOutputReference PersistToolOutput(string toolName, string rawOutput, string mediaType)
+    private ToolOutputReference? PersistToolOutput(string toolName, string rawOutput, string mediaType)
     {
+        if (!context.Options.CaptureToolOutputArtifacts)
+        {
+            return null;
+        }
+
         var artifactName = $"tool-output-{toolName}";
         var uri = $"cyberpilot://tool-output/{Uri.EscapeDataString(stage.Name)}/{Uri.EscapeDataString(toolName)}/{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
         context.RecordToolArtifact(stage.Name, new StageArtifact(artifactName, Truncate(rawOutput, 3800), uri, mediaType));

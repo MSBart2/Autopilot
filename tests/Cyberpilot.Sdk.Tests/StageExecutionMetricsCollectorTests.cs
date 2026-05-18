@@ -8,7 +8,7 @@ public sealed class StageExecutionMetricsCollectorTests
     [Fact]
     public void Build_AggregatesStreamingEvents()
     {
-        var collector = new StageExecutionMetricsCollector("configured-model");
+        var collector = new StageExecutionMetricsCollector("configured-model", "review");
 
         collector.RecordTurnStart(new AssistantTurnStartData { TurnId = "turn-1" });
         collector.RecordTurnStart(new AssistantTurnStartData { TurnId = "turn-2" });
@@ -65,7 +65,7 @@ public sealed class StageExecutionMetricsCollectorTests
     [Fact]
     public void ApplyFinalUsageMetrics_FillsMissingUsageWithoutOverwritingStreamingUsage()
     {
-        var collector = new StageExecutionMetricsCollector("configured-model");
+        var collector = new StageExecutionMetricsCollector("configured-model", "review");
         collector.RecordUsage(new AssistantUsageData
         {
             Model = string.Empty,
@@ -87,10 +87,47 @@ public sealed class StageExecutionMetricsCollectorTests
     [Fact]
     public void Build_UsesConfiguredModelWhenNoUsageModelWasReported()
     {
-        var collector = new StageExecutionMetricsCollector("configured-model");
+        var collector = new StageExecutionMetricsCollector("configured-model", "review");
 
         var metrics = collector.Build();
 
         Assert.Equal("configured-model", metrics.Model);
+    }
+
+    [Fact]
+    public void Build_ClassifiesBlankToolErrorsFromStageAndArgs()
+    {
+        var collector = new StageExecutionMetricsCollector("configured-model", "review");
+        collector.RecordToolExecutionStart(new ToolExecutionStartData
+        {
+            ToolCallId = "tool-1",
+            ToolName = "powershell",
+            Arguments = new { command = "gh issue comment 34 --body hello" },
+        });
+
+        collector.RecordToolExecutionComplete(new ToolExecutionCompleteData { ToolCallId = "tool-1", Success = false });
+
+        var failure = Assert.Single(collector.Build().FailedToolCalls!);
+        Assert.Equal("policy_denied", failure.ErrorCode);
+        Assert.Contains("durable side-effect", failure.ErrorMessage);
+        Assert.Contains("gh issue comment", failure.ToolArgs);
+    }
+
+    [Fact]
+    public void Build_ClassifiesPowerShellUnixUtilityMismatchWhenSdkErrorIsBlank()
+    {
+        var collector = new StageExecutionMetricsCollector("configured-model", "implement");
+        collector.RecordToolExecutionStart(new ToolExecutionStartData
+        {
+            ToolCallId = "tool-1",
+            ToolName = "powershell",
+            Arguments = new { command = "dotnet build 2>&1 | tail -20" },
+        });
+
+        collector.RecordToolExecutionComplete(new ToolExecutionCompleteData { ToolCallId = "tool-1", Success = false });
+
+        var failure = Assert.Single(collector.Build().FailedToolCalls!);
+        Assert.Equal("command_style_mismatch", failure.ErrorCode);
+        Assert.Contains("PowerShell", failure.ErrorMessage);
     }
 }

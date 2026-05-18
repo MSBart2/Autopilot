@@ -157,7 +157,10 @@ public sealed class CyberpilotPipelineService(
                 PipelineDefinitionFilePath: request.PipelineDefinitionFilePath,
                 PrHeadBranch: request.PrHeadBranch,
                 StageModelOverrides: request.StageModelOverrides,
-                StageModelFallbacks: request.StageModelFallbacks), sink, cancellationToken);
+                StageModelFallbacks: request.StageModelFallbacks,
+                RuntimePreferences: new CyberpilotRuntimePreferences(
+                    options.Value.CommandStyle,
+                    options.Value.CaptureToolOutputArtifacts)), sink, cancellationToken);
 
             run.Status = result.Status;
             run.BranchName = result.BranchName;

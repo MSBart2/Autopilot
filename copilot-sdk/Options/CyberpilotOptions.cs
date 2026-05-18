@@ -29,7 +29,8 @@ internal sealed record CyberpilotOptions(
     IReadOnlyDictionary<string, string>? StageModelOverrides = null,
     IReadOnlyDictionary<string, string>? StageModelFallbacks = null,
     bool ResetMode = false,
-    bool BenchmarkReset = false)
+    bool BenchmarkReset = false,
+    CyberpilotRuntimePreferences? RuntimePreferences = null)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);
@@ -66,6 +67,10 @@ internal sealed record CyberpilotOptions(
             "  --allow-missing-docs Continue to deliver if the docs stage fails.",
             "  --agent-prompt-root <path>",
             "                       Root directory containing .github/agents. Defaults to --repo-root.",
+            "  --command-style <auto|windows|linux>",
+            "                       Preferred command syntax guidance for agents. Defaults to auto.",
+            "  --capture-tool-output-artifacts",
+            "                       Persist shaped tool output as diagnostic artifacts. Defaults to off.",
             "  --db <connection>  Persist this run to the shared Cyberpilot database.",
             "  --config <path>    Load repo/token pairs from an appsettings-style JSON file.",
             "  --skip-deliver      Run through docs but stop before merge/deliver.",
@@ -108,7 +113,8 @@ internal sealed record CyberpilotOptions(
             StageModelOverrides: parsed.StageModelOverrides,
             StageModelFallbacks: parsed.StageModelFallbacks,
             ResetMode: parsed.ResetMode,
-            BenchmarkReset: parsed.BenchmarkReset);
+            BenchmarkReset: parsed.BenchmarkReset,
+            RuntimePreferences: parsed.RuntimePreferences);
     }
 
     private sealed record ParsedArgs(
@@ -133,7 +139,8 @@ internal sealed record CyberpilotOptions(
         IReadOnlyDictionary<string, string>? StageModelOverrides = null,
         IReadOnlyDictionary<string, string>? StageModelFallbacks = null,
         bool ResetMode = false,
-        bool BenchmarkReset = false)
+        bool BenchmarkReset = false,
+        CyberpilotRuntimePreferences? RuntimePreferences = null)
     {
         public static ParsedArgs Default => new() { StageTimeout = DefaultStageTimeout };
     }
@@ -183,6 +190,12 @@ internal sealed record CyberpilotOptions(
                 case "--stage-fallback-model":
                     parsed = parsed with { StageModelFallbacks = AddStageModel(parsed.StageModelFallbacks, RequireNonEmptyValue(args, ref index, arg), arg) };
                     break;
+                case "--command-style":
+                    parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithCommandStyle(ParseCommandStyle(RequireNonEmptyValue(args, ref index, arg), arg)) };
+                    break;
+                case "--capture-tool-output-artifacts":
+                    parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithCaptureToolOutputArtifacts(true) };
+                    break;
                 case "--skip-deliver":
                     parsed = parsed with { SkipDeliver = true };
                     break;
@@ -223,6 +236,12 @@ internal sealed record CyberpilotOptions(
         }
         return parsed;
     }
+
+    private CyberpilotRuntimePreferences Preferences => RuntimePreferences ?? CyberpilotRuntimePreferences.Default;
+
+    public CommandStylePreference CommandStyle => Preferences.CommandStyle;
+
+    public bool CaptureToolOutputArtifacts => Preferences.CaptureToolOutputArtifacts;
 
     private static TimeSpan ParsePositiveMinutes(string value, string optionName)
     {
@@ -276,5 +295,31 @@ internal sealed record CyberpilotOptions(
             [stageName] = model,
         };
         return updated;
+    }
+
+    private static CommandStylePreference ParseCommandStyle(string value, string optionName)
+    {
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "auto" => CommandStylePreference.Auto,
+            "windows" or "powershell" or "pwsh" => CommandStylePreference.Windows,
+            "linux" or "posix" or "bash" or "shell" => CommandStylePreference.Linux,
+            _ => throw new ArgumentException($"{optionName} expects one of: auto, windows, linux."),
+        };
+    }
+}
+
+internal static class CyberpilotRuntimePreferenceExtensions
+{
+    public static CyberpilotRuntimePreferences WithCommandStyle(this CyberpilotRuntimePreferences? preferences, CommandStylePreference commandStyle)
+    {
+        var current = preferences ?? CyberpilotRuntimePreferences.Default;
+        return current with { CommandStyle = commandStyle };
+    }
+
+    public static CyberpilotRuntimePreferences WithCaptureToolOutputArtifacts(this CyberpilotRuntimePreferences? preferences, bool captureToolOutputArtifacts)
+    {
+        var current = preferences ?? CyberpilotRuntimePreferences.Default;
+        return current with { CaptureToolOutputArtifacts = captureToolOutputArtifacts };
     }
 }

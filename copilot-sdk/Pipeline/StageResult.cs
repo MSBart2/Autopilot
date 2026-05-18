@@ -102,29 +102,31 @@ public sealed record StageResult(
     private static string? ExtractLastJsonBlock(string content)
     {
         const string FenceOpen = "```json";
-        var searchStart = 0;
-        string? lastJson = null;
+        const string FenceClose = "```";
 
-        while (true)
+        var fenceStart = content.LastIndexOf(FenceOpen, StringComparison.OrdinalIgnoreCase);
+        if (fenceStart < 0)
         {
-            var fenceStart = content.IndexOf(FenceOpen, searchStart, StringComparison.OrdinalIgnoreCase);
-            if (fenceStart < 0) break;
-
-            var contentStart = fenceStart + FenceOpen.Length;
-            while (contentStart < content.Length && content[contentStart] is ' ' or '\t' or '\r' or '\n')
-                contentStart++;
-
-            if (contentStart < content.Length && content[contentStart] == '{')
-            {
-                var extracted = ExtractJsonObject(content, contentStart);
-                if (extracted is not null)
-                    lastJson = extracted;
-            }
-
-            searchStart = fenceStart + FenceOpen.Length;
+            return null;
         }
 
-        return lastJson;
+        var contentStart = fenceStart + FenceOpen.Length;
+        while (contentStart < content.Length && content[contentStart] is ' ' or '\t' or '\r' or '\n')
+            contentStart++;
+
+        var objectStart = content.IndexOf('{', contentStart);
+        var fenceEnd = content.IndexOf(FenceClose, contentStart, StringComparison.Ordinal);
+        if (objectStart >= 0 && (fenceEnd < 0 || objectStart < fenceEnd))
+        {
+            var extracted = ExtractJsonObject(content, objectStart);
+            if (extracted is not null)
+                return extracted;
+        }
+
+        var rawEnd = fenceEnd >= 0 ? fenceEnd : content.Length;
+        var rawJson = content[contentStart..rawEnd].Trim();
+
+        return string.IsNullOrWhiteSpace(rawJson) ? null : rawJson;
     }
 
     private static string? ExtractJsonObject(string content, int start)

@@ -202,7 +202,7 @@ public sealed class StageToolPolicyHooksTests
     }
 
     [Fact]
-    public void ShapePostToolUse_RedactsSecretsTruncatesOutputAndRecordsArtifact()
+    public void ShapePostToolUse_RedactsSecretsTruncatesOutputWithoutArtifactByDefault()
     {
         var context = CreateContext();
         var hooks = new StageToolPolicyHooks(Stage("review"), context);
@@ -217,7 +217,25 @@ public sealed class StageToolPolicyHooksTests
         var modified = Assert.IsType<string>(output.ModifiedResult);
         Assert.Contains("token=[REDACTED]", modified);
         Assert.Contains("...[truncated]", modified);
-        Assert.Contains("redacted or truncated", output.AdditionalContext);
+        Assert.Contains("Enable tool output artifact capture", output.AdditionalContext);
+        Assert.Empty(context.GetToolArtifacts("review"));
+    }
+
+    [Fact]
+    public void ShapePostToolUse_WhenCaptureEnabled_RecordsArtifact()
+    {
+        var context = CreateContext(captureToolOutputArtifacts: true);
+        var hooks = new StageToolPolicyHooks(Stage("review"), context);
+        var secretOutput = $"token=abc123 {new string('x', 4100)}";
+
+        var output = hooks.ShapePostToolUse(new PostToolUseHookInput
+        {
+            ToolName = "run_in_terminal",
+            ToolResult = secretOutput,
+        });
+
+        var modified = Assert.IsType<string>(output.ModifiedResult);
+        Assert.Contains("Full shaped output is recorded", output.AdditionalContext);
         var artifact = Assert.Single(context.GetToolArtifacts("review"));
         Assert.Equal("tool-hook-run_in_terminal", artifact.Name);
         Assert.DoesNotContain("abc123", artifact.Value);
@@ -228,7 +246,7 @@ public sealed class StageToolPolicyHooksTests
         return new StageToolPolicyHooks(Stage(stageName), CreateContext());
     }
 
-    private static PipelineExecutionContext CreateContext()
+    private static PipelineExecutionContext CreateContext(bool captureToolOutputArtifacts = false)
     {
         return new PipelineExecutionContext(
             new CyberpilotOptions(
@@ -245,7 +263,8 @@ public sealed class StageToolPolicyHooksTests
                 false,
                 null,
                 null,
-                false),
+                false,
+                RuntimePreferences: new CyberpilotRuntimePreferences(CaptureToolOutputArtifacts: captureToolOutputArtifacts)),
             DefaultPipelineDefinitionProvider.Definition);
     }
 

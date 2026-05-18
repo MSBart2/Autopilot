@@ -117,6 +117,14 @@ Everything else — headings, prose, crew briefings, dramatic sign-offs — is p
 
 ## Return Value
 
+The final fenced `json` block is parsed by the SDK harness. Keep it boring and valid:
+
+- Return exactly one final ` ```json ` block, and make it the last thing in your response.
+- Put the full heist handoff in `artifacts.plan-comment` as a JSON string with escaped line breaks (`\n`) and escaped quotes.
+- Do not paste raw multi-line markdown directly into the JSON object.
+- Do not include nested triple-backtick fences inside artifact values. If the handoff needs code or command examples, use indented code blocks or inline snippets instead.
+- Do not add any commentary after the final JSON fence.
+
 When complete, return:
 - `branch`: the feature branch name
 - `tasks`: count of tasks planned

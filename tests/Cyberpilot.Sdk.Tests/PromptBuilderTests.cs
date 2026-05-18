@@ -65,6 +65,54 @@ public sealed class PromptBuilderTests
     }
 
     [Fact]
+    public async Task BuildAsync_WithWindowsCommandStyle_IncludesPowerShellGuidance()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "implement.agent.md"), "implement instructions");
+        var builder = new PromptBuilder(
+            targetRepo.Path,
+            agentRepo.Path,
+            21,
+            runtimePreferences: new CyberpilotRuntimePreferences(CommandStylePreference.Windows));
+
+        var prompt = await builder.BuildAsync(
+            Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", []),
+            "implement issue",
+            StandardPolicy());
+
+        Assert.Contains("This run prefers Windows/PowerShell-native command syntax", prompt);
+        Assert.Contains("Select-Object -Last", prompt);
+        Assert.Contains("instead of `| tail -n <n>`", prompt);
+    }
+
+    [Fact]
+    public async Task BuildAsync_WithLinuxCommandStyle_IncludesPosixGuidance()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "implement.agent.md"), "implement instructions");
+        var builder = new PromptBuilder(
+            targetRepo.Path,
+            agentRepo.Path,
+            21,
+            runtimePreferences: new CyberpilotRuntimePreferences(CommandStylePreference.Linux));
+
+        var prompt = await builder.BuildAsync(
+            Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", []),
+            "implement issue",
+            StandardPolicy());
+
+        Assert.Contains("This run prefers Linux/POSIX shell command syntax", prompt);
+        Assert.Contains("tail -n", prompt);
+        Assert.Contains("Avoid PowerShell-specific cmdlets", prompt);
+    }
+
+    [Fact]
     public async Task BuildAsync_ForDeliverStage_IncludesLandingReportEvidenceGuidance()
     {
         using var targetRepo = new TempDirectory();

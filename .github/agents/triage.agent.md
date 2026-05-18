@@ -209,6 +209,16 @@ When running under the SDK controller, the prompt wrapper supplies the exact sta
 - Include `policy_rationale` explaining why the issue is ready to plan, why it must stop, or why it is a confirmed duplicate.
 - Include `required_actions` whenever `status` is `STOP`, using actionable items the issue author or operator can complete.
 
+## Final JSON Safety
+
+The final fenced `json` block is parsed by the SDK harness. Keep it boring and valid:
+
+- Return exactly one final ` ```json ` block, and make it the last thing in your response.
+- Put the full noir handoff in `artifacts.triage-comment` as a JSON string with escaped line breaks (`\n`) and escaped quotes.
+- Do not paste raw multi-line markdown directly into the JSON object.
+- Do not include nested triple-backtick fences inside artifact values. If the handoff needs code or command examples, use indented code blocks or inline snippets instead.
+- Do not add any commentary after the final JSON fence.
+
 When complete, return a summary object with:
 - `status`: "GO", "STOP", or "DUPLICATE"
 - `type`: the classification type (only if GO)

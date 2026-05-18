@@ -3,7 +3,7 @@ using GitHub.Copilot.SDK;
 
 namespace Cyberpilot.Copilot;
 
-internal sealed class StageExecutionMetricsCollector(string configuredModel)
+internal sealed class StageExecutionMetricsCollector(string configuredModel, string stageName)
 {
     private readonly HashSet<string> providerCallIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> apiCallIds = new(StringComparer.OrdinalIgnoreCase);
@@ -69,12 +69,13 @@ internal sealed class StageExecutionMetricsCollector(string configuredModel)
             var callId = data.ToolCallId ?? string.Empty;
             toolNames.TryGetValue(callId, out var toolName);
             toolArgs.TryGetValue(callId, out var args);
+            var classified = ToolFailureClassifier.Classify(stageName, toolName, args, data.Error?.Code, data.Error?.Message);
             failedToolCalls.Add(new FailedToolCallRecord(
                 callId,
                 toolName,
                 args,
-                data.Error?.Code,
-                data.Error?.Message));
+                classified.Code,
+                classified.Message));
         }
     }
 
