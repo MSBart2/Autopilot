@@ -84,7 +84,7 @@ internal sealed class PipelineEngine(
     {
         var triageStage = Stage("triage");
         await labels.SetStageAsync(Options.IssueNumber, triageStage.Label, cancellationToken);
-        var triage = await RunStageAsync(triageStage, "Classify the issue and publish the mandatory triage handoff comment.", cancellationToken);
+        var triage = await RunStageAsync(triageStage, "Classify the issue and produce the mandatory triage handoff as a stage artifact. Do not post comments or mutate GitHub from triage.", cancellationToken);
 
         if (StageStatus.IsStop(triage))
         {
@@ -116,7 +116,7 @@ internal sealed class PipelineEngine(
     {
         var planStage = Stage("plan");
         await labels.SetStageAsync(Options.IssueNumber, planStage.Label, cancellationToken);
-        var plan = await RunStageAsync(planStage, $"Create the implementation plan and issue comments for branch `{context.BranchName}`. The controller has already created or reused the branch; do not create a different branch.", cancellationToken);
+        var plan = await RunStageAsync(planStage, $"Create the implementation plan and return the plan comment as a stage artifact for branch `{context.BranchName}`. The controller has already created or reused the branch; do not create a different branch, post comments, or mutate GitHub from planning.", cancellationToken);
 
         if (!StageStatus.IsGo(plan))
         {

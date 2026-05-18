@@ -34,8 +34,14 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             options = configuration.ApplyTo(options);
 
             var issueClient = CreateIssueClient(options, configuration);
-            var labels = new SdkLabelService(issueClient, output);
             await using var dbContext = await CreateDbContextAsync(options, cancellationToken);
+
+            if (options.ResetMode)
+            {
+                return await RunResetAsync(options, issueClient, dbContext, cancellationToken);
+            }
+
+            var labels = new SdkLabelService(issueClient, output);
             var run = dbContext is null ? null : await CreateRunAsync(dbContext, options, cancellationToken);
             var branchProvisioner = new BranchProvisioner();
             var progressSink = CreateProgressSink(dbContext, run, options);
@@ -67,8 +73,27 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
         }
     }
 
-    private static IGitHubIssueClient CreateIssueClient(CyberpilotOptions options, SdkConfiguration configuration)
+    private async Task<int> RunResetAsync(CyberpilotOptions options, IGitHubIssueClient issueClient, CyberpilotDbContext? dbContext, CancellationToken cancellationToken)
     {
+        var resetService = new PipelineResetService(issueClient, dbContext);
+        PipelineResetResult result;
+
+        if (options.IssueNumber > 0)
+        {
+            output.WriteLine($"Resetting issue #{options.IssueNumber}...");
+            result = await resetService.ResetIssueAsync(options.IssueNumber, options.RepoRoot, cancellationToken: cancellationToken);
+        }
+        else
+        {
+            error.WriteLine("Reset requires an issue number. Try: reset issue <number>");
+            return 1;
+        }
+
+        output.WriteLine(result.ToSummary());
+        return 0;
+    }
+
+    private static IGitHubIssueClient CreateIssueClient(CyberpilotOptions options, SdkConfiguration configuration)    {
         var token = configuration.GetToken(options.Repository)
             ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN")
             ?? Environment.GetEnvironmentVariable("GH_TOKEN");
@@ -83,7 +108,12 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
 
     private static async Task<CyberpilotDbContext?> CreateDbContextAsync(CyberpilotOptions options, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(options.DatabaseConnectionString) || options.IssueNumber <= 0)
+        if (string.IsNullOrWhiteSpace(options.DatabaseConnectionString))
+        {
+            return null;
+        }
+
+        if (!options.ResetMode && options.IssueNumber <= 0)
         {
             return null;
         }

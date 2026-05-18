@@ -54,7 +54,7 @@ public sealed class StageToolPolicyHooksTests
     }
 
     [Fact]
-    public void EvaluatePreToolUse_ForPrReviewComment_AllowsCall()
+    public void EvaluatePreToolUse_ForReadOnlyStagePrReviewComment_DeniesCall()
     {
         var hooks = CreateHooks("review");
 
@@ -64,7 +64,8 @@ public sealed class StageToolPolicyHooksTests
             ToolArgs = new { command = "gh pr review 42 --comment --body \"looks good\"" },
         });
 
-        Assert.Equal("allow", output.PermissionDecision);
+        Assert.Equal("deny", output.PermissionDecision);
+        Assert.Contains("durable side effects", output.PermissionDecisionReason);
     }
 
     [Fact]
@@ -109,8 +110,81 @@ public sealed class StageToolPolicyHooksTests
         });
 
         Assert.Equal("deny", output.PermissionDecision);
-        Assert.True(output.SuppressOutput);
-        Assert.Contains("read-only", output.PermissionDecisionReason);
+        Assert.False(output.SuppressOutput);
+        Assert.Contains("durable side effects", output.PermissionDecisionReason);
+    }
+
+    [Fact]
+    public void EvaluatePreToolUse_ForReadOnlyStagePythonReadScript_AllowsCall()
+    {
+        var hooks = CreateHooks("plan");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "python",
+            ToolArgs = new { code = "from pathlib import Path\nprint(Path('README.md').read_text()[:80])" },
+        });
+
+        Assert.Equal("allow", output.PermissionDecision);
+    }
+
+    [Fact]
+    public void EvaluatePreToolUse_ForReadOnlyStagePythonIssueComment_DeniesCall()
+    {
+        var hooks = CreateHooks("plan");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "python",
+            ToolArgs = new { code = "import subprocess\nsubprocess.run(['gh', 'issue', 'comment', '34', '--body', 'plan'])" },
+        });
+
+        Assert.Equal("deny", output.PermissionDecision);
+        Assert.False(output.SuppressOutput);
+        Assert.Contains("stage artifact", output.PermissionDecisionReason);
+    }
+
+    [Fact]
+    public void EvaluatePreToolUse_ForReadOnlyStagePythonFileWrite_DeniesCall()
+    {
+        var hooks = CreateHooks("triage");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "python",
+            ToolArgs = new { code = "open('notes.txt', 'w').write('nope')" },
+        });
+
+        Assert.Equal("deny", output.PermissionDecision);
+        Assert.Contains("durable side effects", output.PermissionDecisionReason);
+    }
+
+    [Fact]
+    public void EvaluatePreToolUse_ForReadOnlyStageNodeFileWrite_DeniesCall()
+    {
+        var hooks = CreateHooks("plan");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "node",
+            ToolArgs = new { code = "const fs = require('fs'); fs.writeFileSync('plan.txt', 'nope');" },
+        });
+
+        Assert.Equal("deny", output.PermissionDecision);
+    }
+
+    [Fact]
+    public void EvaluatePreToolUse_ForReadOnlyStageStderrRedirect_AllowsCall()
+    {
+        var hooks = CreateHooks("triage");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "powershell",
+            ToolArgs = new { command = "gh issue list --repo owner/repo 2>&1" },
+        });
+
+        Assert.Equal("allow", output.PermissionDecision);
     }
 
     [Fact]

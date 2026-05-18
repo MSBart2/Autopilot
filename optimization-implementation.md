@@ -4,10 +4,10 @@ This tracker turns `optimization-plan.md` into measurable implementation work. M
 
 ## Milestone 0: SDK reference and decision log
 
-- [ ] Create `docs/copilot-sdk-references.md` with SDK feature links and Cyberpilot-specific notes.
-- [ ] Update `AGENTS.md` to point SDK/session orchestration work at `docs/copilot-sdk-references.md`.
-- [ ] Add a short SDK harness decision log covering session lifetime, streaming metrics, prompt hierarchy, tool policy, and hook/tool placement.
-- [ ] Record any SDK preview caveats that could affect implementation.
+- [x] Create `docs/copilot-sdk-references.md` with SDK feature links and Cyberpilot-specific notes.
+- [x] Update `AGENTS.md` to point SDK/session orchestration work at `docs/copilot-sdk-references.md`.
+- [x] Add a short SDK harness decision log covering session lifetime, streaming metrics, prompt hierarchy, tool policy, and hook/tool placement.
+- [x] Record any SDK preview caveats that could affect implementation.
 
 ### Validation / baseline notes
 
@@ -16,22 +16,22 @@ This tracker turns `optimization-plan.md` into measurable implementation work. M
 
 ## Milestone 1: Observability baseline
 
-- [ ] Capture current prompt character count per stage.
-- [ ] Capture current input/output/cache token metrics per stage.
-- [ ] Capture current `assistant.turn_start` / `assistant.turn_end` counts per stage.
-- [ ] Capture tool execution counts and failed tool counts per stage.
-- [ ] Capture stage duration and total run duration.
-- [ ] Persist enough metrics to compare experiments across runs.
-- [ ] Surface the minimum useful metrics in the Run Room or logs.
+- [x] Capture current prompt character count per stage.
+- [x] Capture current input/output/cache token metrics per stage.
+- [x] Capture current `assistant.turn_start` / `assistant.turn_end` counts per stage.
+- [x] Capture tool execution counts and failed tool counts per stage.
+- [x] Capture stage duration and total run duration.
+- [x] Persist enough metrics to compare experiments across runs.
+- [x] Surface the minimum useful metrics in the Run Room or logs.
 
 ### Baseline exit criteria
 
-- [ ] One `baseline-aspire-docs` run recorded.
-- [ ] One `baseline-aspire-helper` run recorded.
-- [ ] One `baseline-aspire-ui` run recorded.
-- [ ] One `baseline-pr-review` run recorded.
-- [ ] Metrics are recorded at stage granularity.
-- [ ] We can identify the most expensive stage by tokens, turns, and time.
+- [x] One `baseline-aspire-docs` run recorded.
+- [x] One `baseline-aspire-helper` run recorded. (issues #32, #34)
+- [x] One `baseline-aspire-ui` run recorded.
+- [x] One `baseline-pr-review` run recorded.
+- [x] Metrics are recorded at stage granularity.
+- [x] We can identify the most expensive stage by tokens, turns, and time.
 
 ## Milestone 1.5: Tool failure rate reduction
 
@@ -64,10 +64,10 @@ Remaining ~151 failures are not captured — most likely pre-hook write denials 
 ### Investigation tasks
 
 - [x] Query `PipelineStageLogs` to identify which stages have the highest `FailedToolCallCount / ToolCallCount` ratio.
-- [ ] Add failure reason logging — capture `ToolExecutionCompleteData.Error.Code` and `Error.Message` when `Success = false` to make root causes inspectable.
-- [ ] Determine what fraction of failures are pre-hook write denials in read-only stages vs. tool execution errors.
-- [ ] Confirm whether the self-review error is from a stage prompt instructing the agent to approve PRs, and fix the prompt or add a pre-hook denial.
-- [ ] Investigate the PowerShell multi-arg errors — determine which commands trigger them and whether tightening the tool description prevents them.
+- [x] Add failure reason logging — capture `ToolExecutionCompleteData.Error.Code` and `Error.Message` when `Success = false` to make root causes inspectable.
+- [x] Determine what fraction of failures are pre-hook write denials in read-only stages vs. tool execution errors.
+- [x] Confirm whether the self-review error is from a stage prompt instructing the agent to approve PRs, and fix the prompt or add a pre-hook denial.
+- [x] Investigate the PowerShell multi-arg errors — determine which commands trigger them and whether tightening the tool description prevents them.
 - [ ] Determine whether failures are retried by the model (wasted turns) or silently skipped.
 
 ### Implementation steps
@@ -88,6 +88,8 @@ Remaining ~151 failures are not captured — most likely pre-hook write denials 
 **Done when:** Failed tool calls include a reason code queryable from `cyberpilot.db`. Run a benchmark issue and confirm no invisible failures remain.
 
 ✅ **Implemented** (`65bb602`) — `FailedToolCallRecord` added to `StageExecutionMetrics`, `PipelineToolFailures` table created with EF migration, `StageExecutionMetricsCollector` tracks ToolCallId→ToolName and captures error code/message per failure.
+
+**Follow-up** (`b20f5db`) — Added `ToolArgs` capture: `ToolExecutionStartData.Arguments` is serialized and stored per failure so we can see exactly what the tool was called with. Also fixed `SignalRProgressSink` to actually persist `PipelineToolFailures` (it was wired in the SDK sink but not the web sink — `3c69873`). Added `--agent-prompt-root` to the exe CLI so it can run against external repos (`d27a954`).
 
 ---
 
@@ -137,14 +139,14 @@ Add 2–3 attempt retry with exponential backoff in `GitHubCli` or `GitHubApiIss
 | Model retries a failing tool in a loop | Post-tool hook: inject retry hint on repeat failure | **Step 4** |
 | GitHub API TLS timeouts | Add retry with backoff for transient network failures | **Step 5** |
 | Tool times out on slow operations | Add per-tool timeout config with a sensible default | Not started |
-| Read-only stage agent attempts file writes | Confirm pre-hook denial messages reach the model; add denial hint in prompt | Not started |
+| Read-only stage agent attempts durable side effects through scripts | Block mutation patterns across shell/script wrappers; make denial visible; align triage/plan prompts to return artifacts instead of posting comments | ✅ Done |
 
 ### Success criteria
 
 - [ ] `FailedToolCallCount / ToolCallCount` drops below 20% on a full benchmark run.
 - [ ] No regression in stage output quality or valid JSON rate.
-- [ ] Per-stage failure counts recorded in `metrics.md` before and after each fix.
-- [ ] Failed tool calls include a logged reason code — no more invisible failures.
+- [x] Per-stage failure counts recorded in `metrics.md` before and after each fix.
+- [x] Failed tool calls include a logged reason code — no more invisible failures.
 
 ### Baseline failure rates (for comparison)
 

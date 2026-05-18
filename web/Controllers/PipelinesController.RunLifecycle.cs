@@ -1,4 +1,3 @@
-using Cyberpilot.Git;
 using Cyberpilot.GitHub;
 using Cyberpilot.Persistence;
 using Cyberpilot.Pipeline;
@@ -193,31 +192,9 @@ public partial class PipelinesController
             : _issueClientFactory.Create(run.Repository, token);
         try
         {
-            var issue = await issueClient.GetIssueAsync(run.IssueNumber, HttpContext.RequestAborted);
-            var pr = await issueClient.FindPullRequestForIssueAsync(run.IssueNumber, HttpContext.RequestAborted);
-            if (pr is not null)
-            {
-                await issueClient.ClosePullRequestAsync(pr.Number, HttpContext.RequestAborted);
-            }
-
-            await GitHubIssueHelper.ResetIssueLabelsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
-            var deletedComments = await GitHubIssueHelper.DeleteAgentCommentsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
-
-            var branchName = run.BranchName;
-            if (string.IsNullOrWhiteSpace(branchName))
-            {
-                branchName = BranchProvisioner.CreateBranchName(run.IssueNumber, issue?.Title ?? $"issue-{run.IssueNumber}");
-            }
-
-            var branchDeleted = await GitHelper.DeleteIssueBranchAsync(repoRoot, branchName, HttpContext.RequestAborted);
-
-            run.BenchmarkResetAt = DateTime.UtcNow;
-            await _dbContext.SaveChangesAsync();
-
-            var prNote = pr is not null ? $" Closed PR #{pr.Number}." : string.Empty;
-            var branchNote = branchDeleted ? $" Deleted branch {branchName}." : string.Empty;
-            TempData["PipelineNotice"] = $"Benchmark reset complete. Removed {deletedComments} agent comment(s) and cleared SDK stage labels.{prNote}{branchNote} Run metrics are preserved in the database.";
-
+            var resetService = new PipelineResetService(issueClient, _dbContext);
+            var result = await resetService.BenchmarkResetAsync(run.Id, repoRoot, HttpContext.RequestAborted);
+            TempData["PipelineNotice"] = $"Benchmark reset complete. {result.ToSummary()}";
             return RedirectToAction(nameof(Details), new { id });
         }
         catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException)
@@ -254,23 +231,9 @@ public partial class PipelinesController
             : _issueClientFactory.Create(run.Repository, token);
         try
         {
-            var issue = await issueClient.GetIssueAsync(run.IssueNumber, HttpContext.RequestAborted);
-            await GitHubIssueHelper.ResetIssueLabelsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
-            var deletedComments = await GitHubIssueHelper.DeleteAgentCommentsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
-            var branchName = run.BranchName;
-            if (string.IsNullOrWhiteSpace(branchName))
-            {
-                branchName = BranchProvisioner.CreateBranchName(run.IssueNumber, issue?.Title ?? $"issue-{run.IssueNumber}");
-            }
-
-            var branchDeleted = await GitHelper.DeleteIssueBranchAsync(repoRoot, branchName, HttpContext.RequestAborted);
-
-            TempData["PipelineNotice"] = branchDeleted
-                ? $"Mission reset. Removed {deletedComments} agent comment(s), cleared SDK stage labels, and deleted branch {branchName}."
-                : $"Mission reset. Removed {deletedComments} agent comment(s) and cleared SDK stage labels. Branch {branchName} was not found or could not be deleted.";
-
-            _dbContext.PipelineRuns.Remove(run);
-            await _dbContext.SaveChangesAsync();
+            var resetService = new PipelineResetService(issueClient, _dbContext);
+            var result = await resetService.ResetMissionAsync(run.Id, repoRoot, HttpContext.RequestAborted);
+            TempData["PipelineNotice"] = $"Mission reset. {result.ToSummary()}";
             return RedirectToAction(nameof(Index));
         }
         catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException)

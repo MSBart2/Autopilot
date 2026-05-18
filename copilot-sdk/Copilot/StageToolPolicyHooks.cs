@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Cyberpilot.Pipeline;
@@ -65,8 +66,8 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
             return new PreToolUseHookOutput
             {
                 PermissionDecision = "deny",
-                PermissionDecisionReason = $"Stage '{stage.Name}' is read-only for broad write operations. Move the write to an implementation, docs, or deliver stage.",
-                SuppressOutput = true,
+                PermissionDecisionReason = $"Stage '{stage.Name}' may run investigative tools, but durable side effects are blocked. Return the intended comment, label, branch, or file change as a stage artifact instead; implementation, docs, and deliver stages may perform scoped writes.",
+                SuppressOutput = false,
             };
         }
 
@@ -156,12 +157,7 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
     private static bool LooksLikeSelfReviewAttempt(string toolName, object? args)
     {
         // GitHub rejects approve/request-changes reviews on PRs authored by the same user.
-        // Detect: powershell calling `gh pr review --approve` or `--request-changes`
-        if (!string.Equals(toolName, "powershell", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
+        // Detect it through any tool wrapper, including shell scripts.
         var serializedArgs = Serialize(args);
         return SelfReviewCommandRegex().IsMatch(serializedArgs);
     }
@@ -174,7 +170,10 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
         }
 
         var serializedArgs = Serialize(args);
-        return WriteCommandRegex().IsMatch(serializedArgs);
+        var normalizedCommandText = CommandTokenSeparatorRegex().Replace(serializedArgs, " ");
+        return DurableSideEffectCommandRegex().IsMatch(serializedArgs)
+            || DurableSideEffectCommandRegex().IsMatch(normalizedCommandText)
+            || FileMutationScriptRegex().IsMatch(serializedArgs);
     }
 
     private static string Serialize(object? value)
@@ -191,7 +190,10 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
 
         try
         {
-            return JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            {
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            });
         }
         catch (NotSupportedException)
         {
@@ -224,8 +226,14 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
     [GeneratedRegex("(write|edit|create|delete|remove|rename|move|apply[_-]?patch|push|merge|commit)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex WriteToolNameRegex();
 
-    [GeneratedRegex("(git\\s+(push|commit|merge)|apply_patch|set-content|add-content|out-file|new-item|remove-item|mkdir|rm\\s|del\\s|>\\s*[^\\s])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex WriteCommandRegex();
+    [GeneratedRegex(@"\bgh\s+(issue\s+(comment|edit|close|reopen|delete)|pr\s+(comment|review|merge|close|edit|create))\b|\bgh\s+api\b(?=.*\b(-X|--method)\s*(POST|PUT|PATCH|DELETE)\b)|\bgit\s+(push|commit|merge|rebase|reset|clean|tag|branch|checkout\s+-b|switch\s+-c)\b|\b(apply_patch|set-content|add-content|out-file|new-item|remove-item|move-item|rename-item|copy-item|mkdir|rm|del)\b|(?<!\d)>\s*(?!&)\S", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DurableSideEffectCommandRegex();
+
+    [GeneratedRegex(@"\bopen\s*\([^)]*,\s*[""'](?:w|a|x)\b|\.write_text\s*\(|\b(os\.(remove|unlink|rmdir|mkdir|makedirs|rename|replace)|shutil\.(move|copy|copyfile|copytree|rmtree))\s*\(|\bfs\.(writeFileSync|appendFileSync|rmSync|unlinkSync|mkdirSync|renameSync|cpSync|copyFileSync)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex FileMutationScriptRegex();
+
+    [GeneratedRegex(@"[\[\]\{\}""',:]+", RegexOptions.CultureInvariant)]
+    private static partial Regex CommandTokenSeparatorRegex();
 
     [GeneratedRegex("[^a-zA-Z0-9_-]+", RegexOptions.CultureInvariant)]
     private static partial Regex ToolNameSafeCharactersRegex();

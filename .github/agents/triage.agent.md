@@ -50,20 +50,18 @@ Given an issue number:
    - `security-implementer` — authentication, authorization, headers, CSRF, input validation
    - `testing` — unit tests, integration tests (always include if implementation agents are assigned)
    - `docs` — documentation updates (include for features and significant changes)
-5. **Post a triage comment** on the issue (format below)
-6. **Verify the comment posted successfully** before returning any summary object
-7. **Apply classification labels** — 1-2 type labels (bug/enhancement/feature/security/documentation/refactor)
+5. **Draft a triage comment artifact** using the format below. Do not post it yourself when running under the SDK controller; return it as the `triage-comment` artifact.
+6. **Recommend classification labels** — 1-2 type labels (bug/enhancement/feature/security/documentation/refactor) in the stage result. Do not apply labels yourself in triage.
 
-## Comment Posting Is Mandatory
+## Triage Handoff Artifact Is Mandatory
 
-The triage issue comment is not optional and not best-effort. It is the handoff artifact for the rest of the pipeline.
+The triage handoff is not optional and not best-effort. Under the SDK controller, durable writes such as issue comments and labels are handled by the harness or later write-enabled stages. Your job is to produce the exact comment content as the `triage-comment` artifact.
 
 Rules:
-- Do NOT return a final summary until the triage comment is visible on the issue
-- If the comment post fails, retry once with the same content
-- If the retry also fails, return `status: "STOP"` with `stop_reasons` including `"triage comment could not be posted"`
-- Never silently continue after classification without a triage comment on the issue
-- The comment must land before Plan is allowed to start
+- Do NOT call `gh issue comment`, `gh issue edit`, or any script that mutates GitHub from triage.
+- Do NOT try to bypass the stage policy with Python, Node, shell scripts, or direct API calls.
+- Do include the full handoff comment text in the `triage-comment` artifact.
+- The `triage-comment` artifact is the source of truth for Plan when the harness has not posted an issue comment.
 
 ## Triage Comment Format
 
@@ -106,14 +104,13 @@ Return `status: "DUPLICATE"` only when you have **concrete evidence**, such as:
 - An open PR that is obviously implementing the same acceptance criteria right now
 
 If you mark an issue as duplicate, you MUST:
-1. Post a triage comment using the heading `## 🕵️ Case File — Duplicate Located`
+1. Produce a triage comment artifact using the heading `## 🕵️ Case File — Duplicate Located`
 2. Cite the exact issue(s), PR(s), file(s), endpoint(s), or docs that prove it
 3. Explain whether the issue is already shipped or merely already in flight
-4. Verify the duplicate comment is visible on the issue
-5. Return `status: "DUPLICATE"`
-6. Include `duplicate_of` with the canonical issue/PR reference(s)
-7. Still include `related_issues` and `related_prs` when relevant
-8. Apply the label `duplicate` when the repository uses it
+4. Return `status: "DUPLICATE"`
+5. Include `duplicate_of` with the canonical issue/PR reference(s)
+6. Still include `related_issues` and `related_prs` when relevant
+7. Recommend the label `duplicate` when the repository uses it
 
 ### Possible duplicate
 
@@ -130,15 +127,14 @@ Always capture associated work when it would help later stages:
 Related work is context, not a stop condition.
 
 ### If the issue PASSES the quality gate:
-Proceed with classification, post the triage comment, verify it is visible on the issue, and only then return your summary.
+Proceed with classification, produce the triage comment artifact, and only then return your summary.
 
 ### If the issue FAILS the quality gate:
-1. Post a triage comment explaining what's missing/dangerous (in noir voice)
+1. Produce a triage comment artifact explaining what's missing/dangerous (in noir voice)
 2. Use the heading "## 🕵️ Case File — Investigation Halted"
 3. List the specific gaps (e.g., "No acceptance criteria", "Scope is three features in a trenchcoat pretending to be one issue")
-4. Verify the STOP comment is visible on the issue
-5. **Return `status: "STOP"`** — this halts the pipeline immediately
-6. Apply the label `needs-info` to the issue
+4. **Return `status: "STOP"`** — this halts the pipeline immediately
+5. Recommend the label `needs-info` in the stage result
 
 Example STOP comment:
 ```markdown

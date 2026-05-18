@@ -27,7 +27,9 @@ internal sealed record CyberpilotOptions(
     string? PrHeadBranch = null,
     string? AgentPromptRoot = null,
     IReadOnlyDictionary<string, string>? StageModelOverrides = null,
-    IReadOnlyDictionary<string, string>? StageModelFallbacks = null)
+    IReadOnlyDictionary<string, string>? StageModelFallbacks = null,
+    bool ResetMode = false,
+    bool BenchmarkReset = false)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);
@@ -39,6 +41,7 @@ internal sealed record CyberpilotOptions(
             "  dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- run issue <number> [--repo owner/name] [--model model-id] [--skip-deliver]",
             "  dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- issue <number> [--repo owner/name]",
             "  dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- <number>",
+            "  dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- reset issue <number> [--benchmark-reset]",
             "  dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- --check-labels [--repo owner/name]",
             "  dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- --check-model [--model model-id]",
             string.Empty,
@@ -65,7 +68,8 @@ internal sealed record CyberpilotOptions(
             "                       Root directory containing .github/agents. Defaults to --repo-root.",
             "  --db <connection>  Persist this run to the shared Cyberpilot database.",
             "  --config <path>    Load repo/token pairs from an appsettings-style JSON file.",
-            "  --skip-deliver      Run through docs but stop before merge/deliver.");
+            "  --skip-deliver      Run through docs but stop before merge/deliver.",
+            "  --benchmark-reset   When used with 'reset', preserve run metrics in the database.");
 
     public static CyberpilotOptions Parse(string[] args)
     {
@@ -76,7 +80,7 @@ internal sealed record CyberpilotOptions(
 
         var parsed = ParseArguments(args);
 
-        if ((parsed.IssueNumber is null or <= 0) && !parsed.CheckLabelsOnly && !parsed.CheckModelOnly)
+        if ((parsed.IssueNumber is null or <= 0) && !parsed.CheckLabelsOnly && !parsed.CheckModelOnly && !parsed.ResetMode)
         {
             throw new ArgumentException("Provide a positive issue number. Try: dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- run issue 135");
         }
@@ -102,7 +106,9 @@ internal sealed record CyberpilotOptions(
             PipelineDefinitionFilePath: parsed.PipelineDefinitionFilePath,
             AgentPromptRoot: string.IsNullOrWhiteSpace(parsed.AgentPromptRoot) ? null : Path.GetFullPath(parsed.AgentPromptRoot),
             StageModelOverrides: parsed.StageModelOverrides,
-            StageModelFallbacks: parsed.StageModelFallbacks);
+            StageModelFallbacks: parsed.StageModelFallbacks,
+            ResetMode: parsed.ResetMode,
+            BenchmarkReset: parsed.BenchmarkReset);
     }
 
     private sealed record ParsedArgs(
@@ -125,7 +131,9 @@ internal sealed record CyberpilotOptions(
         string? PipelineDefinitionFilePath = null,
         string? AgentPromptRoot = null,
         IReadOnlyDictionary<string, string>? StageModelOverrides = null,
-        IReadOnlyDictionary<string, string>? StageModelFallbacks = null)
+        IReadOnlyDictionary<string, string>? StageModelFallbacks = null,
+        bool ResetMode = false,
+        bool BenchmarkReset = false)
     {
         public static ParsedArgs Default => new() { StageTimeout = DefaultStageTimeout };
     }
@@ -141,6 +149,9 @@ internal sealed record CyberpilotOptions(
                 case "run":
                 case "issue":
                 case "cyberpilot":
+                    continue;
+                case "reset":
+                    parsed = parsed with { ResetMode = true };
                     continue;
                 case "--repo-root":
                     parsed = parsed with { RepoRoot = RequireValue(args, ref index, arg) };
@@ -183,6 +194,9 @@ internal sealed record CyberpilotOptions(
                     break;
                 case "--check-model":
                     parsed = parsed with { CheckModelOnly = true };
+                    break;
+                case "--benchmark-reset":
+                    parsed = parsed with { BenchmarkReset = true };
                     break;
                 case "--approve-all":
                     parsed = parsed with { ApproveAll = true };
