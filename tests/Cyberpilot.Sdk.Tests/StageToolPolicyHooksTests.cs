@@ -68,6 +68,36 @@ public sealed class StageToolPolicyHooksTests
     }
 
     [Fact]
+    public void EvaluatePreToolUse_ForPowershellArrayCommand_DeniesCall()
+    {
+        var hooks = CreateHooks("plan");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "powershell",
+            ToolArgs = new { command = new[] { "git", "status", "--porcelain" } },
+        });
+
+        Assert.Equal("deny", output.PermissionDecision);
+        Assert.False(output.SuppressOutput);
+        Assert.Contains("single 'command' string", output.PermissionDecisionReason);
+    }
+
+    [Fact]
+    public void EvaluatePreToolUse_ForPowershellStringCommand_AllowsCall()
+    {
+        var hooks = CreateHooks("plan");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "powershell",
+            ToolArgs = new { command = "git status --porcelain" },
+        });
+
+        Assert.Equal("allow", output.PermissionDecision);
+    }
+
+    [Fact]
     public void EvaluatePreToolUse_ForReadOnlyStageWriteCommand_DeniesCall()
     {
         var hooks = CreateHooks("review");

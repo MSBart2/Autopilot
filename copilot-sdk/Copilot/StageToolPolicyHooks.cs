@@ -50,6 +50,16 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
             };
         }
 
+        if (LooksLikePowershellArrayArgs(input.ToolName, input.ToolArgs))
+        {
+            return new PreToolUseHookOutput
+            {
+                PermissionDecision = "deny",
+                PermissionDecisionReason = "The powershell tool accepts a single 'command' string argument. Pass the full command as one string, e.g. { \"command\": \"git status --porcelain\" }. Do not pass an array or multiple arguments.",
+                SuppressOutput = false,
+            };
+        }
+
         if (!AllowsWrites(stage.Name) && LooksLikeWriteOperation(input.ToolName, input.ToolArgs))
         {
             return new PreToolUseHookOutput
@@ -98,6 +108,49 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
     private static bool AllowsWrites(string stageName)
     {
         return WriteEnabledStages.Contains(stageName);
+    }
+
+    private static bool LooksLikePowershellArrayArgs(string toolName, object? args)
+    {
+        // Detect when the model passes an array as the powershell command arg instead of a single string.
+        // The powershell tool expects: { "command": "git status" }
+        // A common mistake is: { "command": ["git", "status"] } or positional array args.
+        if (!string.Equals(toolName, "powershell", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var serialized = Serialize(args);
+        if (string.IsNullOrWhiteSpace(serialized))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(serialized);
+            var root = doc.RootElement;
+
+            // Top-level array: model passed ["git", "status"] directly
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                return true;
+            }
+
+            // Object with "command" key that is an array: { "command": ["git", "status"] }
+            if (root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("command", out var commandProp) &&
+                commandProp.ValueKind == JsonValueKind.Array)
+            {
+                return true;
+            }
+
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static bool LooksLikeSelfReviewAttempt(string toolName, object? args)
