@@ -17,9 +17,11 @@ public interface ILocalRepositoryValidator
 
     /// <summary>
     /// Validates a local repository root and returns its full path.
+    /// Throws if the repository has uncommitted changes — a clean working tree is required before dispatching a pipeline run.
     /// </summary>
     /// <param name="repoRoot">The configured local repository root.</param>
     /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The normalized repository root path.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the working tree is dirty or is not a valid git repository.</exception>
     Task<string> ValidateAsync(string repoRoot, CancellationToken cancellationToken = default);
 }
