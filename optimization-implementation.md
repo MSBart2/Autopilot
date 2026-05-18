@@ -37,28 +37,57 @@ This tracker turns `optimization-plan.md` into measurable implementation work. M
 
 Baseline runs show ~34–38% of tool calls failing across all stages (44/131 on #33 run 1, 43/133 on #32 run 2). This is the highest-leverage near-term target — reducing failures drives down turns, tokens, duration, and cost without requiring prompt or architecture changes.
 
+### Investigation findings (2026-05-18)
+
+Stage-level failure rates across all 4 clean baseline runs (by `ToolCallCount` aggregate):
+
+| Stage | Failed / Total | Rate |
+| --- | --- | --- |
+| plan | 40 / 88 | 45.5% |
+| triage | 19 / 44 | 43.2% |
+| review | 37 / 108 | 34.3% |
+| implement | 44 / 133 | 33.1% |
+| docs | 25 / 82 | 30.5% |
+
+**Root cause visibility is limited.** `ToolExecutionCompleteData` carries an `Error.Code` and `Error.Message` when `Success = false`, but Cyberpilot currently only increments `FailedToolCallCount` — it does not log the failure reason. The `PipelineArtifacts` table (from post-tool-use hooks) only records tool calls that executed; denied calls and SDK-level failures produce no artifact, so they are invisible.
+
+**Confirmed failure types from artifact analysis** (partial — post-hook artifacts only, 488 total):
+
+| Type | Count | Example |
+| --- | --- | --- |
+| PowerShell multi-arg error | 7 | `accepts 1 arg(s), received 6 — exited with exit code 1` |
+| GitHub self-review block | 4 | `Review: Can not approve/request changes on your own pull request` |
+| GitHub GraphQL TLS timeout | 3 | `Post https://api.github.com/graphql: net/http: TLS handshake timeout` |
+
+Remaining ~151 failures are not captured — most likely pre-hook write denials in read-only stages (plan, triage, review) and SDK-level failures that produce no artifact.
+
 ### Investigation tasks
 
-- [ ] Query `PipelineStageLogs` to identify which stages have the highest `FailedToolCallCount / ToolCallCount` ratio.
-- [ ] Correlate failed tool calls with stage output logs to identify the most common failure modes (bad args, missing files, permission errors, tool not found, timeout, etc.).
+- [x] Query `PipelineStageLogs` to identify which stages have the highest `FailedToolCallCount / ToolCallCount` ratio.
+- [ ] Add failure reason logging — capture `ToolExecutionCompleteData.Error.Code` and `Error.Message` when `Success = false` to make root causes inspectable.
+- [ ] Determine what fraction of failures are pre-hook write denials in read-only stages vs. tool execution errors.
+- [ ] Confirm whether the self-review error is from a stage prompt instructing the agent to approve PRs, and fix the prompt or add a pre-hook denial.
+- [ ] Investigate the PowerShell multi-arg errors — determine which commands trigger them and whether tightening the tool description prevents them.
 - [ ] Determine whether failures are retried by the model (wasted turns) or silently skipped.
-- [ ] Identify whether any failures are expected/benign (e.g. probing for a file that may not exist) vs. avoidable errors.
 
 ### Candidate fixes
 
 | Root cause | Candidate fix | Status |
 | --- | --- | --- |
-| Model passes bad args to known tools | Improve tool descriptions / arg validation error messages | Not started |
+| Failure reasons not logged | Log `ToolExecutionCompleteData.Error` (code + message) per failed call | Not started |
+| Review agent tries to approve its own PR | Remove or gate the PR approval step in the review stage prompt | Not started |
+| Agent passes multi-word commands as separate PowerShell args | Improve PowerShell tool description to require a single command string | Not started |
 | Model retries a failing tool in a loop | Add post-tool hook to detect repeat failures and surface a hint | Not started |
 | Tool times out on slow operations | Add per-tool timeout config with a sensible default | Not started |
-| Tool not available in current stage policy | Tighten stage tool policy so unavailable tools are never offered | Not started |
-| Model probes for files that don't exist | Structured context pre-populates known file paths | Not started |
+| Read-only stage agent attempts file writes | Confirm pre-hook denial messages reach the model; add denial hint in prompt | Not started |
+| GitHub API TLS timeouts | Add retry with backoff for transient network failures | Not started |
 
 ### Success criteria
 
 - [ ] `FailedToolCallCount / ToolCallCount` drops below 20% on a full benchmark run.
 - [ ] No regression in stage output quality or valid JSON rate.
 - [ ] Per-stage failure counts recorded in `metrics.md` before and after each fix.
+- [ ] Failed tool calls include a logged reason code — no more invisible failures.
 
 ### Baseline failure rates (for comparison)
 
@@ -205,7 +234,7 @@ Baseline runs show ~34–38% of tool calls failing across all stages (44/131 on 
 | Date | Decision | Reason | Revisit when |
 | --- | --- | --- | --- |
 | 2026-05-18 | Use stage-level metrics as primary optimization unit | Stage totals reveal bottlenecks better than run totals | Metrics model changes |
-| 2026-05-18 | Start with tool failure rate reduction before prompt/context work | Baseline shows 32–46% failure rate — highest-leverage fix with no architecture risk | Failure root causes identified |
+| 2026-05-18 | Start with tool failure rate reduction before prompt/context work | Baseline shows 32–46% failure rate — highest-leverage fix with no architecture risk | Failure reason logging implemented so all root causes are visible |
 | TBD | Start with PR-first review for prompt/context A/B tests | It isolates review routing and avoids full pipeline noise | Full issue baselines are available |
 
 ## Open questions
