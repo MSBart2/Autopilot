@@ -39,7 +39,7 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             var run = dbContext is null ? null : await CreateRunAsync(dbContext, options, cancellationToken);
             var branchProvisioner = new BranchProvisioner();
             var progressSink = CreateProgressSink(dbContext, run, options);
-            var promptBuilder = new PromptBuilder(options.RepoRoot, options.RepoRoot, options.IssueNumber);
+            var promptBuilder = new PromptBuilder(options.RepoRoot, options.AgentPromptRoot ?? options.RepoRoot, options.IssueNumber);
             var stageRunner = new CopilotStageRunner(options.RepoRoot, progressSink, error);
             var modelChecker = new CopilotModelAvailabilityChecker();
             var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output);

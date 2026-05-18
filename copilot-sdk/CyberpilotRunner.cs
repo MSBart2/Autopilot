@@ -72,6 +72,7 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
             request.ShouldPauseDecisionAsync,
             request.PipelineDefinitionFilePath,
             request.PrHeadBranch,
+            request.AgentPromptRoot,
             request.StageModelOverrides,
             request.StageModelFallbacks);
 

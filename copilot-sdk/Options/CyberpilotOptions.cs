@@ -25,6 +25,7 @@ internal sealed record CyberpilotOptions(
     Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null,
     string? PipelineDefinitionFilePath = null,
     string? PrHeadBranch = null,
+    string? AgentPromptRoot = null,
     IReadOnlyDictionary<string, string>? StageModelOverrides = null,
     IReadOnlyDictionary<string, string>? StageModelFallbacks = null)
 {
@@ -60,6 +61,8 @@ internal sealed record CyberpilotOptions(
             "  --check-model       Check Copilot model availability and exit without running stages.",
             "  --approve-all       Allow Copilot SDK to approve all tool permission requests.",
             "  --allow-missing-docs Continue to deliver if the docs stage fails.",
+            "  --agent-prompt-root <path>",
+            "                       Root directory containing .github/agents. Defaults to --repo-root.",
             "  --db <connection>  Persist this run to the shared Cyberpilot database.",
             "  --config <path>    Load repo/token pairs from an appsettings-style JSON file.",
             "  --skip-deliver      Run through docs but stop before merge/deliver.");
@@ -97,6 +100,7 @@ internal sealed record CyberpilotOptions(
             PipelineDefinitionVersion: parsed.PipelineDefinitionVersion,
             PolicyProfileName: parsed.PolicyProfileName,
             PipelineDefinitionFilePath: parsed.PipelineDefinitionFilePath,
+            AgentPromptRoot: string.IsNullOrWhiteSpace(parsed.AgentPromptRoot) ? null : Path.GetFullPath(parsed.AgentPromptRoot),
             StageModelOverrides: parsed.StageModelOverrides,
             StageModelFallbacks: parsed.StageModelFallbacks);
     }
@@ -119,6 +123,7 @@ internal sealed record CyberpilotOptions(
         string PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
         string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
         string? PipelineDefinitionFilePath = null,
+        string? AgentPromptRoot = null,
         IReadOnlyDictionary<string, string>? StageModelOverrides = null,
         IReadOnlyDictionary<string, string>? StageModelFallbacks = null)
     {
@@ -184,6 +189,9 @@ internal sealed record CyberpilotOptions(
                     break;
                 case "--allow-missing-docs":
                     parsed = parsed with { AllowMissingDocs = true };
+                    break;
+                case "--agent-prompt-root":
+                    parsed = parsed with { AgentPromptRoot = RequireValue(args, ref index, arg) };
                     break;
                 case "--db":
                     parsed = parsed with { DatabaseConnectionString = RequireValue(args, ref index, arg) };
