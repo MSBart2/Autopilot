@@ -3,6 +3,7 @@ using System;
 using Cyberpilot.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Cyberpilot.Persistence.Migrations
 {
     [DbContext(typeof(CyberpilotDbContext))]
-    partial class CyberpilotDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260515202023_AddStageModelSelectionToPipelineStageLog")]
+    partial class AddStageModelSelectionToPipelineStageLog
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
@@ -268,10 +271,6 @@ namespace Cyberpilot.Persistence.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("CyberpilotSha")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Error")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
@@ -328,10 +327,6 @@ namespace Cyberpilot.Persistence.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(40)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TargetRepoSha")
-                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TargetRepository")

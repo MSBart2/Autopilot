@@ -40,7 +40,7 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             var branchProvisioner = new BranchProvisioner();
             var progressSink = CreateProgressSink(dbContext, run, options);
             var promptBuilder = new PromptBuilder(options.RepoRoot, options.RepoRoot, options.IssueNumber);
-            var stageRunner = new CopilotStageRunner(options.RepoRoot, options.Model, progressSink, error);
+            var stageRunner = new CopilotStageRunner(options.RepoRoot, progressSink, error);
             var modelChecker = new CopilotModelAvailabilityChecker();
             var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output);
             var exitCode = await runner.RunAsync(cancellationToken);
@@ -98,6 +98,12 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
 
     private static async Task<PipelineRun> CreateRunAsync(CyberpilotDbContext dbContext, CyberpilotOptions options, CancellationToken cancellationToken)
     {
+        var targetRepoSha = await GitRevParser.TryGetHeadShaAsync(options.RepoRoot, cancellationToken);
+        var cyberpilotRoot = GitRevParser.FindGitRoot(AppContext.BaseDirectory);
+        var cyberpilotSha = cyberpilotRoot is not null
+            ? await GitRevParser.TryGetHeadShaAsync(cyberpilotRoot, cancellationToken)
+            : null;
+
         var run = new PipelineRun
         {
             IssueNumber = options.IssueNumber,
@@ -112,6 +118,8 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             PipelineDefinitionVersion = options.PipelineDefinitionVersion,
             PolicyProfileName = options.PolicyProfileName,
             ContractVersion = PipelineDefinitionDefaults.ContractVersion,
+            TargetRepoSha = targetRepoSha,
+            CyberpilotSha = cyberpilotSha,
         };
 
         dbContext.PipelineRuns.Add(run);

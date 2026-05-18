@@ -67,9 +67,8 @@ These issues in `MSBart2/Aspire1` are scoped to give useful signal without deliv
   - pipeline definition
   - policy profile
   - skip delivery enabled
-- Record:
-  - `git rev-parse HEAD` in the Cyberpilot repo
-  - `git rev-parse HEAD` in the Aspire1 repo
+
+> **SHAs are captured automatically.** Cyberpilot records `CyberpilotSha` and `TargetRepoSha` in `PipelineRuns` at run start — no manual `git rev-parse` needed. Both appear in the per-stage query output.
 
 ### 2. Dispatch
 

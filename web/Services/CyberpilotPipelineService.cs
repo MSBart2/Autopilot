@@ -1,4 +1,5 @@
 using Cyberpilot;
+using Cyberpilot.Git;
 using Cyberpilot.GitHub;
 using Cyberpilot.Persistence;
 using Cyberpilot.Pipeline;
@@ -94,6 +95,11 @@ public sealed class CyberpilotPipelineService(
             sink = new SignalRProgressSink(run.Id, run.Model, run.IssueNumber, dbContext, hubContext, sinkLogger, request.StartStage, request.RetryReason);
             var repoRoot = await localRepositoryValidator.PrepareAsync(request.RepoRoot, request.Repository, request.GitHubToken, cancellationToken);
             run.WorktreePath = repoRoot;
+            run.TargetRepoSha = await GitRevParser.TryGetHeadShaAsync(repoRoot, cancellationToken);
+            var cyberpilotRoot = GitRevParser.FindGitRoot(AppContext.BaseDirectory);
+            run.CyberpilotSha = cyberpilotRoot is not null
+                ? await GitRevParser.TryGetHeadShaAsync(cyberpilotRoot, cancellationToken)
+                : null;
             await dbContext.SaveChangesAsync(cancellationToken);
             var profileDetector = scope.ServiceProvider.GetRequiredService<IRepositoryProfileDetector>();
             var profile = await profileDetector.DetectAsync(repoRoot, cancellationToken);
@@ -149,7 +155,9 @@ public sealed class CyberpilotPipelineService(
                 PolicyProfileName: request.PolicyProfileName,
                 TargetRepositoryProfileSummary: profile.ToSummary(),
                 PipelineDefinitionFilePath: request.PipelineDefinitionFilePath,
-                PrHeadBranch: request.PrHeadBranch), sink, cancellationToken);
+                PrHeadBranch: request.PrHeadBranch,
+                StageModelOverrides: request.StageModelOverrides,
+                StageModelFallbacks: request.StageModelFallbacks), sink, cancellationToken);
 
             run.Status = result.Status;
             run.BranchName = result.BranchName;

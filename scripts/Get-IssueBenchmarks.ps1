@@ -40,6 +40,8 @@ SELECT
   r.Status,
   r.Model,
   r.SkipDeliver,
+  r.CyberpilotSha,
+  r.TargetRepoSha,
   SUM(COALESCE(l.InputTokens, 0))         AS InputTokens,
   SUM(COALESCE(l.OutputTokens, 0))        AS OutputTokens,
   SUM(COALESCE(l.CacheReadTokens, 0))     AS CacheReadTokens,

@@ -104,6 +104,14 @@ public sealed class PipelineRun
     [StringLength(40)]
     public string? ContractVersion { get; set; }
 
+    /// <summary>Gets or sets the Cyberpilot HEAD commit SHA captured at run start.</summary>
+    [StringLength(64)]
+    public string? CyberpilotSha { get; set; }
+
+    /// <summary>Gets or sets the target repository HEAD commit SHA captured at run start.</summary>
+    [StringLength(64)]
+    public string? TargetRepoSha { get; set; }
+
     /// <summary>Gets or sets the stage logs for this run.</summary>
     public ICollection<PipelineStageLog> StageLogs { get; set; } = [];
 
@@ -115,4 +123,7 @@ public sealed class PipelineRun
 
     /// <summary>Gets or sets structured evidence rows for this run.</summary>
     public ICollection<PipelineEvidence> Evidence { get; set; } = [];
+
+    /// <summary>Gets or sets structured artifacts produced by this run.</summary>
+    public ICollection<PipelineArtifact> Artifacts { get; set; } = [];
 }

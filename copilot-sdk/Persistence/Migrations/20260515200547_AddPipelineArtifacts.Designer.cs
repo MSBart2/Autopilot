@@ -3,6 +3,7 @@ using System;
 using Cyberpilot.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Cyberpilot.Persistence.Migrations
 {
     [DbContext(typeof(CyberpilotDbContext))]
-    partial class CyberpilotDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260515200547_AddPipelineArtifacts")]
+    partial class AddPipelineArtifacts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
@@ -268,10 +271,6 @@ namespace Cyberpilot.Persistence.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("CyberpilotSha")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Error")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
@@ -330,10 +329,6 @@ namespace Cyberpilot.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("TargetRepoSha")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("TargetRepository")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
@@ -374,10 +369,6 @@ namespace Cyberpilot.Persistence.Migrations
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ConfiguredModel")
-                        .HasMaxLength(120)
-                        .HasColumnType("TEXT");
-
                     b.Property<double?>("DurationMs")
                         .HasColumnType("REAL");
 
@@ -386,14 +377,6 @@ namespace Cyberpilot.Persistence.Migrations
 
                     b.Property<int?>("FailedToolCallCount")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("FallbackModel")
-                        .HasMaxLength(120)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FallbackReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("TEXT");
 
                     b.Property<int?>("InputTokens")
                         .HasColumnType("INTEGER");
@@ -431,10 +414,6 @@ namespace Cyberpilot.Persistence.Migrations
                     b.Property<string>("RunId")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SelectedModel")
-                        .HasMaxLength(120)
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("SessionErrorCount")

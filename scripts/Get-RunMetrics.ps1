@@ -37,6 +37,8 @@ SELECT
   r.Model AS RequestedModel,
   r.SkipDeliver,
   r.Status AS RunStatus,
+  r.CyberpilotSha,
+  r.TargetRepoSha,
   r.CreatedAt,
   r.CompletedAt,
   l.StageName,

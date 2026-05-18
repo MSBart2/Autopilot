@@ -3,6 +3,7 @@ using System;
 using Cyberpilot.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Cyberpilot.Persistence.Migrations
 {
     [DbContext(typeof(CyberpilotDbContext))]
-    partial class CyberpilotDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260515200102_AddStageExecutionMetricsToPipelineStageLog")]
+    partial class AddStageExecutionMetricsToPipelineStageLog
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
@@ -84,67 +87,6 @@ namespace Cyberpilot.Persistence.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("PipelineApprovals");
-                });
-
-            modelBuilder.Entity("Cyberpilot.Persistence.PipelineArtifact", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ContractVersion")
-                        .HasMaxLength(40)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("MediaType")
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RunId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Source")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("StageLogId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("StageName")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Uri")
-                        .HasMaxLength(1000)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Value")
-                        .HasMaxLength(4000)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name");
-
-                    b.HasIndex("RunId");
-
-                    b.HasIndex("StageLogId");
-
-                    b.HasIndex("StageName");
-
-                    b.ToTable("PipelineArtifacts");
                 });
 
             modelBuilder.Entity("Cyberpilot.Persistence.PipelineDispatch", b =>
@@ -268,10 +210,6 @@ namespace Cyberpilot.Persistence.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("CyberpilotSha")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Error")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
@@ -330,10 +268,6 @@ namespace Cyberpilot.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("TargetRepoSha")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("TargetRepository")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
@@ -374,10 +308,6 @@ namespace Cyberpilot.Persistence.Migrations
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ConfiguredModel")
-                        .HasMaxLength(120)
-                        .HasColumnType("TEXT");
-
                     b.Property<double?>("DurationMs")
                         .HasColumnType("REAL");
 
@@ -386,14 +316,6 @@ namespace Cyberpilot.Persistence.Migrations
 
                     b.Property<int?>("FailedToolCallCount")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("FallbackModel")
-                        .HasMaxLength(120)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FallbackReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("TEXT");
 
                     b.Property<int?>("InputTokens")
                         .HasColumnType("INTEGER");
@@ -431,10 +353,6 @@ namespace Cyberpilot.Persistence.Migrations
                     b.Property<string>("RunId")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SelectedModel")
-                        .HasMaxLength(120)
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("SessionErrorCount")
@@ -489,24 +407,6 @@ namespace Cyberpilot.Persistence.Migrations
                     b.Navigation("Run");
                 });
 
-            modelBuilder.Entity("Cyberpilot.Persistence.PipelineArtifact", b =>
-                {
-                    b.HasOne("Cyberpilot.Persistence.PipelineRun", "Run")
-                        .WithMany("Artifacts")
-                        .HasForeignKey("RunId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Cyberpilot.Persistence.PipelineStageLog", "StageLog")
-                        .WithMany("Artifacts")
-                        .HasForeignKey("StageLogId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Run");
-
-                    b.Navigation("StageLog");
-                });
-
             modelBuilder.Entity("Cyberpilot.Persistence.PipelineDispatch", b =>
                 {
                     b.HasOne("Cyberpilot.Persistence.PipelineRun", null)
@@ -549,8 +449,6 @@ namespace Cyberpilot.Persistence.Migrations
                 {
                     b.Navigation("Approvals");
 
-                    b.Navigation("Artifacts");
-
                     b.Navigation("Dispatches");
 
                     b.Navigation("Evidence");
@@ -560,8 +458,6 @@ namespace Cyberpilot.Persistence.Migrations
 
             modelBuilder.Entity("Cyberpilot.Persistence.PipelineStageLog", b =>
                 {
-                    b.Navigation("Artifacts");
-
                     b.Navigation("Evidence");
                 });
 #pragma warning restore 612, 618
