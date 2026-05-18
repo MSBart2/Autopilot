@@ -91,67 +91,23 @@ These issues in `MSBart2/Aspire1` are scoped to give useful signal without deliv
 
 Check the Run Room first; it shows stage-level tokens, turns, tool calls, duration, model, and status.
 
-For raw extraction, query `web\cyberpilot.db`:
+For raw extraction, use the scripts in `scripts/` — both require `sqlite3` on your PATH.
 
-```sql
--- Per-stage detail for one run
-SELECT
-  r.Id AS RunId,
-  r.Repository,
-  r.IssueNumber,
-  r.IssueTitle,
-  r.Model AS RequestedModel,
-  r.SkipDeliver,
-  r.Status AS RunStatus,
-  r.CreatedAt,
-  r.CompletedAt,
-  l.StageName,
-  l.Status AS StageStatus,
-  l.Model AS ReportedModel,
-  l.SelectedModel,
-  l.FallbackModel,
-  l.InputTokens,
-  l.OutputTokens,
-  l.CacheReadTokens,
-  l.CacheWriteTokens,
-  l.ReasoningTokens,
-  l.PremiumRequestCost,
-  l.EstimatedCostUsd,
-  l.DurationMs,
-  l.TurnCount,
-  l.ToolCallCount,
-  l.FailedToolCallCount,
-  l.SessionErrorCount,
-  l.ReachedIdle,
-  l.WasAborted
-FROM PipelineRuns r
-JOIN PipelineStageLogs l ON l.RunId = r.Id
-WHERE r.Id = '<RUN_ID>'
-ORDER BY l.StartedAt;
+**Per-stage detail for a single run** (use immediately after dispatch, replace `<RUN_ID>` with the ID from the Run Room):
+
+```powershell
+.\scripts\Get-RunMetrics.ps1 -RunId "<RUN_ID>"
 ```
 
-```sql
--- Run totals for all runs on one benchmark issue
-SELECT
-  r.Id AS RunId,
-  r.CreatedAt,
-  r.Status,
-  SUM(COALESCE(l.InputTokens, 0))        AS InputTokens,
-  SUM(COALESCE(l.OutputTokens, 0))       AS OutputTokens,
-  SUM(COALESCE(l.CacheReadTokens, 0))    AS CacheReadTokens,
-  SUM(COALESCE(l.CacheWriteTokens, 0))   AS CacheWriteTokens,
-  SUM(COALESCE(l.DurationMs, 0))         AS DurationMs,
-  SUM(COALESCE(l.TurnCount, 0))          AS Turns,
-  SUM(COALESCE(l.ToolCallCount, 0))      AS ToolCalls,
-  SUM(COALESCE(l.FailedToolCallCount, 0)) AS FailedToolCalls,
-  SUM(COALESCE(l.EstimatedCostUsd, 0))   AS EstimatedCostUsd
-FROM PipelineRuns r
-JOIN PipelineStageLogs l ON l.RunId = r.Id
-WHERE r.Repository = 'MSBart2/Aspire1'
-  AND r.IssueNumber = <ISSUE_NUMBER>
-GROUP BY r.Id, r.CreatedAt, r.Status
-ORDER BY r.CreatedAt DESC;
+**All runs for a benchmark issue** (use for before/after comparison):
+
+```powershell
+.\scripts\Get-IssueBenchmarks.ps1 -IssueNumber 32
+.\scripts\Get-IssueBenchmarks.ps1 -IssueNumber 33
+.\scripts\Get-IssueBenchmarks.ps1 -IssueNumber 34
 ```
+
+Both scripts default to `web\cyberpilot.db` and `MSBart2/Aspire1`. Pass `-DbPath` or `-Repository` to override.
 
 ### 5. Capture qualitative notes
 
