@@ -534,18 +534,34 @@
             else if (cls === 'state-skipped') noteEl.textContent = STATE_NOTES.skipped;
             else noteEl.textContent = typeof STATE_NOTES.done === 'function' ? STATE_NOTES.done(stage) : STATE_NOTES.done;
         }
-        if (tokenData && (tokenData.inputTokens > 0 || tokenData.outputTokens > 0)) {
+        if (tokenData && hasMetricData(tokenData)) {
             const tagline = card.querySelector('.agent-tagline');
             if (tagline) {
+                card.querySelector('.agent-token-badge')?.remove();
                 const tokenBadge = document.createElement('div');
                 tokenBadge.className = 'agent-token-badge';
-                tokenBadge.innerHTML = `🪙 ${Number(tokenData.inputTokens ?? 0).toLocaleString()} in / ${Number(tokenData.outputTokens ?? 0).toLocaleString()} out`;
-                if (tokenData.estimatedCostUsd > 0) {
-                    const costLine = document.createElement('div');
-                    costLine.className = 'agent-cost-line';
-                    costLine.textContent = `~$${Number(tokenData.estimatedCostUsd).toFixed(4)} (estimated)`;
-                    tokenBadge.appendChild(costLine);
+                const lines = [];
+                if ((tokenData.inputTokens ?? 0) > 0 || (tokenData.outputTokens ?? 0) > 0) {
+                    lines.push(`🪙 ${Number(tokenData.inputTokens ?? 0).toLocaleString()} in / ${Number(tokenData.outputTokens ?? 0).toLocaleString()} out`);
                 }
+                if (tokenData.estimatedCostUsd > 0) {
+                    lines.push(`~$${Number(tokenData.estimatedCostUsd).toFixed(4)} estimated`);
+                }
+                if ((tokenData.turnCount ?? 0) > 0 || (tokenData.toolCallCount ?? 0) > 0) {
+                    const failedTools = Number(tokenData.failedToolCallCount ?? 0);
+                    const failedSuffix = failedTools > 0 ? `, ${failedTools.toLocaleString()} failed` : '';
+                    lines.push(`${Number(tokenData.turnCount ?? 0).toLocaleString()} turns / ${Number(tokenData.toolCallCount ?? 0).toLocaleString()} tools${failedSuffix}`);
+                }
+                if (tokenData.durationMs > 0) {
+                    lines.push(`${formatDurationMs(tokenData.durationMs)} model time`);
+                }
+                if ((tokenData.sessionErrorCount ?? 0) > 0) {
+                    lines.push(`${Number(tokenData.sessionErrorCount).toLocaleString()} session errors`);
+                }
+                if (tokenData.model) {
+                    lines.push(String(tokenData.model));
+                }
+                tokenBadge.innerHTML = lines.map(line => `<div class="agent-cost-line">${escapeHtml(line)}</div>`).join('');
                 tagline.insertAdjacentElement('afterend', tokenBadge);
             }
         }
@@ -570,6 +586,25 @@
             }
         }
         removeCursor();
+    }
+
+    function hasMetricData(tokenData) {
+        return (tokenData.inputTokens ?? 0) > 0
+            || (tokenData.outputTokens ?? 0) > 0
+            || (tokenData.estimatedCostUsd ?? 0) > 0
+            || (tokenData.turnCount ?? 0) > 0
+            || (tokenData.toolCallCount ?? 0) > 0
+            || (tokenData.failedToolCallCount ?? 0) > 0
+            || (tokenData.sessionErrorCount ?? 0) > 0
+            || (tokenData.durationMs ?? 0) > 0
+            || Boolean(tokenData.model);
+    }
+
+    function formatDurationMs(value) {
+        const totalSeconds = Math.round(Number(value) / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${String(seconds).padStart(2, '0')}`;
     }
 
     // ── Per-stage live timer ───────────────────────────────────────────
@@ -705,7 +740,17 @@
         } else if (s === 'running') {
             finalizeCard(log.stage, 'failed', log.duration);
         } else {
-            finalizeCard(log.stage, s, log.duration, { inputTokens: log.inputTokens, outputTokens: log.outputTokens, estimatedCostUsd: log.estimatedCostUsd });
+            finalizeCard(log.stage, s, log.duration, {
+                inputTokens: log.inputTokens,
+                outputTokens: log.outputTokens,
+                estimatedCostUsd: log.estimatedCostUsd,
+                model: log.model,
+                turnCount: log.turnCount,
+                toolCallCount: log.toolCallCount,
+                failedToolCallCount: log.failedToolCallCount,
+                sessionErrorCount: log.sessionErrorCount,
+                durationMs: log.durationMs
+            });
         }
     }
 
@@ -870,7 +915,17 @@
             const statusLower = (e.status ?? '').toLowerCase();
             lastCompletedStage = e.stage;
             lastCompletedStatus = statusLower;
-            finalizeCard(e.stage, statusLower, durSec, { inputTokens: e.inputTokens, outputTokens: e.outputTokens, estimatedCostUsd: e.estimatedCostUsd });
+            finalizeCard(e.stage, statusLower, durSec, {
+                inputTokens: e.inputTokens,
+                outputTokens: e.outputTokens,
+                estimatedCostUsd: e.estimatedCostUsd,
+                model: e.model,
+                turnCount: e.turnCount,
+                toolCallCount: e.toolCallCount,
+                failedToolCallCount: e.failedToolCallCount,
+                sessionErrorCount: e.sessionErrorCount,
+                durationMs: e.durationMs
+            });
             updateStation(e.stage, STATION_STATE_MAP[statusLower] ?? 'is-complete', statusLower);
             stopTimer();
             currentStage = null;

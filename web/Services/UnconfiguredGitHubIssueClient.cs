@@ -47,6 +47,9 @@ public sealed class UnconfiguredGitHubIssueClient(string message) : IGitHubIssue
     public Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => throw CreateException();
 
     /// <inheritdoc />
+    public Task ClosePullRequestAsync(int pullRequestNumber, CancellationToken cancellationToken = default) => throw CreateException();
+
+    /// <inheritdoc />
     public Task<GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => throw CreateException();
 
     private InvalidOperationException CreateException() => new(message);

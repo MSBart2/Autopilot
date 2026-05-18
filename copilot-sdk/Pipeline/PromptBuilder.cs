@@ -2,12 +2,12 @@ namespace Cyberpilot.Pipeline;
 
 internal interface IPromptBuilder
 {
-	Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, CancellationToken cancellationToken = default);
+	Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, PipelineExecutionContext? context = null, CancellationToken cancellationToken = default);
 }
 
 internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int issueNumber, string? targetRepositoryProfileSummary = null) : IPromptBuilder
 {
-	public async Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, CancellationToken cancellationToken = default)
+	public async Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, PipelineExecutionContext? context = null, CancellationToken cancellationToken = default)
 	{
 		var stage = stageDefinition.Stage;
 		var promptPath = Path.Combine(agentPromptRoot, ".github", "agents", stage.PromptFile);
@@ -18,6 +18,7 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 		var artifactExample = BuildArtifactExample(stageDefinition.Contract.RequiredArtifacts);
 		var reportingGuidance = BuildReportingGuidance(stage.Name);
 		var repositoryProfileContext = BuildRepositoryProfileContext(targetRepositoryProfileSummary);
+		var harnessContext = BuildHarnessContext(stage.Name, context);
 
 		return $$"""
 			You are running as the Cyberpilot SDK cyberpilot controller.
@@ -30,11 +31,12 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 			Policy profile: {{policyProfile.Name}}
 			Stage result contract version: {{stageDefinition.Contract.Version}}
 			Required artifacts: {{requiredArtifacts}}
+			{{harnessContext}}
 
 			The controller has already applied the permanent `sdk` provenance label and the correct SDK stage label for this stage.
 			Do not manage the `sdk` label or any `sdk/*` labels yourself. Do not close the issue.
 
-			Execute the stage instructions below yourself. Use the issue thread as the state file.
+			Execute the stage instructions below yourself. Treat the harness context and structured artifacts as the primary workflow state. Use issue and pull request comments as human-readable reports, not as the canonical state store.
 			Do not delegate to background agents or wait for specialist agent tasks. When the imported prompt asks for specialist input, perform that specialist analysis directly in this SDK session and include the result in the stage summary.
 
 			## Output Formatting
@@ -74,6 +76,109 @@ internal sealed class PromptBuilder(string repoRoot, string agentPromptRoot, int
 			{{stagePrompt}}
 			</stage-agent-prompt>
 			""";
+	}
+
+	private static string BuildHarnessContext(string stageName, PipelineExecutionContext? context)
+	{
+		if (context is null)
+		{
+			return string.Empty;
+		}
+
+		var lines = new List<string>
+		{
+			"",
+			"## Harness Context",
+			$"- Issue: #{context.IssueNumber}",
+			$"- Repository: {ValueOrPending(context.Repository)}",
+			$"- Repository root: {context.RepoRoot}",
+			$"- Pipeline definition: {context.Definition.Name} v{context.Definition.Version.Value}",
+			$"- Current stage: {stageName}",
+		};
+
+		if (ShouldIncludeBranch(stageName))
+		{
+			lines.Add($"- Head branch: {ValueOrPending(context.HeadBranch)}");
+		}
+
+		if (ShouldIncludePullRequest(stageName))
+		{
+			lines.Add($"- Pull request: {FormatPullRequest(context)}");
+		}
+
+		var priorStages = FilterPriorStages(stageName, context.StageHistory);
+		if (priorStages.Count > 0)
+		{
+			lines.Add("- Prior stage summaries:");
+			foreach (var priorStage in priorStages)
+			{
+				lines.Add($"  - {priorStage.StageName}: {priorStage.Status} / {priorStage.Decision}{FormatError(priorStage.Error)}");
+				foreach (var artifact in priorStage.Artifacts.Take(3))
+				{
+					lines.Add($"    - artifact: {artifact}");
+				}
+				foreach (var evidence in priorStage.Evidence.Take(2))
+				{
+					lines.Add($"    - evidence: {evidence}");
+				}
+			}
+		}
+
+		return string.Join(Environment.NewLine, lines);
+	}
+
+	private static bool ShouldIncludeBranch(string stageName)
+	{
+		return !stageName.Equals("triage", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static bool ShouldIncludePullRequest(string stageName)
+	{
+		return stageName.Equals("review", StringComparison.OrdinalIgnoreCase)
+			|| stageName.Equals("docs", StringComparison.OrdinalIgnoreCase)
+			|| stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase);
+	}
+
+	private static IReadOnlyList<StageExecutionSummary> FilterPriorStages(string stageName, IReadOnlyList<StageExecutionSummary> summaries)
+	{
+		var includedStages = stageName.ToLowerInvariant() switch
+		{
+			"plan" => new[] { "triage" },
+			"implement" => ["triage", "plan"],
+			"review" => ["plan", "implement"],
+			"docs" => ["implement", "review"],
+			"deliver" => ["review", "docs"],
+			_ => [],
+		};
+
+		return summaries
+			.Where(summary => includedStages.Contains(summary.StageName, StringComparer.OrdinalIgnoreCase))
+			.ToArray();
+	}
+
+	private static string FormatPullRequest(PipelineExecutionContext context)
+	{
+		if (!string.IsNullOrWhiteSpace(context.PrUrl) && context.PrNumber.HasValue)
+		{
+			return $"#{context.PrNumber.Value} at {context.PrUrl}";
+		}
+
+		if (!string.IsNullOrWhiteSpace(context.PrUrl))
+		{
+			return context.PrUrl;
+		}
+
+		return "not known yet";
+	}
+
+	private static string FormatError(string? error)
+	{
+		return string.IsNullOrWhiteSpace(error) ? string.Empty : $" ({error})";
+	}
+
+	private static string ValueOrPending(string? value)
+	{
+		return string.IsNullOrWhiteSpace(value) ? "not known yet" : value;
 	}
 
 	private static string BuildRepositoryProfileContext(string? profileSummary)

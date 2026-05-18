@@ -165,6 +165,71 @@ public partial class PipelinesController
     }
 
     /// <summary>
+    /// Resets a run's issue for replay by removing SDK stage labels, Cyberpilot comments, and SDK issue branches,
+    /// while preserving the run record in the database for historical metric analysis.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <returns>A redirect to the run details page.</returns>
+    [HttpPost("{id}/BenchmarkReset")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BenchmarkReset(string id)
+    {
+        var run = await _dbContext.PipelineRuns.FirstOrDefaultAsync(item => item.Id == id);
+        if (run is null) return NotFound();
+
+        if (run.Status is "Queued" or "Running" or "Pausing")
+            return RedirectWithError(nameof(Details), new { id }, "Cancel or finish the active run before resetting.");
+
+        if (PipelineRunPredicates.IsDeliveredRun(run))
+            return RedirectWithError(nameof(Details), new { id }, "Benchmark Reset is not available after the code has been delivered.");
+
+        if (run.BenchmarkResetAt.HasValue)
+            return RedirectWithError(nameof(Details), new { id }, "This run has already been benchmark-reset.");
+
+        var (repoRoot, token) = ResolveRepoConfig(run.Repository);
+
+        var issueClient = string.IsNullOrWhiteSpace(token)
+            ? _issueClient
+            : _issueClientFactory.Create(run.Repository, token);
+        try
+        {
+            var issue = await issueClient.GetIssueAsync(run.IssueNumber, HttpContext.RequestAborted);
+            var pr = await issueClient.FindPullRequestForIssueAsync(run.IssueNumber, HttpContext.RequestAborted);
+            if (pr is not null)
+            {
+                await issueClient.ClosePullRequestAsync(pr.Number, HttpContext.RequestAborted);
+            }
+
+            await GitHubIssueHelper.ResetIssueLabelsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
+            var deletedComments = await GitHubIssueHelper.DeleteAgentCommentsAsync(issueClient, run.IssueNumber, HttpContext.RequestAborted);
+
+            var branchName = run.BranchName;
+            if (string.IsNullOrWhiteSpace(branchName))
+            {
+                branchName = BranchProvisioner.CreateBranchName(run.IssueNumber, issue?.Title ?? $"issue-{run.IssueNumber}");
+            }
+
+            var branchDeleted = await GitHelper.DeleteIssueBranchAsync(repoRoot, branchName, HttpContext.RequestAborted);
+
+            run.BenchmarkResetAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync();
+
+            var prNote = pr is not null ? $" Closed PR #{pr.Number}." : string.Empty;
+            var branchNote = branchDeleted ? $" Deleted branch {branchName}." : string.Empty;
+            TempData["PipelineNotice"] = $"Benchmark reset complete. Removed {deletedComments} agent comment(s) and cleared SDK stage labels.{prNote}{branchNote} Run metrics are preserved in the database.";
+
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException)
+        {
+            _logger.LogError(ex, "Failed to benchmark-reset run {RunId} for issue {IssueNumber} in {Repository}.", run.Id, run.IssueNumber, run.Repository);
+            TempData["PipelineError"] = $"Benchmark reset failed: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    /// <summary>
     /// Resets a run's issue for replay by removing SDK stage labels, Cyberpilot comments, and SDK issue branches.
     /// </summary>
     /// <param name="id">The run identifier.</param>

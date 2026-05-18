@@ -85,6 +85,73 @@ public class PipelineRunDetailsViewModelTests
     }
 
     [Fact]
+    public void MetricTotals_SumStageExecutionMetrics()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var logs = new[]
+        {
+            new PipelineStageLog
+            {
+                RunId = run.Id,
+                StageName = "plan",
+                Status = "GO",
+                TurnCount = 2,
+                ToolCallCount = 5,
+                FailedToolCallCount = 1,
+                DurationMs = 1000,
+            },
+            new PipelineStageLog
+            {
+                RunId = run.Id,
+                StageName = "review",
+                Status = "GO",
+                TurnCount = 3,
+                ToolCallCount = 7,
+                DurationMs = 2500,
+            },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, logs);
+
+        Assert.Equal(5, vm.TotalTurnCount);
+        Assert.Equal(12, vm.TotalToolCallCount);
+        Assert.Equal(1, vm.TotalFailedToolCallCount);
+        Assert.Equal(TimeSpan.FromMilliseconds(3500), vm.TotalModelDuration);
+    }
+
+    [Fact]
+    public void ArtifactItems_FormatsAndOrdersArtifacts()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var artifacts = new[]
+        {
+            new PipelineArtifact
+            {
+                RunId = run.Id,
+                StageName = "implement",
+                Name = "validation-summary",
+                Value = "dotnet test passed.",
+                Uri = "log://validation",
+                MediaType = "text/plain",
+                ContractVersion = "1.0",
+                CreatedAt = DateTime.Parse("2026-05-13T09:30:00Z").ToUniversalTime(),
+            },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, [], [], Artifacts: artifacts);
+
+        var item = Assert.Single(vm.ArtifactItems);
+        Assert.Equal("Validation Summary", item.Label);
+        Assert.Equal("Implement", item.StageLabel);
+        Assert.True(item.HasValue);
+        Assert.True(item.HasUri);
+        Assert.Equal("dotnet test passed.", item.Value);
+        Assert.Equal("log://validation", item.Uri);
+        Assert.Equal("text/plain", item.MediaType);
+        Assert.Equal("1.0", item.ContractVersion);
+    }
+
+    [Fact]
     public void PlanReview_WithStructuredPlanLog_FormatsPlanArtifact()
     {
         var run = new PipelineRun

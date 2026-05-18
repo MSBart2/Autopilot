@@ -100,6 +100,27 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public void PipelineStageLog_ExecutionMetricColumns_DefaultToNull()
+    {
+        var log = new PipelineStageLog();
+
+        Assert.Null(log.Model);
+        Assert.Null(log.CacheReadTokens);
+        Assert.Null(log.CacheWriteTokens);
+        Assert.Null(log.ReasoningTokens);
+        Assert.Null(log.PremiumRequestCost);
+        Assert.Null(log.DurationMs);
+        Assert.Null(log.TurnCount);
+        Assert.Null(log.ToolCallCount);
+        Assert.Null(log.FailedToolCallCount);
+        Assert.Null(log.SessionErrorCount);
+        Assert.Null(log.ReachedIdle);
+        Assert.Null(log.WasAborted);
+        Assert.Null(log.ProviderCallIds);
+        Assert.Null(log.ApiCallIds);
+    }
+
+    [Fact]
     public void PipelineStageLog_StructuredResultColumns_DefaultToNull()
     {
         var log = new PipelineStageLog();
@@ -132,6 +153,53 @@ public sealed class CyberpilotDbContextTests : IDisposable
         Assert.Equal(log.StageResultJson, retrieved.StageResultJson);
         Assert.Equal(PipelineDefinitionDefaults.ContractVersion, retrieved.StageResultContractVersion);
         Assert.Equal("Retry after addressing review feedback.", retrieved.RetryReason);
+    }
+
+    [Fact]
+    public async Task PipelineStageLog_ExecutionMetrics_CanBeAddedAndRetrieved()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        var log = new PipelineStageLog
+        {
+            RunId = run.Id,
+            StageName = "review",
+            Status = "GO",
+            Model = "actual-model",
+            CacheReadTokens = 10,
+            CacheWriteTokens = 2,
+            ReasoningTokens = 3,
+            PremiumRequestCost = 1.5,
+            DurationMs = 2500,
+            TurnCount = 4,
+            ToolCallCount = 7,
+            FailedToolCallCount = 1,
+            SessionErrorCount = 2,
+            ReachedIdle = true,
+            WasAborted = false,
+            ProviderCallIds = "provider-1,provider-2",
+            ApiCallIds = "api-1,api-2",
+        };
+        _dbContext.PipelineStageLogs.Add(log);
+        await _dbContext.SaveChangesAsync();
+
+        var retrieved = await _dbContext.PipelineStageLogs.FindAsync(log.Id);
+
+        Assert.NotNull(retrieved);
+        Assert.Equal("actual-model", retrieved.Model);
+        Assert.Equal(10, retrieved.CacheReadTokens);
+        Assert.Equal(2, retrieved.CacheWriteTokens);
+        Assert.Equal(3, retrieved.ReasoningTokens);
+        Assert.Equal(1.5, retrieved.PremiumRequestCost);
+        Assert.Equal(2500, retrieved.DurationMs);
+        Assert.Equal(4, retrieved.TurnCount);
+        Assert.Equal(7, retrieved.ToolCallCount);
+        Assert.Equal(1, retrieved.FailedToolCallCount);
+        Assert.Equal(2, retrieved.SessionErrorCount);
+        Assert.True(retrieved.ReachedIdle);
+        Assert.False(retrieved.WasAborted);
+        Assert.Equal("provider-1,provider-2", retrieved.ProviderCallIds);
+        Assert.Equal("api-1,api-2", retrieved.ApiCallIds);
     }
 
     [Fact]
@@ -215,6 +283,36 @@ public sealed class CyberpilotDbContextTests : IDisposable
     }
 
     [Fact]
+    public async Task PipelineArtifact_CanBeAddedAndRetrieved()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        var artifact = new PipelineArtifact
+        {
+            RunId = run.Id,
+            StageName = "implement",
+            Name = "pull-request",
+            Value = "PR #1 ready.",
+            Uri = "https://github.com/owner/repo/pull/1",
+            MediaType = "text/markdown",
+            ContractVersion = "1.0",
+        };
+        _dbContext.PipelineArtifacts.Add(artifact);
+        await _dbContext.SaveChangesAsync();
+
+        var retrieved = await _dbContext.PipelineArtifacts.FindAsync(artifact.Id);
+
+        Assert.NotNull(retrieved);
+        Assert.Equal(run.Id, retrieved.RunId);
+        Assert.Equal("implement", retrieved.StageName);
+        Assert.Equal("pull-request", retrieved.Name);
+        Assert.Equal("PR #1 ready.", retrieved.Value);
+        Assert.Equal("https://github.com/owner/repo/pull/1", retrieved.Uri);
+        Assert.Equal("text/markdown", retrieved.MediaType);
+        Assert.Equal("1.0", retrieved.ContractVersion);
+    }
+
+    [Fact]
     public async Task PipelineEvidence_CascadeDeletesWithRun()
     {
         var run = new PipelineRun { IssueNumber = 42, Repository = "test/repo", Model = "m" };
@@ -233,6 +331,25 @@ public sealed class CyberpilotDbContextTests : IDisposable
         await _dbContext.SaveChangesAsync();
 
         Assert.Empty(await _dbContext.PipelineEvidence.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task PipelineArtifact_CascadeDeletesWithRun()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "test/repo", Model = "m" };
+        _dbContext.PipelineRuns.Add(run);
+        _dbContext.PipelineArtifacts.Add(new PipelineArtifact
+        {
+            RunId = run.Id,
+            StageName = "plan",
+            Name = "plan-comment",
+        });
+        await _dbContext.SaveChangesAsync();
+
+        _dbContext.PipelineRuns.Remove(run);
+        await _dbContext.SaveChangesAsync();
+
+        Assert.Empty(await _dbContext.PipelineArtifacts.ToArrayAsync());
     }
 
     [Fact]
@@ -278,6 +395,29 @@ public sealed class CyberpilotDbContextTests : IDisposable
                 Assert.Equal("required-action-1", action.Name);
                 Assert.Equal("Fix failing tests.", action.Summary);
             });
+    }
+
+    [Fact]
+    public void PipelineArtifact_FromStageResult_CreatesArtifactRows()
+    {
+        var result = new StageResult(
+            "GO",
+            "approved",
+            true,
+            null,
+            ContractVersion: "1.1",
+            Artifacts: [new StageArtifact("pull-request", "PR #1 ready.", "https://github.com/owner/repo/pull/1", "text/markdown")]);
+
+        var rows = PipelineArtifact.FromStageResult("run-1", "implement", null, result);
+
+        var artifact = Assert.Single(rows);
+        Assert.Equal("run-1", artifact.RunId);
+        Assert.Equal("implement", artifact.StageName);
+        Assert.Equal("pull-request", artifact.Name);
+        Assert.Equal("PR #1 ready.", artifact.Value);
+        Assert.Equal("https://github.com/owner/repo/pull/1", artifact.Uri);
+        Assert.Equal("text/markdown", artifact.MediaType);
+        Assert.Equal("1.1", artifact.ContractVersion);
     }
 
     [Fact]

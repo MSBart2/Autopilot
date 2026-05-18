@@ -61,7 +61,15 @@ Registered services in [web/Program.cs](web/Program.cs):
 | `PipelineDefinitionAdminStore` | File-backed editor for operator-managed JSON pipeline definitions and policy profiles |
 | `ModelPricingService` | Static class in `Cyberpilot.Persistence`; maps model IDs to per-1M-token USD rates and returns `0` for unknown models. Powers cost estimation in both sink implementations. |
 
-**Token capture flow:** `CopilotStageRunner` calls `session.Rpc.Usage.GetMetricsAsync()` after each `SendAndWaitAsync`, stamps `InputTokens` and `OutputTokens` onto the returned `StageResult` (non-fatal — wrapped in try/catch), and both sink implementations (`CyberpilotRunHistoryProgressSink` and `SignalRProgressSink`) write those values plus `EstimatedCostUsd` (via `ModelPricingService.Estimate`) and `RetryCount` to `PipelineStageLog`.
+**Stage telemetry flow:** `CopilotStageRunner` subscribes to streaming SDK events while each stage runs. It aggregates assistant turns, `assistant.usage` token/cache/duration data, tool starts/completions, session errors, idle state, provider call IDs, and API call IDs into `StageExecutionMetrics`. Final `session.Rpc.Usage.GetMetricsAsync()` capture remains as a non-fatal fallback for input/output tokens, model duration, and premium request cost. Both sink implementations (`CyberpilotRunHistoryProgressSink` and `SignalRProgressSink`) write the legacy token/cost columns plus rich metrics and `RetryCount` to `PipelineStageLog`.
+
+**Stage artifact flow:** Structured `StageResult.Artifacts` are persisted as first-class `PipelineArtifact` rows by both sink implementations. Artifacts keep the producing run, stage, optional stage log, artifact name, value, URI, media type, contract version, source, and capture time. The run details page loads artifacts directly from `PipelineArtifacts` and renders an artifact ledger independent of raw transcripts and compatibility evidence rows.
+
+**Deterministic SDK tools:** `CopilotStageRunner` attaches harness-owned tools from [copilot-sdk/Copilot/PipelineContextToolProvider.cs](copilot-sdk/Copilot/PipelineContextToolProvider.cs) to every SDK session. The current tools are `get_pipeline_context`, `get_pr_details`, and `get_pr_diff_summary`. They return compact typed results for model consumption and structured errors such as `missing_pr`, `pr_details_failed`, and `pr_diff_summary_failed`. PR tools use `gh pr view --json ...` through the existing GitHub CLI abstraction, and detailed JSON output is recorded on `PipelineExecutionContext` as `tool-output-*` artifacts so the stage completion path persists it to `PipelineArtifacts` without feeding the full payload back into the model context.
+
+**Stage tool policy hooks:** SDK sessions also attach `StageToolPolicyHooks`, which use `SessionHooks.OnPreToolUse` and `OnPostToolUse`. Pre-tool policy allows Cyberpilot's deterministic read tools, denies broad write-looking operations in read-only stages, and leaves write-capable stages (`implement`, `docs`, `deliver`) able to perform code, documentation, and delivery actions. Post-tool policy redacts secret-looking output, truncates noisy output before it reaches the model context, and records shaped tool output as `tool-hook-*` artifacts for run-history auditability.
+
+**Per-stage model selection:** `StageModelResolver` checks the configured model before each stage starts. The global `--model` remains the default, `--stage-model <stage>=<model>` overrides one stage or `*`, and `--stage-fallback-model <stage>=<model>` provides the fallback used when the configured stage model is unavailable. Web-triggered runs can pass the same maps through request-level stage model override/fallback fields. Selected model, configured model, fallback model, and fallback reason are recorded on each `PipelineStageLog`.
 
 **`PipelineStageLog` columns:**
 
@@ -74,6 +82,30 @@ Retry tracking (added in migration `AddRetryCountToPipelineStageLog`):
 - `RetryCount` (INTEGER, nullable) — attempt index for this stage (0 = first attempt, 1 = first retry, etc.)
 
 The `RetryCount` value is set by both sink implementations (`SignalRProgressSink` and `CyberpilotRunHistoryProgressSink`) by counting existing logs for the same run and stage before inserting the new row.
+
+Execution metric tracking (added in migration `AddStageExecutionMetricsToPipelineStageLog`):
+- `Model` (TEXT, nullable) — model that reported stage usage, falling back to the configured run model
+- `ConfiguredModel`, `SelectedModel`, `FallbackModel`, `FallbackReason` (TEXT, nullable; added in migration `AddStageModelSelectionToPipelineStageLog`) — per-stage model selection and fallback metadata
+- `CacheReadTokens`, `CacheWriteTokens`, `ReasoningTokens` (INTEGER, nullable) — additional usage counters from streaming SDK usage events
+- `PremiumRequestCost` (REAL, nullable) — SDK-reported premium request cost or multiplier
+- `DurationMs` (REAL, nullable) — accumulated model API duration in milliseconds
+- `TurnCount`, `ToolCallCount`, `FailedToolCallCount`, `SessionErrorCount` (INTEGER, nullable) — stage loop and tool execution counters
+- `ReachedIdle`, `WasAborted` (INTEGER/boolean, nullable) — session completion state observed from SDK events
+- `ProviderCallIds`, `ApiCallIds` (TEXT, nullable) — comma-separated request identifiers for provider/API correlation
+
+Run details show total tokens, estimated cost, assistant turns, tool calls, failed tool calls, total model API time, and per-stage metric badges when data is available.
+
+**`PipelineArtifacts` table** (added in migration `AddPipelineArtifacts`):
+- `RunId` (TEXT, required) — owning pipeline run, cascade-deleted with the run
+- `StageLogId` (INTEGER, nullable) — related stage log; set to null when the log is deleted
+- `StageName` (TEXT, required) — stage that produced the artifact
+- `Name` (TEXT, required) — artifact name or type from the structured stage result
+- `Value` (TEXT, nullable) — artifact summary or value
+- `Uri` (TEXT, nullable) — link to the generated artifact, PR, log, or external record
+- `MediaType` (TEXT, nullable) — media type for linked or inline artifact content
+- `ContractVersion` (TEXT, nullable) — structured result contract version that produced the artifact
+- `Source` (TEXT, required) — capture source, currently `stage-result`
+- `CreatedAt` (TEXT, required) — UTC capture timestamp
 
 Middleware order:
 
@@ -107,6 +139,10 @@ Local mode uses [.github/agents/cyberpilot.agent.md](.github/agents/cyberpilot.a
 Cloud mode uses `.github/workflows/cloud-*.md` source files compiled to `.lock.yml` files with `gh aw compile`. Always delete cloud lockfiles before recompiling so the lock pins a current AWF binary.
 
 SDK mode uses [copilot-sdk/Pipeline/SdkCyberpilotRunner.cs](copilot-sdk/Pipeline/SdkCyberpilotRunner.cs) to run stage prompts through Copilot SDK sessions. The command-line executable lives in [copilot-sdk-exe/](copilot-sdk-exe) and references the SDK library. It shares the same agent prompt files as local mode.
+
+SDK stage prompts include a harness-owned context block generated by [copilot-sdk/Pipeline/PromptBuilder.cs](copilot-sdk/Pipeline/PromptBuilder.cs). [copilot-sdk/Pipeline/PipelineExecutionContext.cs](copilot-sdk/Pipeline/PipelineExecutionContext.cs) records issue, repository, branch, pull request, definition, and prior stage summaries as stages complete. The prompt builder prunes this context by stage: triage gets minimal issue/repository context, plan and implement receive branch and relevant prior summaries, and review/docs/deliver receive pull-request-first context when known. Agents should treat this context and structured artifacts as canonical workflow state; issue and pull request comments remain human-readable reports.
+
+Review and docs stages can also call deterministic tools for fresh PR metadata and diff summaries instead of searching issue comments. Tool outputs stay compact by default and include artifact references when detailed JSON has been captured for the run ledger.
 
 SDK pipeline routing is definition-driven. Built-in definitions live under [copilot-sdk/Pipeline/](copilot-sdk/Pipeline) and include the full `cyberpilot-default` flow plus focused variants such as `bugfix` and `docs-only`. The runner can also load additional JSON definitions through `--pipeline-definition-file`; file-backed definitions are combined with built-ins and validated before issue, label, model, or stage side effects. The web admin surface writes operator-managed definitions to `web/App_Data/pipeline-definitions.json` by default, exposes them in the issue launcher, and passes that file path to queued SDK runs when present.
 

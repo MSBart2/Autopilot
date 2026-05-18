@@ -54,6 +54,12 @@
             inputTokens = l.InputTokens,
             outputTokens = l.OutputTokens,
             estimatedCostUsd = l.EstimatedCostUsd,
+            model = l.Model,
+            turnCount = l.TurnCount,
+            toolCallCount = l.ToolCallCount,
+            failedToolCallCount = l.FailedToolCallCount,
+            sessionErrorCount = l.SessionErrorCount,
+            durationMs = l.DurationMs,
             retryCount = l.RetryCount,
             retryReason = l.RetryReason,
         }),
@@ -147,6 +153,17 @@
                         @Html.AntiForgeryToken()
                         <button type="submit" class="btn btn-sm btn-outline-danger">Reset</button>
                     </form>
+                }
+                @if (!isActive && !isDelivered && !Model.Run.IsRemote && !Model.Run.BenchmarkResetAt.HasValue)
+                {
+                    <form asp-action="BenchmarkReset" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Clean up remote state (PR, branch, comments) while keeping run metrics in the database.">⚗ Benchmark Reset</button>
+                    </form>
+                }
+                @if (Model.Run.BenchmarkResetAt.HasValue)
+                {
+                    <span class="badge text-bg-secondary" title="Remote state was cleaned for re-run at @Model.Run.BenchmarkResetAt.Value.ToString("u")">⚗ Benchmark Reset</span>
                 }
                 @if (!isActive && !isDelivered && !Model.Run.IsRemote && canContinue)
                 {
@@ -264,6 +281,32 @@
                                         <span class="muted-cell fst-italic" id="total-cost-value">—</span>
                                     }
                                 </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Turns / Tools</div>
+                                    @if (Model.TotalTurnCount > 0 || Model.TotalToolCallCount > 0)
+                                    {
+                                        <strong>@Model.TotalTurnCount.ToString("N0") turns / @Model.TotalToolCallCount.ToString("N0") tools</strong>
+                                        @if (Model.TotalFailedToolCallCount > 0)
+                                        {
+                                            <small class="muted-cell">@Model.TotalFailedToolCallCount.ToString("N0") failed tool calls</small>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="muted-cell fst-italic">—</span>
+                                    }
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">Model Time</div>
+                                    @if (Model.TotalModelDuration.HasValue)
+                                    {
+                                        <strong>@Model.TotalModelDuration.Value.ToString(@"m\:ss")</strong>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted-cell fst-italic">—</span>
+                                    }
+                                </div>
                             </div>
 
                             @if (!string.IsNullOrWhiteSpace(Model.Run.Error))
@@ -307,6 +350,7 @@
                                              <h3 id="plan-review-title">Plan Review</h3>
                                          </div>
                                          <div class="plan-review-badges">
+                                             <a asp-action="Plan" asp-route-id="@Model.Run.Id" class="btn btn-sm btn-outline-info">View plan</a>
                                              <span class="plan-review-status">@planReview.Status</span>
                                              @if (!string.IsNullOrWhiteSpace(planReview.Decision) && planReview.Decision != "unknown")
                                              {
@@ -519,6 +563,55 @@
                                                         <span class="policy-stage">@policy.StageLabel</span>
                                                     </div>
                                                     <p>@policy.Summary</p>
+                                                </article>
+                                            }
+                                        </div>
+                                    </div>
+                                </section>
+                            }
+
+                            @if (Model.ArtifactItems.Any())
+                            {
+                                <section class="evidence-panel" aria-labelledby="artifact-panel-title">
+                                    <button class="evidence-panel-header collapsed" type="button" data-bs-toggle="collapse"
+                                            data-bs-target="#artifact-collapse" aria-expanded="false" aria-controls="artifact-collapse">
+                                        <div>
+                                            <p class="eyebrow">Artifact ledger</p>
+                                            <h3 id="artifact-panel-title">Artifacts</h3>
+                                        </div>
+                                        <div class="panel-toggle-group">
+                                            <span class="evidence-count">@Model.ArtifactItems.Count</span>
+                                            <span class="panel-chevron">&#8964;</span>
+                                        </div>
+                                    </button>
+                                    <div class="collapse" id="artifact-collapse">
+                                        <div class="evidence-list">
+                                            @foreach (var artifact in Model.ArtifactItems)
+                                            {
+                                                <article class="evidence-item evidence-kind-stage-artifact">
+                                                    <div class="evidence-item-header">
+                                                        <span class="evidence-kind">@artifact.Label</span>
+                                                        <span class="evidence-stage">@artifact.StageLabel</span>
+                                                    </div>
+                                                    @if (artifact.HasValue)
+                                                    {
+                                                        <p>@artifact.Value</p>
+                                                    }
+                                                    <div class="evidence-meta">
+                                                        <span>@artifact.CreatedAt.ToLocalTime().ToString("g")</span>
+                                                        @if (!string.IsNullOrWhiteSpace(artifact.ContractVersion))
+                                                        {
+                                                            <span>contract @artifact.ContractVersion</span>
+                                                        }
+                                                        @if (!string.IsNullOrWhiteSpace(artifact.MediaType))
+                                                        {
+                                                            <span>@artifact.MediaType</span>
+                                                        }
+                                                    </div>
+                                                    @if (artifact.HasUri)
+                                                    {
+                                                        <a class="evidence-link" href="@artifact.Uri" target="_blank" rel="noopener">Open artifact</a>
+                                                    }
                                                 </article>
                                             }
                                         </div>

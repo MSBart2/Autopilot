@@ -155,6 +155,13 @@ public sealed class GitHubApiIssueClient : IGitHubIssueClient
     }
 
     /// <inheritdoc />
+    public async Task ClosePullRequestAsync(int pullRequestNumber, CancellationToken cancellationToken = default)
+    {
+        var payload = JsonSerializer.Serialize(new { state = "closed" });
+        await SendAsync(HttpMethod.Patch, $"repos/{repository}/pulls/{pullRequestNumber}", payload, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default)
     {
         // GitHub REST: list PRs, filter by head branch pattern for the issue

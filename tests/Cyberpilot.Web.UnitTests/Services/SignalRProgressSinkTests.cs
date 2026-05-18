@@ -195,6 +195,91 @@ public class SignalRProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnStageCompleted_WithExecutionMetrics_WritesToStageLog()
+    {
+        var sink = CreateSink("gpt-4.1");
+        var stage = new StageDefinition("REVIEW", "review", "pipeline-review.agent.md", "sdk/reviewing");
+        sink.OnStageStarted(stage, 42);
+
+        var result = new StageResult(
+            "GO",
+            "approved",
+            true,
+            null,
+            InputTokens: 2_000,
+            OutputTokens: 1_000,
+            Metrics: new StageExecutionMetrics(
+                Model: "actual-model",
+                TurnCount: 2,
+                ToolCallCount: 5,
+                FailedToolCallCount: 1,
+                SessionErrorCount: 1,
+                DurationMs: 1200,
+                ProviderCallIds: ["provider-1"],
+                ApiCallIds: ["api-1"]));
+        sink.OnStageCompleted(stage, result);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("actual-model", log.Model);
+        Assert.Equal(2, log.TurnCount);
+        Assert.Equal(5, log.ToolCallCount);
+        Assert.Equal(1, log.FailedToolCallCount);
+        Assert.Equal(1, log.SessionErrorCount);
+        Assert.Equal(1200, log.DurationMs);
+        Assert.Equal("provider-1", log.ProviderCallIds);
+        Assert.Equal("api-1", log.ApiCallIds);
+    }
+
+    [Fact]
+    public void OnStageCompleted_WithModelSelection_WritesModelSelectionColumns()
+    {
+        var sink = CreateSink("claude-sonnet-4.6");
+        var stage = new StageDefinition("REVIEW", "review", "pipeline-review.agent.md", "sdk/reviewing");
+        sink.OnStageStarted(stage, 42);
+
+        var result = new StageResult(
+            "GO",
+            "approved",
+            true,
+            null,
+            ConfiguredModel: "gpt-4.1",
+            SelectedModel: "claude-haiku-4.5",
+            FallbackModel: "claude-haiku-4.5",
+            FallbackReason: "gpt-4.1 unavailable");
+        sink.OnStageCompleted(stage, result);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("gpt-4.1", log.ConfiguredModel);
+        Assert.Equal("claude-haiku-4.5", log.SelectedModel);
+        Assert.Equal("claude-haiku-4.5", log.FallbackModel);
+        Assert.Equal("gpt-4.1 unavailable", log.FallbackReason);
+    }
+
+    [Fact]
+    public void OnStageCompleted_WithArtifacts_WritesArtifactRows()
+    {
+        var sink = CreateSink("gpt-4.1");
+        var stage = new StageDefinition("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing");
+        sink.OnStageStarted(stage, 42);
+
+        var result = new StageResult(
+            "GO",
+            "approved",
+            true,
+            null,
+            Artifacts: [new StageArtifact("validation-summary", "dotnet test passed.", "log://validation", "text/plain")]);
+        sink.OnStageCompleted(stage, result);
+
+        var artifact = _dbContext.PipelineArtifacts.Single();
+        Assert.Equal(_run.Id, artifact.RunId);
+        Assert.Equal("implement", artifact.StageName);
+        Assert.Equal("validation-summary", artifact.Name);
+        Assert.Equal("dotnet test passed.", artifact.Value);
+        Assert.Equal("log://validation", artifact.Uri);
+        Assert.Equal("text/plain", artifact.MediaType);
+    }
+
+    [Fact]
     public void OnStageStarted_WithRetryReason_WritesReasonToMatchingStageLog()
     {
         var sink = new SignalRProgressSink(

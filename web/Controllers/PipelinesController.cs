@@ -140,7 +140,14 @@ public partial class PipelinesController : Controller
         return View(nameof(Issues), await _viewBuilder.BuildIssuesViewModelAsync(issues, pullRequests, repository, repositoryInput, connectionId, null, HttpContext.RequestAborted));
     }
 
-    private ValueTask EnqueueRunAsync(PipelineRun run, string repoRoot, string? token, string? retryReason = null, string? prHeadBranch = null)
+    private ValueTask EnqueueRunAsync(
+        PipelineRun run,
+        string repoRoot,
+        string? token,
+        string? retryReason = null,
+        string? prHeadBranch = null,
+        IReadOnlyDictionary<string, string>? stageModelOverrides = null,
+        IReadOnlyDictionary<string, string>? stageModelFallbacks = null)
     {
         return _queue.EnqueueAsync(new WebPipelineRunRequest(
             run.Id,
@@ -160,6 +167,8 @@ public partial class PipelinesController : Controller
             run.ContractVersion,
             System.IO.File.Exists(_pipelineAdminStore.DefinitionFilePath) ? _pipelineAdminStore.DefinitionFilePath : null,
             string.IsNullOrWhiteSpace(retryReason) ? null : retryReason,
-            string.IsNullOrWhiteSpace(prHeadBranch) ? null : prHeadBranch));
+            string.IsNullOrWhiteSpace(prHeadBranch) ? null : prHeadBranch,
+            stageModelOverrides,
+            stageModelFallbacks));
     }
 }

@@ -83,5 +83,13 @@ public sealed class PipelineStartRequest
 
     /// <summary>Gets or sets whether missing docs may be tolerated.</summary>
     public bool AllowMissingDocs { get; set; }
+
+    /// <summary>Gets or sets optional per-stage model overrides as semicolon-separated stage=model pairs.</summary>
+    [StringLength(1000)]
+    public string? StageModelOverrides { get; set; }
+
+    /// <summary>Gets or sets optional per-stage fallback models as semicolon-separated stage=model pairs.</summary>
+    [StringLength(1000)]
+    public string? StageModelFallbacks { get; set; }
 }
 

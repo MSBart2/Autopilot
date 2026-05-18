@@ -49,14 +49,44 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
             currentLog.InputTokens = result.InputTokens;
             currentLog.OutputTokens = result.OutputTokens;
             currentLog.EstimatedCostUsd = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens);
+            ApplyMetrics(currentLog, result, model);
             currentLog.StageResultJson = JsonSerializer.Serialize(result);
             currentLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
                 ? PipelineDefinitionDefaults.ContractVersion
                 : result.ContractVersion;
+            dbContext.PipelineArtifacts.AddRange(PipelineArtifact.FromStageResult(runId, stage.Name, currentLog, result));
             dbContext.PipelineEvidence.AddRange(PipelineEvidence.FromStageResult(runId, stage.Name, currentLog, result));
         }
 
         dbContext.SaveChanges();
+    }
+
+    private static void ApplyMetrics(PipelineStageLog log, StageResult result, string configuredModel)
+    {
+        var metrics = result.Metrics;
+        log.Model = string.IsNullOrWhiteSpace(metrics?.Model) ? configuredModel : metrics.Model;
+        log.ConfiguredModel = string.IsNullOrWhiteSpace(result.ConfiguredModel) ? configuredModel : result.ConfiguredModel;
+        log.SelectedModel = string.IsNullOrWhiteSpace(result.SelectedModel) ? log.Model : result.SelectedModel;
+        log.FallbackModel = result.FallbackModel;
+        log.FallbackReason = result.FallbackReason;
+        log.CacheReadTokens = metrics?.CacheReadTokens;
+        log.CacheWriteTokens = metrics?.CacheWriteTokens;
+        log.ReasoningTokens = metrics?.ReasoningTokens;
+        log.PremiumRequestCost = metrics?.PremiumRequestCost;
+        log.DurationMs = metrics?.DurationMs;
+        log.TurnCount = metrics?.TurnCount;
+        log.ToolCallCount = metrics?.ToolCallCount;
+        log.FailedToolCallCount = metrics?.FailedToolCallCount;
+        log.SessionErrorCount = metrics?.SessionErrorCount;
+        log.ReachedIdle = metrics?.ReachedIdle;
+        log.WasAborted = metrics?.WasAborted;
+        log.ProviderCallIds = JoinIds(metrics?.ProviderCallIds);
+        log.ApiCallIds = JoinIds(metrics?.ApiCallIds);
+    }
+
+    private static string? JoinIds(IReadOnlyList<string>? values)
+    {
+        return values is null || values.Count == 0 ? null : string.Join(",", values);
     }
 
     /// <inheritdoc />

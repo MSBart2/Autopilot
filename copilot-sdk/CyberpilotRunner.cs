@@ -47,7 +47,7 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
         var labels = new SdkLabelService(issueClient, output);
         var branchProvisioner = new BranchProvisioner();
         var promptBuilder = new PromptBuilder(request.RepoRoot, request.AgentPromptRoot ?? request.RepoRoot, request.IssueNumber, request.TargetRepositoryProfileSummary);
-        var stageRunner = new CopilotStageRunner(request.RepoRoot, request.Model, progressSink, TextWriter.Null);
+        var stageRunner = new CopilotStageRunner(request.RepoRoot, progressSink, TextWriter.Null);
         var modelChecker = new CopilotModelAvailabilityChecker();
         var options = new CyberpilotOptions(
             request.IssueNumber,
@@ -71,7 +71,9 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
             request.PolicyProfileName ?? PipelineDefinitionDefaults.PolicyProfileName,
             request.ShouldPauseDecisionAsync,
             request.PipelineDefinitionFilePath,
-            request.PrHeadBranch);
+            request.PrHeadBranch,
+            request.StageModelOverrides,
+            request.StageModelFallbacks);
 
         var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output);
         var exitCode = await runner.RunAsync(cancellationToken);

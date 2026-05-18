@@ -41,6 +41,11 @@ public sealed class CyberpilotDbContext : DbContext
     /// </summary>
     public DbSet<PipelineEvidence> PipelineEvidence => Set<PipelineEvidence>();
 
+    /// <summary>
+    /// Gets structured artifacts produced by pipeline stages.
+    /// </summary>
+    public DbSet<PipelineArtifact> PipelineArtifacts => Set<PipelineArtifact>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -66,6 +71,10 @@ public sealed class CyberpilotDbContext : DbContext
                 .WithOne(e => e.Run)
                 .HasForeignKey(e => e.RunId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(e => e.Artifacts)
+                .WithOne(e => e.Run)
+                .HasForeignKey(e => e.RunId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<PipelineStageLog>(entity =>
@@ -73,6 +82,10 @@ public sealed class CyberpilotDbContext : DbContext
             entity.HasIndex(e => e.RunId);
             entity.HasIndex(e => e.StageName);
             entity.HasMany(e => e.Evidence)
+                .WithOne(e => e.StageLog)
+                .HasForeignKey(e => e.StageLogId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasMany(e => e.Artifacts)
                 .WithOne(e => e.StageLog)
                 .HasForeignKey(e => e.StageLogId)
                 .OnDelete(DeleteBehavior.SetNull);
@@ -96,6 +109,14 @@ public sealed class CyberpilotDbContext : DbContext
             entity.HasIndex(e => e.StageLogId);
             entity.HasIndex(e => e.StageName);
             entity.HasIndex(e => e.Kind);
+        });
+
+        modelBuilder.Entity<PipelineArtifact>(entity =>
+        {
+            entity.HasIndex(e => e.RunId);
+            entity.HasIndex(e => e.StageLogId);
+            entity.HasIndex(e => e.StageName);
+            entity.HasIndex(e => e.Name);
         });
     }
 }

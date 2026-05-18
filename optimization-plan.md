@@ -4,6 +4,8 @@
 
 Cyberpilot is becoming a custom harness around GitHub Copilot SDK sessions, not just a wrapper that fires one prompt per pipeline stage. The next optimization pass should make that harness cheaper, faster, more observable, easier to steer, and less dependent on model-discovered workflow state.
 
+The guiding theme is to reduce the amount of "polite blending" the model has to do. Cyberpilot should own deterministic workflow mechanics in code, scripts, tools, gates, and typed state. The model should focus on judgment-heavy work: interpretation, tradeoffs, implementation reasoning, review findings, summaries, and decisions that genuinely require language/code understanding.
+
 This plan is intentionally design-focused. Do not execute it until the team has reviewed the tradeoffs and sequencing.
 
 ## SDK references reviewed
@@ -67,6 +69,25 @@ Follow-up documentation task:
 4. **Make human intervention first-class.** Pause, steer, resume, and inspect sessions without corrupting pipeline state.
 5. **Prefer typed contracts over prompt conventions.** Use custom tools and structured artifacts to reduce markdown parsing fragility.
 6. **Keep isolation clear.** Each pipeline run, repository, PR, and user intervention needs explicit ownership and session identity.
+7. **Do not ask the model to invent deterministic mechanics.** If an action can be expressed as code, configuration, a script, a query, or a typed API call, make the harness do it and provide the result to the model.
+
+## Harness vs. model responsibility split
+
+Cyberpilot should explicitly separate harness law, deterministic mechanics, runtime facts, and model judgment.
+
+| Responsibility | Owner | Examples | Why |
+| --- | --- | --- | --- |
+| Harness law | System prompt + code | Stage contract rules, JSON result requirements, label ownership, tool policy, safety boundaries | These are durable invariants and should not compete with stage prompt prose. |
+| Runtime facts | Harness state/context | issue number, PR number, PR URL, branch, base, repository, run ID, prior artifacts, known approvals | The harness already knows these; the model should not spend turns rediscovering them. |
+| Deterministic mechanics | Code/scripts/custom tools/gates | route stage, find linked PR, fetch diff, set labels, post normalized comments, run validation commands, compute status, persist artifacts | These are cheaper, auditable, testable, and more reliable outside the model. |
+| Policy evaluation | Code + model, depending on ambiguity | required labels, PR presence, approval state, validation pass/fail, severity threshold enforcement | Objective checks should be code; ambiguous review interpretation can remain model-assisted. |
+| Judgment-heavy work | Model | implementation strategy, code changes, architectural review, security reasoning, docs wording, final review synthesis | This is where language/code understanding and tradeoff reasoning are valuable. |
+
+Default rule:
+
+- If the next step has a known API, deterministic algorithm, stable script, database query, or repository command, implement it as harness behavior or a custom tool.
+- If the next step requires weighing tradeoffs, interpreting code intent, writing code, reviewing nuanced risk, or explaining decisions, give it to the model with typed context and a narrow mission.
+- If the model repeatedly performs the same discovery or shell sequence, promote that sequence into a tool, gate, cache, or script.
 
 ## Recommended roadmap
 
@@ -165,6 +186,46 @@ Success criteria:
 - Agents no longer perform avoidable issue/PR lookup steps when the harness already has that state.
 - Review/docs/deliver stages receive PR-first context.
 
+### Phase 2A: Cyberpilot harness system prompt and prompt split
+
+Goal: move durable controller rules out of per-stage prose and into a compact, stable harness-level system prompt.
+
+Work:
+
+- Define a Cyberpilot harness system prompt containing only durable invariants:
+  - Cyberpilot is SDK-controlled and stage-scoped.
+  - Harness state and typed tools are authoritative.
+  - Use provided structured context before discovery.
+  - Do not manage `sdk` labels directly.
+  - Do not close issues unless the deliver contract explicitly permits it.
+  - Respect stage tool policy.
+  - Return valid stage-result JSON matching the contract.
+- Keep stage agent prompts focused on role, expertise, review/implementation criteria, and voice.
+- Keep user/stage messages focused on:
+  - stage name
+  - mission
+  - typed context
+  - required artifacts
+  - stage-specific policy profile
+- Validate SDK behavior before committing to this architecture:
+  - determine whether `SystemMessage` augments or replaces the default Copilot runtime prompt
+  - verify tools, permissions, custom agents, and JSON result parsing still behave correctly
+  - compare valid JSON rate, turn count, tool count, token usage, and retries before/after
+
+Target files:
+
+- `CopilotStageRunner.cs`
+- `PromptBuilder.cs`
+- New `CyberpilotSystemPrompt` or prompt template file
+- Stage prompt files under `.github/agents`
+
+Success criteria:
+
+- Durable controller rules are defined once instead of repeated and blended into every stage mission.
+- Stage prompts get shorter and more role-specific.
+- The model receives a clear hierarchy: system prompt = harness law, structured context = facts, stage mission = current task.
+- SDK compatibility is proven before replacing or overriding any default system behavior.
+
 ### Phase 3: Custom tools for deterministic operations
 
 Goal: replace expensive model-driven CLI/API discovery with typed, cheap, auditable tools.
@@ -178,12 +239,18 @@ Candidate tools:
 - `record_stage_artifact`: persists structured artifacts to the app state store.
 - `run_validation_command`: executes whitelisted validation commands with normalized output.
 - `set_pipeline_label`: manages SDK labels consistently.
+- `compute_stage_route`: determines the next stage from definition, gates, prior result, and run state.
+- `collect_validation_evidence`: runs known build/test/lint commands from repository profile and returns normalized evidence.
+- `render_stage_comment`: converts structured artifacts into consistent issue/PR comments.
+- `prepare_review_inputs`: builds PR-first review context from PR metadata, changed files, diff summary, prior implementation artifact, and policy profile.
 
 Design notes:
 
 - Use the SDK's custom tool support rather than asking the model to call arbitrary shell/GitHub commands for known operations.
 - Keep tools narrow, typed, and whitelisted.
 - Return compact results optimized for model consumption, with detailed output persisted separately for UI display.
+- Prefer custom tools or harness code for repeatable workflows that currently require the model to "figure out what to do next."
+- The model may decide *whether* a validation result is sufficient, but the harness should decide *how* to run and normalize the validation command.
 
 Target files:
 
@@ -367,12 +434,13 @@ Success criteria:
 1. Phase 0: SDK reference and decision log
 2. Phase 1: Observability-first instrumentation
 3. Phase 2: Harness-owned state and context injection
-4. Phase 3: Custom tools for deterministic operations
-5. Phase 4: Hook-based guardrails and output shaping
-6. Phase 5: Tiered model selection and fallback
-7. Phase 6: Session persistence, pause, resume, and human steering
-8. Phase 7: Parallelize review safely
-9. Phase 8: MCP and repository intelligence
+4. Phase 2A: Cyberpilot harness system prompt and prompt split
+5. Phase 3: Custom tools for deterministic operations
+6. Phase 4: Hook-based guardrails and output shaping
+7. Phase 5: Tiered model selection and fallback
+8. Phase 6: Session persistence, pause, resume, and human steering
+9. Phase 7: Parallelize review safely
+10. Phase 8: MCP and repository intelligence
 
 ## Open design questions
 
@@ -385,9 +453,253 @@ Success criteria:
 - What model tiers should be the default per stage?
 - What is the cleanup policy for persisted SDK sessions and run artifacts?
 
+## Proposed decisions
+
+These decisions are the recommended starting point for implementation. Revisit them as SDK behavior, cost data, or operator feedback changes.
+
+| Question | Proposed decision | Rationale |
+| --- | --- | --- |
+| Session lifetime | Use a hybrid model with one SDK session per stage as the default. Use stable run/stage/attempt session IDs so later phases can resume or clean up sessions explicitly. | Stage isolation already matches the current harness and keeps retries, labels, logs, and tool policy boundaries clear. Stable IDs create the path to resume without merging every stage into one long-lived conversation. |
+| Review parallelization | Prototype harness-level parallel review sessions first. Keep a final review verdict session after dimension outputs are collected. | Separate sessions give clearer isolation, timeout control, read-only permissions, metrics, and partial-failure handling than custom agents inside one conversation. |
+| First-class artifacts | Promote plan summaries, implementation summaries, PR metadata, diff summaries, validation results, review findings/verdicts, docs verification, delivery evidence, and approval decisions into the database. Keep issue/PR comments as human-readable reports. | The harness should own workflow state instead of asking later stages to rediscover it from comments. Comments remain useful communication, but they should not be the canonical state store. |
+| Stage tool policy | Default to least privilege by stage: triage/plan get read plus GitHub comments, implement gets repo write/shell/git/PR creation, review gets read/validation/PR review with no broad writes, docs gets docs-focused writes, and deliver gets merge/comment/cleanup only. | Tool policy should match stage responsibility and prevent accidental writes during analysis or review. |
+| External PR review flow | Add a PR-first pipeline definition for external review runs instead of forcing them through issue-originated routing. | External PR review starts from PR number, branch, base, and diff metadata. It should not spend model turns on issue triage or branch creation. |
+| Raw tool output | Persist redacted raw output for humans with size limits and retention rules. Feed compact summaries to the model by default, with raw detail opt-in only when a stage needs it. | Humans need auditability and troubleshooting detail; the model usually needs a concise signal. This reduces token bloat without hiding operational evidence. |
+| Model tiers | Use cheap/fast models for triage, docs, and deliver; standard models for plan; strong coding models for implement; and strong reasoning/review models for review. Record selected model, fallback model, and fallback reason per stage. | Most stages do not need premium model capacity. Recording the actual model makes cost and quality comparisons possible. |
+| Cleanup | Keep structured artifacts and high-level metrics with run history. Retain raw tool output and resumable SDK session records for a shorter configurable window. Reset Mission should delete local session/artifact state for the run unless delivery already completed. | Long-lived history should stay useful and compact, while bulky transcripts and resumable session state need explicit lifecycle management. |
+| Prompt hierarchy | Introduce a compact Cyberpilot harness system prompt for durable controller rules, keep stage prompts role-focused, and pass runtime facts as structured context. Validate whether SDK `SystemMessage` augments or replaces default runtime behavior before relying on it. | This reduces instruction blending and gives the model a clearer separation between harness law, facts, and current-stage judgment. |
+| Code/script/tool promotion | Promote repeated deterministic model behavior into harness code, custom tools, gates, or whitelisted scripts. Leave only ambiguous judgment and synthesis to the model. | Deterministic operations are cheaper, testable, auditable, and less likely to drift than model-invented shell/API sequences. |
+
 ## Immediate next review checklist
 
 - Confirm the roadmap order.
 - Decide whether Phase 1 metrics should be database-only, UI-visible, or both.
 - Decide whether Phase 3 custom tools should live in the SDK project or in the web host.
 - Pick the first concrete optimization slice after review.
+
+## Issue-ready chunks
+
+Use these chunks as the initial GitHub issue backlog. Each issue should include acceptance criteria, validation notes, and any affected docs.
+
+### Chunk 1: Document SDK harness decisions
+
+Phase: 0
+
+Status: Complete
+
+Scope:
+
+- Create `docs/copilot-sdk-references.md` with SDK links, supported features, and Cyberpilot integration notes.
+- Update `AGENTS.md` to point SDK-related work to the reference document.
+- Add the initial SDK harness decision log covering stage-scoped sessions, streaming metrics, tool policy, and future hook/tool placement.
+
+Acceptance criteria:
+
+- Future agents have one repo-local reference before changing SDK integration code.
+- The decision log states the current default session lifetime and where to record future SDK design changes.
+
+### Chunk 2: Capture rich stage metrics
+
+Phase: 1
+
+Status: Complete
+
+Scope:
+
+- Subscribe to streaming events for assistant turns, usage, tool execution, session errors, and idle/completion.
+- Add or extend a `StageExecutionMetrics` model with model, tokens, cache tokens, duration, turn count, tool counts, failed tool counts, and provider request identifiers where available.
+- Keep existing final usage capture as a fallback when streaming usage events are unavailable.
+
+Acceptance criteria:
+
+- Each stage result includes richer metrics than final input/output token counts.
+- Metrics capture failures are non-fatal and visible in logs.
+- Unit tests cover metrics aggregation from representative event sequences where practical.
+
+### Chunk 3: Persist and display stage metrics
+
+Phase: 1
+
+Status: Complete
+
+Scope:
+
+- Persist rich metrics to stage logs or related metric rows.
+- Update progress sinks to write selected model, turn count, tool counts, failed tool counts, duration, and cost inputs.
+- Surface the metrics in the dashboard so expensive or looping stages are visible.
+
+Acceptance criteria:
+
+- Run details show token usage, turn count, tool count, duration, and error indicators per stage.
+- Existing run history remains readable after migration.
+- Cost estimates continue to work for known models and degrade to zero/unknown for unmapped models.
+
+### Chunk 4: Inject harness-owned stage context
+
+Phase: 2
+
+Status: Complete
+
+Scope:
+
+- Expand `PipelineExecutionContext` with issue, PR, branch, repository, run, prior-stage, and cached diff metadata.
+- Update `PromptBuilder` to render a compact structured context block before the imported stage prompt.
+- Add stage-specific pruning rules so each stage receives only useful context.
+
+Acceptance criteria:
+
+- Review, docs, and deliver prompts receive PR-first context when the harness already knows it.
+- Stage prompts no longer instruct agents to rediscover known issue/PR routing information.
+- Prompt size is reduced or held steady while context quality improves.
+
+### Chunk 5: Promote first-class stage artifacts
+
+Phase: 2
+
+Status: Complete
+
+Scope:
+
+- Define database-backed artifact records for plan, implementation, PR metadata, diff summary, validation, review verdict, docs verification, delivery evidence, and approvals.
+- Add artifact write paths from stage results and deterministic gates.
+- Keep issue/PR comments as reports generated from stored artifacts where feasible.
+
+Acceptance criteria:
+
+- Later stages can read canonical artifacts without scraping issue comments.
+- Run details can show structured artifacts independent of raw stage transcript output.
+- Artifact records include stage, run, contract version, summary, optional URI, and timestamps.
+
+### Chunk 6: Add deterministic PR context tools
+
+Phase: 3
+
+Status: Complete
+
+Scope:
+
+- Add custom tools under the SDK project for `get_pipeline_context`, `get_pr_details`, and `get_pr_diff_summary`.
+- Return compact typed results optimized for model consumption.
+- Persist detailed tool output separately when the UI needs it.
+
+Acceptance criteria:
+
+- Review and docs stages can consume typed PR data instead of searching issue comments.
+- Tool outputs are small enough for prompt context and include references to detailed persisted output when available.
+- Tool failures return actionable, structured errors.
+
+### Chunk 6A: Add Cyberpilot harness system prompt
+
+Phase: 2A
+
+Scope:
+
+- Define a compact harness-level system prompt for durable Cyberpilot controller invariants.
+- Split prompt responsibilities so system prompt covers harness law, structured context covers facts, and stage prompts cover stage-specific expertise.
+- Validate whether SDK system-message configuration augments or replaces default Copilot runtime instructions.
+- Compare before/after metrics for valid JSON rate, turn count, tool count, token usage, retries, and prompt size.
+
+Acceptance criteria:
+
+- Stage prompts no longer repeat durable controller boilerplate.
+- The harness prompt explicitly tells agents to use typed context and tools before rediscovering state.
+- SDK compatibility is documented before the new prompt architecture becomes the default.
+
+### Chunk 6B: Promote repeated deterministic workflows into code/tools
+
+Phase: 3
+
+Scope:
+
+- Identify repeated model-discovered workflows in recent stage logs, especially PR lookup, route selection, validation command selection, diff gathering, label management, artifact persistence, and comment rendering.
+- Implement the highest-volume workflows as harness code, custom tools, gates, or whitelisted scripts.
+- Add a promotion checklist so future repeated prompt/tool sequences are candidates for deterministic implementation.
+
+Acceptance criteria:
+
+- The model no longer has to invent command/API sequences for the selected workflows.
+- Deterministic workflows are unit-tested where practical and emit structured results.
+- The plan documents which workflows remain model-owned because they require judgment.
+
+### Chunk 7: Add stage tool policies and hooks
+
+Phase: 4
+
+Status: Complete
+
+Scope:
+
+- Add a stage tool policy model and wire pre-tool guardrails into SDK session configuration.
+- Deny writes by default outside stages that require them.
+- Add post-tool redaction, truncation, and noisy-output shaping.
+
+Acceptance criteria:
+
+- Read-only stages cannot perform broad write operations.
+- Secret-looking output is redacted before it reaches the model context.
+- Raw and summarized tool outputs are both auditable from run history where configured.
+
+### Chunk 8: Add per-stage model tiers and fallback
+
+Phase: 5
+
+Status: Complete
+
+Scope:
+
+- Add stage-specific model configuration with CLI, web, and request-level overrides.
+- Check model availability before stage start and use configured fallbacks for model-unavailable failures.
+- Record selected model, fallback model, and fallback reason per stage.
+
+Acceptance criteria:
+
+- Cheap stages can use cheaper default models without changing the global model.
+- Stage logs show the model that actually ran.
+- Model outages degrade gracefully when a fallback is configured.
+
+### Chunk 9: Add session persistence and steering primitives
+
+Phase: 6
+
+Scope:
+
+- Persist SDK session IDs using run/stage/attempt identity.
+- Add pause-after-turn, resume-stage, immediate steering, and queued follow-up concepts to the run lifecycle.
+- Define resume eligibility rules for read-only, write-capable, failed, and interrupted stages.
+
+Acceptance criteria:
+
+- Operators can inspect and steer an active stage without killing the run.
+- Restarted web runs can reconnect, resume, or cleanly mark session state as abandoned.
+- Unsafe resume cases fail closed with clear required actions.
+
+### Chunk 10: Parallelize review dimensions
+
+Phase: 7
+
+Scope:
+
+- Add harness-level read-only review dimension sessions for security, quality, architecture, tests, and docs.
+- Merge dimension findings into a deterministic final verdict session.
+- Capture dimension-specific metrics and failures.
+
+Acceptance criteria:
+
+- Review dimensions run concurrently under read-only tool policy.
+- One failed dimension does not hide other dimension findings.
+- Final verdict is deterministic and based on collected dimension outputs plus policy profile.
+
+### Chunk 11: Evaluate MCP integration points
+
+Phase: 8
+
+Scope:
+
+- Evaluate MCP servers for GitHub, filesystem, SQLite/app database access, and browser validation.
+- Compare MCP against Cyberpilot custom tools for control, maturity, observability, and failure handling.
+- Add configuration only for the integrations that beat custom tools for the use case.
+
+Acceptance criteria:
+
+- The plan documents which integrations should remain custom tools and which should use MCP.
+- Any enabled MCP server is stage-scoped, permission-scoped, observable, and recoverable.

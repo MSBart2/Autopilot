@@ -189,6 +189,12 @@ public sealed class StageResultTests
     }
 
     [Fact]
+    public void Metrics_DefaultsToNull()
+    {
+        Assert.Null(StageResult.Empty.Metrics);
+    }
+
+    [Fact]
     public void WithExpression_SetsTokens()
     {
         var result = StageResult.Empty with { InputTokens = 500, OutputTokens = 1200 };

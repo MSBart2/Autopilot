@@ -112,6 +112,9 @@ public sealed class PipelineRun
     [StringLength(64)]
     public string? TargetRepoSha { get; set; }
 
+    /// <summary>Gets or sets when the run was benchmark-reset. Set when remote state (PR, branch, comments) was cleaned up for re-run while preserving DB metrics.</summary>
+    public DateTime? BenchmarkResetAt { get; set; }
+
     /// <summary>Gets or sets the stage logs for this run.</summary>
     public ICollection<PipelineStageLog> StageLogs { get; set; } = [];
 

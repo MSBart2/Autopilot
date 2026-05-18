@@ -1,0 +1,137 @@
+@model Cyberpilot.Web.Models.PipelinePlanDocumentViewModel
+@{
+    ViewData["Title"] = $"Plan - Issue #{Model.Run.IssueNumber}";
+    var plan = Model.Plan;
+}
+
+<div class="pipeline-detail-shell plan-document-shell">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a asp-action="Index">Pipelines</a></li>
+            <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@Model.Run.Id">Run @Model.Run.Id</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Plan</li>
+        </ol>
+    </nav>
+
+    <section class="plan-document-hero" aria-labelledby="plan-document-title">
+        <div>
+            <p class="eyebrow">Plan document</p>
+            <h1 id="plan-document-title">Issue #@Model.Run.IssueNumber Plan</h1>
+            <p>@plan.Summary</p>
+        </div>
+        <div class="plan-review-badges">
+            <a class="btn btn-sm btn-outline-light" href="@Model.IssueUrl" target="_blank" rel="noopener">View issue</a>
+            <a asp-action="Details" asp-route-id="@Model.Run.Id" class="btn btn-sm btn-outline-info">Back to run</a>
+            <span class="plan-review-status">@plan.Status</span>
+            @if (!string.IsNullOrWhiteSpace(plan.Decision) && plan.Decision != "unknown")
+            {
+                <span class="plan-review-decision">@plan.Decision</span>
+            }
+        </div>
+    </section>
+
+    <main class="plan-document-grid">
+        <section class="plan-document-main" aria-labelledby="plan-full-title">
+            <div class="plan-document-section-header">
+                <p class="eyebrow">Captured output</p>
+                <h2 id="plan-full-title">Full Plan</h2>
+            </div>
+            @if (plan.HasFullPlanText)
+            {
+                <pre class="plan-document-pre">@plan.FullPlanText</pre>
+            }
+            else
+            {
+                <p class="muted-cell">No full plan text was captured for this run.</p>
+            }
+        </section>
+
+        <aside class="plan-document-aside" aria-label="Plan metadata">
+            <section class="plan-document-card">
+                <p class="eyebrow">Metadata</p>
+                <dl class="plan-review-meta">
+                    <div>
+                        <dt>Branch</dt>
+                        <dd>
+                            @if (plan.HasBranch)
+                            {
+                                <code>@plan.BranchName</code>
+                            }
+                            else
+                            {
+                                <span class="muted-cell fst-italic">pending</span>
+                            }
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Captured</dt>
+                        <dd>@plan.CreatedAt.ToLocalTime().ToString("g")</dd>
+                    </div>
+                    <div>
+                        <dt>Contract</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(plan.ContractVersion) ? "unknown" : plan.ContractVersion)</dd>
+                    </div>
+                </dl>
+            </section>
+
+            @if (plan.HasRequiredActions)
+            {
+                <section class="plan-document-card">
+                    <p class="eyebrow">Required before continuing</p>
+                    <ul class="plan-document-list">
+                        @foreach (var action in plan.RequiredActions)
+                        {
+                            <li>@action</li>
+                        }
+                    </ul>
+                </section>
+            }
+
+            @if (plan.HasArtifacts)
+            {
+                <section class="plan-document-card">
+                    <p class="eyebrow">Artifacts</p>
+                    <div class="plan-review-artifacts" aria-label="Plan artifacts">
+                        @foreach (var artifact in plan.Artifacts)
+                        {
+                            <article class="plan-review-artifact">
+                                <div class="plan-review-artifact-header">
+                                    <h4>@artifact.Label</h4>
+                                    @if (!string.IsNullOrWhiteSpace(artifact.MediaType))
+                                    {
+                                        <span>@artifact.MediaType</span>
+                                    }
+                                </div>
+                                @if (artifact.HasValue)
+                                {
+                                    <p>@artifact.Value</p>
+                                }
+                                @if (artifact.HasUri)
+                                {
+                                    <a href="@artifact.Uri" target="_blank" rel="noopener">Open artifact</a>
+                                }
+                            </article>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if (plan.HasEvidence)
+            {
+                <section class="plan-document-card">
+                    <p class="eyebrow">Supporting evidence</p>
+                    <div class="plan-review-evidence">
+                        @foreach (var evidence in plan.Evidence)
+                        {
+                            <p><strong>@evidence.KindLabel:</strong> @evidence.Summary</p>
+                        }
+                    </div>
+                </section>
+            }
+        </aside>
+    </main>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/pipeline-details.css" asp-append-version="true" />
+}

@@ -83,6 +83,9 @@ public static class DispatchType
     /// <summary>Target repository profile detection.</summary>
     public const string RepositoryProfile = "repo_profile";
 
+    /// <summary>Per-stage model fallback selection.</summary>
+    public const string ModelFallback = "model_fallback";
+
     /// <summary>Skip-deliver or early termination.</summary>
     public const string Skip = "skip";
 

@@ -12,11 +12,16 @@ namespace Cyberpilot.Pipeline;
 /// <param name="Error">The validation error, when invalid.</param>
 /// <param name="InputTokens">The number of input tokens consumed by this stage, when available.</param>
 /// <param name="OutputTokens">The number of output tokens produced by this stage, when available.</param>
+/// <param name="Metrics">The richer execution metrics captured while running the stage, when available.</param>
 /// <param name="ContractVersion">The structured result contract version used by this stage result.</param>
 /// <param name="Artifacts">The artifacts produced by the stage.</param>
 /// <param name="Evidence">The evidence gathered or referenced by the stage.</param>
 /// <param name="PolicyRationale">The policy rationale supplied by the stage.</param>
 /// <param name="RequiredActions">The corrective actions required before the pipeline can continue.</param>
+/// <param name="ConfiguredModel">The model configured for this stage before fallback.</param>
+/// <param name="SelectedModel">The model selected for this stage after availability checks.</param>
+/// <param name="FallbackModel">The fallback model used for this stage, when any.</param>
+/// <param name="FallbackReason">The reason a fallback model was selected, when any.</param>
 public sealed record StageResult(
     string Status,
     string Decision,
@@ -24,11 +29,16 @@ public sealed record StageResult(
     string? Error,
     int? InputTokens = null,
     int? OutputTokens = null,
+    StageExecutionMetrics? Metrics = null,
     string? ContractVersion = PipelineDefinitionDefaults.ContractVersion,
     IReadOnlyList<StageArtifact>? Artifacts = null,
     IReadOnlyList<StageEvidence>? Evidence = null,
     string? PolicyRationale = null,
-    IReadOnlyList<string>? RequiredActions = null)
+    IReadOnlyList<string>? RequiredActions = null,
+    string? ConfiguredModel = null,
+    string? SelectedModel = null,
+    string? FallbackModel = null,
+    string? FallbackReason = null)
 {
     /// <summary>
     /// Gets an empty successful stage result.

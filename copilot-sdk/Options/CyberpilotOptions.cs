@@ -24,7 +24,9 @@ internal sealed record CyberpilotOptions(
     string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
     Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null,
     string? PipelineDefinitionFilePath = null,
-    string? PrHeadBranch = null)
+    string? PrHeadBranch = null,
+    IReadOnlyDictionary<string, string>? StageModelOverrides = null,
+    IReadOnlyDictionary<string, string>? StageModelFallbacks = null)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);
@@ -94,7 +96,9 @@ internal sealed record CyberpilotOptions(
             PipelineDefinitionName: parsed.PipelineDefinitionName,
             PipelineDefinitionVersion: parsed.PipelineDefinitionVersion,
             PolicyProfileName: parsed.PolicyProfileName,
-            PipelineDefinitionFilePath: parsed.PipelineDefinitionFilePath);
+            PipelineDefinitionFilePath: parsed.PipelineDefinitionFilePath,
+            StageModelOverrides: parsed.StageModelOverrides,
+            StageModelFallbacks: parsed.StageModelFallbacks);
     }
 
     private sealed record ParsedArgs(
@@ -114,7 +118,9 @@ internal sealed record CyberpilotOptions(
         string PipelineDefinitionName = PipelineDefinitionDefaults.DefinitionName,
         string PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
         string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
-        string? PipelineDefinitionFilePath = null)
+        string? PipelineDefinitionFilePath = null,
+        IReadOnlyDictionary<string, string>? StageModelOverrides = null,
+        IReadOnlyDictionary<string, string>? StageModelFallbacks = null)
     {
         public static ParsedArgs Default => new() { StageTimeout = DefaultStageTimeout };
     }
@@ -154,6 +160,12 @@ internal sealed record CyberpilotOptions(
                     break;
                 case "--policy-profile":
                     parsed = parsed with { PolicyProfileName = RequireNonEmptyValue(args, ref index, arg) };
+                    break;
+                case "--stage-model":
+                    parsed = parsed with { StageModelOverrides = AddStageModel(parsed.StageModelOverrides, RequireNonEmptyValue(args, ref index, arg), arg) };
+                    break;
+                case "--stage-fallback-model":
+                    parsed = parsed with { StageModelFallbacks = AddStageModel(parsed.StageModelFallbacks, RequireNonEmptyValue(args, ref index, arg), arg) };
                     break;
                 case "--skip-deliver":
                     parsed = parsed with { SkipDeliver = true };
@@ -220,5 +232,27 @@ internal sealed record CyberpilotOptions(
         }
 
         return value;
+    }
+
+    private static IReadOnlyDictionary<string, string> AddStageModel(IReadOnlyDictionary<string, string>? current, string value, string optionName)
+    {
+        var separator = value.IndexOf('=', StringComparison.Ordinal);
+        if (separator <= 0 || separator == value.Length - 1)
+        {
+            throw new ArgumentException($"{optionName} expects <stage>=<model>.");
+        }
+
+        var stageName = value[..separator].Trim();
+        var model = value[(separator + 1)..].Trim();
+        if (string.IsNullOrWhiteSpace(stageName) || string.IsNullOrWhiteSpace(model))
+        {
+            throw new ArgumentException($"{optionName} expects <stage>=<model>.");
+        }
+
+        var updated = new Dictionary<string, string>(current ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
+        {
+            [stageName] = model,
+        };
+        return updated;
     }
 }

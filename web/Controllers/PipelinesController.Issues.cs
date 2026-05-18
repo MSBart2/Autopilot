@@ -185,9 +185,41 @@ public partial class PipelinesController
         _dbContext.PipelineRuns.Add(run);
         await _dbContext.SaveChangesAsync();
 
-        await EnqueueRunAsync(run, repoRoot, connection?.Token);
+        await EnqueueRunAsync(
+            run,
+            repoRoot,
+            connection?.Token,
+            stageModelOverrides: ParseStageModels(request.StageModelOverrides),
+            stageModelFallbacks: ParseStageModels(request.StageModelFallbacks));
 
         return RedirectToAction(nameof(Details), new { id = run.Id });
+    }
+
+    private static IReadOnlyDictionary<string, string>? ParseStageModels(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var models = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = item.IndexOf('=', StringComparison.Ordinal);
+            if (separator <= 0 || separator == item.Length - 1)
+            {
+                continue;
+            }
+
+            var stageName = item[..separator].Trim();
+            var model = item[(separator + 1)..].Trim();
+            if (!string.IsNullOrWhiteSpace(stageName) && !string.IsNullOrWhiteSpace(model))
+            {
+                models[stageName] = model;
+            }
+        }
+
+        return models.Count == 0 ? null : models;
     }
 
     private sealed record StartValidationError(string Message, string Action, object? ActionArgs = null);

@@ -22,7 +22,8 @@ internal sealed class SdkCyberpilotRunner(
     public IReadOnlyList<StageResult> StageResults => pipelineContext.StageResults;
     private PipelineExecutionContext pipelineContext = new(options, DefaultPipelineDefinitionProvider.Definition);
     private readonly PipelineConsoleWriter console = new(output);
-    private readonly StageExecutor stageExecutor = new(promptBuilder, stageRunner, new DefaultStageArtifactValidator(), progressSink, new PipelineConsoleWriter(output));
+    private readonly StageExecutor stageExecutor = new(promptBuilder, stageRunner, new StageModelResolver(options, modelChecker), new DefaultStageArtifactValidator(), progressSink, new PipelineConsoleWriter(output));
+    private bool globalModelVerified;
     private readonly PipelineBranchCoordinator branchCoordinator = new(options, issueClient, branchProvisioner, progressSink, new PipelineConsoleWriter(output));
 
     public async Task<int> RunAsync(CancellationToken cancellationToken = default)
@@ -87,7 +88,9 @@ internal sealed class SdkCyberpilotRunner(
             return modelCheckExitCode;
         }
 
-        progressSink.OnDispatch(DispatchType.Preflight, $"Model verified: {options.Model}");
+        progressSink.OnDispatch(DispatchType.Preflight, globalModelVerified
+            ? $"Model verified: {options.Model}"
+            : "Global model unavailable; stage fallback resolution enabled");
 
         await labels.EnsureProvenanceAsync(options.IssueNumber, cancellationToken);
         progressSink.OnDispatch(DispatchType.Preflight, $"Labels ready — launching pipeline for issue #{options.IssueNumber}");
@@ -124,7 +127,15 @@ internal sealed class SdkCyberpilotRunner(
         var result = await modelChecker.CheckAsync(options.Model, options.RepoRoot, cancellationToken);
         if (result.IsAvailable)
         {
+            globalModelVerified = true;
             console.WriteSuccess($"Copilot model is available: {options.Model}");
+            return 0;
+        }
+
+        if (options.StageModelFallbacks is { Count: > 0 })
+        {
+            console.WriteWarning($"Copilot model is not available: {options.Model}");
+            console.WriteDetail("Fallback", "Stage fallback models are configured, so availability will be resolved per stage.");
             return 0;
         }
 

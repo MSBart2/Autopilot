@@ -1,4 +1,5 @@
 using Cyberpilot.Pipeline;
+using Cyberpilot.Options;
 
 namespace Cyberpilot.Sdk.Tests;
 
@@ -109,7 +110,85 @@ public sealed class PromptBuilderTests
         Assert.Contains("dotnet test ./App.sln", prompt);
     }
 
+    [Fact]
+    public async Task BuildAsync_WithExecutionContext_IncludesPrFirstReviewContext()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "pipeline-review.agent.md"), "review instructions");
+        var builder = new PromptBuilder(targetRepo.Path, agentRepo.Path, 42);
+        var context = Context(targetRepo.Path);
+        context.BranchName = "cyberpilot/issue-42";
+        context.PrUrl = "https://github.com/owner/repo/pull/123";
+        context.RecordStageResult(
+            "plan",
+            new StageResult(
+                "GO",
+                "approved",
+                true,
+                null,
+                Artifacts: [new StageArtifact("plan-comment", "Use the existing branch.")],
+                Evidence: [new StageEvidence("plan", "Plan approved.")]));
+        context.RecordStageResult(
+            "implement",
+            new StageResult(
+                "GO",
+                "approved",
+                true,
+                null,
+                Artifacts: [new StageArtifact("pull-request", "PR #123 is ready.")],
+                Evidence: [new StageEvidence("validation", "dotnet test passed.")]));
+
+        var prompt = await builder.BuildAsync(
+            Stage("REVIEW", "review", "pipeline-review.agent.md", "sdk/reviewing", ["review-verdict"]),
+            "review the PR",
+            StandardPolicy(),
+            context);
+
+        Assert.Contains("## Harness Context", prompt);
+        Assert.Contains("- Issue: #42", prompt);
+        Assert.Contains("- Repository: owner/repo", prompt);
+        Assert.Contains("- Head branch: cyberpilot/issue-42", prompt);
+        Assert.Contains("- Pull request: #123 at https://github.com/owner/repo/pull/123", prompt);
+        Assert.Contains("- plan: GO / approved", prompt);
+        Assert.Contains("artifact: pull-request: PR #123 is ready.", prompt);
+        Assert.DoesNotContain("triage:", prompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("structured artifacts as the primary workflow state", prompt);
+    }
+
+    [Fact]
+    public async Task BuildAsync_ForTriageContext_PrunesBranchAndPullRequest()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "triage.agent.md"), "triage instructions");
+        var builder = new PromptBuilder(targetRepo.Path, agentRepo.Path, 42);
+        var context = Context(targetRepo.Path);
+        context.BranchName = "cyberpilot/issue-42";
+        context.PrUrl = "https://github.com/owner/repo/pull/123";
+
+        var prompt = await builder.BuildAsync(
+            Stage("TRIAGE", "triage", "triage.agent.md", "sdk/triage", ["triage-comment"]),
+            "triage issue",
+            StandardPolicy(),
+            context);
+
+        Assert.Contains("## Harness Context", prompt);
+        Assert.DoesNotContain("Head branch:", prompt);
+        Assert.DoesNotContain("Pull request:", prompt);
+    }
+
     private static PolicyProfile StandardPolicy() => new("standard", PolicyStrictness.Standard);
+
+    private static PipelineExecutionContext Context(string repoRoot)
+    {
+        var options = new CyberpilotOptions(42, repoRoot, "owner/repo", "test-model", false, false, false, false, TimeSpan.FromMinutes(10), true, false, null, null, false);
+        return new PipelineExecutionContext(options, DefaultPipelineDefinitionProvider.Definition);
+    }
 
     private static PipelineStageDefinition Stage(string displayName, string name, string promptFile, string label, IReadOnlyList<string> requiredArtifacts)
         => new(new StageDefinition(displayName, name, promptFile, label), new StageContract(PipelineDefinitionDefaults.ContractVersion, requiredArtifacts), []);

@@ -95,6 +95,7 @@ public sealed class ModelAvailabilityGateTests
         public Task<Cyberpilot.GitHub.GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.FromResult<Cyberpilot.GitHub.GitHubPullRequestInfo?>(null);
         public Task RemoveIssueLabelAsync(int issueNumber, string label, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ClosePullRequestAsync(int pullRequestNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CreateOrUpdateLabelAsync(string label, string color, string description, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

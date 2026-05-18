@@ -75,6 +75,10 @@ public interface IGitHubIssueClient
     /// <param name="issueNumber">The issue number.</param>
     /// <param name="cancellationToken">A token that cancels the operation.</param>
     Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default);
+    /// <summary>Closes a pull request without merging.</summary>
+    /// <param name="pullRequestNumber">The pull request number.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
+    Task ClosePullRequestAsync(int pullRequestNumber, CancellationToken cancellationToken = default);
     /// <summary>Creates or updates a repository label.</summary>
     /// <param name="label">The label name.</param>
     /// <param name="color">The hex color without a leading hash.</param>
@@ -155,6 +159,11 @@ internal sealed class GitHubIssueClient(IGitHubCli cli) : IGitHubIssueClient
     public async Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default)
     {
         await cli.RunAsync(["issue", "close", issueNumber.ToString()], cancellationToken: cancellationToken);
+    }
+
+    public async Task ClosePullRequestAsync(int pullRequestNumber, CancellationToken cancellationToken = default)
+    {
+        await cli.RunAsync(["pr", "close", pullRequestNumber.ToString()], allowFailure: true, cancellationToken);
     }
 
     public async Task<GitHubPullRequestInfo?> FindPullRequestForIssueAsync(int issueNumber, CancellationToken cancellationToken = default)

@@ -66,6 +66,14 @@ public partial class PipelinesController
             .AsNoTracking()
             .ToArrayAsync();
 
+        var artifacts = await _dbContext.PipelineArtifacts
+            .Where(item => item.RunId == id)
+            .OrderBy(item => item.StageName)
+            .ThenBy(item => item.Name)
+            .ThenBy(item => item.CreatedAt)
+            .AsNoTracking()
+            .ToArrayAsync();
+
         GitHubIssueSummary? issue = null;
         IReadOnlyList<string> labels = [];
         try
@@ -88,7 +96,44 @@ public partial class PipelinesController
             _logger.LogDebug(ex, "Could not fetch GitHub labels for issue #{IssueNumber}.", run.IssueNumber);
         }
 
-        return View(new PipelineRunDetailsViewModel(run, logs, labels, issue, dispatches, approvals, evidence) { MaxStageRetries = _options.MaxStageRetries });
+        return View(new PipelineRunDetailsViewModel(run, logs, labels, issue, dispatches, approvals, evidence, artifacts) { MaxStageRetries = _options.MaxStageRetries });
+    }
+
+    /// <summary>
+    /// Displays the latest captured plan for a pipeline run as a standalone document.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <returns>The plan document view, or NotFound when the run or plan output does not exist.</returns>
+    [HttpGet("{id}/Plan")]
+    public async Task<IActionResult> Plan(string id)
+    {
+        var run = await _dbContext.PipelineRuns.AsNoTracking().FirstOrDefaultAsync(item => item.Id == id);
+        if (run is null)
+        {
+            return NotFound();
+        }
+
+        var logs = await _dbContext.PipelineStageLogs
+            .Where(log => log.RunId == id)
+            .OrderBy(log => log.StartedAt)
+            .AsNoTracking()
+            .ToArrayAsync();
+
+        var evidence = await _dbContext.PipelineEvidence
+            .Where(item => item.RunId == id)
+            .OrderBy(item => item.StageName)
+            .ThenBy(item => item.Kind)
+            .ThenBy(item => item.CreatedAt)
+            .AsNoTracking()
+            .ToArrayAsync();
+
+        var plan = PipelinePlanReviewViewModel.Create(run, logs, evidence);
+        if (plan is null)
+        {
+            return NotFound();
+        }
+
+        return View(new PipelinePlanDocumentViewModel(run, plan));
     }
 
     /// <summary>

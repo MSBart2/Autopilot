@@ -25,4 +25,6 @@ public sealed record CyberpilotRunRequest(
     string? TargetRepositoryProfileSummary = null,
     string? PipelineDefinitionFilePath = null,
     Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null,
-    string? PrHeadBranch = null);
+    string? PrHeadBranch = null,
+    IReadOnlyDictionary<string, string>? StageModelOverrides = null,
+    IReadOnlyDictionary<string, string>? StageModelFallbacks = null);

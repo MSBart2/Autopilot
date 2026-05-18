@@ -214,6 +214,105 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnStageCompleted_WithExecutionMetrics_PersistsMetricColumns()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "claude-sonnet-4.6", _dbContext);
+        var stage = new StageDefinition("REVIEW", "review", "pipeline-review.agent.md", "sdk/reviewing");
+        sink.OnStageStarted(stage, 1);
+
+        var result = new StageResult(
+            "GO",
+            "approved",
+            true,
+            null,
+            InputTokens: 1_000,
+            OutputTokens: 500,
+            Metrics: new StageExecutionMetrics(
+                Model: "actual-model",
+                InputTokens: 1_000,
+                OutputTokens: 500,
+                CacheReadTokens: 100,
+                CacheWriteTokens: 25,
+                ReasoningTokens: 10,
+                PremiumRequestCost: 2,
+                DurationMs: 1500,
+                TurnCount: 3,
+                ToolCallCount: 4,
+                FailedToolCallCount: 1,
+                SessionErrorCount: 1,
+                ReachedIdle: true,
+                WasAborted: false,
+                ProviderCallIds: ["provider-1"],
+                ApiCallIds: ["api-1"]));
+        sink.OnStageCompleted(stage, result);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("actual-model", log.Model);
+        Assert.Equal(100, log.CacheReadTokens);
+        Assert.Equal(25, log.CacheWriteTokens);
+        Assert.Equal(10, log.ReasoningTokens);
+        Assert.Equal(2, log.PremiumRequestCost);
+        Assert.Equal(1500, log.DurationMs);
+        Assert.Equal(3, log.TurnCount);
+        Assert.Equal(4, log.ToolCallCount);
+        Assert.Equal(1, log.FailedToolCallCount);
+        Assert.Equal(1, log.SessionErrorCount);
+        Assert.True(log.ReachedIdle);
+        Assert.False(log.WasAborted);
+        Assert.Equal("provider-1", log.ProviderCallIds);
+        Assert.Equal("api-1", log.ApiCallIds);
+    }
+
+    [Fact]
+    public void OnStageCompleted_WithModelSelection_PersistsModelSelectionColumns()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "claude-sonnet-4.6", _dbContext);
+        var stage = new StageDefinition("REVIEW", "review", "pipeline-review.agent.md", "sdk/reviewing");
+        sink.OnStageStarted(stage, 1);
+
+        var result = new StageResult(
+            "GO",
+            "approved",
+            true,
+            null,
+            ConfiguredModel: "gpt-4.1",
+            SelectedModel: "claude-haiku-4.5",
+            FallbackModel: "claude-haiku-4.5",
+            FallbackReason: "gpt-4.1 unavailable");
+        sink.OnStageCompleted(stage, result);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("gpt-4.1", log.ConfiguredModel);
+        Assert.Equal("claude-haiku-4.5", log.SelectedModel);
+        Assert.Equal("claude-haiku-4.5", log.FallbackModel);
+        Assert.Equal("gpt-4.1 unavailable", log.FallbackReason);
+    }
+
+    [Fact]
+    public void OnStageCompleted_WithArtifacts_PersistsArtifactRows()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "claude-sonnet-4.6", _dbContext);
+        var stage = new StageDefinition("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing");
+        sink.OnStageStarted(stage, 1);
+
+        var result = new StageResult(
+            "GO",
+            "approved",
+            true,
+            null,
+            Artifacts: [new StageArtifact("pull-request", "PR #1 ready.", "https://github.com/owner/repo/pull/1", "text/markdown")]);
+        sink.OnStageCompleted(stage, result);
+
+        var artifact = _dbContext.PipelineArtifacts.Single();
+        Assert.Equal(_run.Id, artifact.RunId);
+        Assert.Equal("implement", artifact.StageName);
+        Assert.Equal("pull-request", artifact.Name);
+        Assert.Equal("PR #1 ready.", artifact.Value);
+        Assert.Equal("https://github.com/owner/repo/pull/1", artifact.Uri);
+        Assert.Equal("text/markdown", artifact.MediaType);
+    }
+
+    [Fact]
     public void OnApprovalRequested_PersistsApprovalRequest()
     {
         var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "", _dbContext);

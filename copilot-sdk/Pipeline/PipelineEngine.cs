@@ -337,19 +337,19 @@ internal sealed class PipelineEngine(
         var beforeGateResult = await RunGatesAsync(stageDefinition, GateTiming.BeforeStage, cancellationToken);
         if (beforeGateResult is not null)
         {
-            context.StageResults.Add(beforeGateResult);
+            context.RecordStageResult(stageDefinition.Stage.Name, beforeGateResult);
             return beforeGateResult;
         }
 
-        var result = await stageExecutor.RunAsync(stageDefinition, Options.IssueNumber, Options.StageTimeout, mission, context.Definition.PolicyProfile, cancellationToken);
+        var result = await stageExecutor.RunAsync(stageDefinition, Options.IssueNumber, Options.StageTimeout, mission, context.Definition.PolicyProfile, context, cancellationToken);
         var afterGateResult = await RunGatesAsync(stageDefinition, GateTiming.AfterStage, cancellationToken, result);
         if (afterGateResult is not null)
         {
-            context.StageResults.Add(afterGateResult);
+            context.RecordStageResult(stageDefinition.Stage.Name, afterGateResult);
             return afterGateResult;
         }
 
-        context.StageResults.Add(result);
+        context.RecordStageResult(stageDefinition.Stage.Name, result);
         return result;
     }
 

@@ -7,6 +7,7 @@ This directory contains operational documentation for the pipeline-first Cyberpi
 - [../README.md](../README.md) - repository overview and quick start
 - [../architecture.md](../architecture.md) - current technical architecture
 - [../AI-SDLC.md](../AI-SDLC.md) - local, cloud, and SDK AI-SDLC pipeline modes
+- [copilot-sdk-references.md](copilot-sdk-references.md) - SDK harness references, capabilities, and decisions
 
 ## Operational Docs
 

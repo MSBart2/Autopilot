@@ -24,6 +24,8 @@ Cyberpilot uses GitHub Copilot Custom Agents for automated code review, security
 
 See [`architecture.md`](architecture.md) in the repo root for the full technical reference: solution structure, dependencies, middleware pipeline, services, controllers, build/test commands, and CI/CD pipeline details.
 
+For SDK harness work, read [`docs/copilot-sdk-references.md`](docs/copilot-sdk-references.md) before changing session orchestration, streaming events, permissions, tools, hooks, model selection, or SDK persistence behavior.
+
 ## Development Guidelines
 
 - Follow MVC boundaries: controllers stay thin, services hold business logic, models validate inputs, and views avoid complex logic.

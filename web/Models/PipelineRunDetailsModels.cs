@@ -16,7 +16,8 @@ namespace Cyberpilot.Web.Models;
 /// <param name="Dispatches">Orchestrator dispatch events for the spine.</param>
 /// <param name="Approvals">Human approval requests for the run.</param>
 /// <param name="Evidence">Structured evidence rows for the run.</param>
-public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<PipelineStageLog> Logs, IReadOnlyList<string> Labels, GitHubIssueSummary? Issue = null, IReadOnlyList<PipelineDispatch>? Dispatches = null, IReadOnlyList<PipelineApproval>? Approvals = null, IReadOnlyList<PipelineEvidence>? Evidence = null)
+/// <param name="Artifacts">Structured artifacts produced by the run.</param>
+public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<PipelineStageLog> Logs, IReadOnlyList<string> Labels, GitHubIssueSummary? Issue = null, IReadOnlyList<PipelineDispatch>? Dispatches = null, IReadOnlyList<PipelineApproval>? Approvals = null, IReadOnlyList<PipelineEvidence>? Evidence = null, IReadOnlyList<PipelineArtifact>? Artifacts = null)
 {
     /// <summary>Gets the latest plan stage output formatted as a first-class review artifact.</summary>
     public PipelinePlanReviewViewModel? PlanReview => PipelinePlanReviewViewModel.Create(Run, Logs, Evidence ?? []);
@@ -53,6 +54,15 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
         .Select(PipelineEvidenceViewModel.FromEvidence)
         .ToArray();
 
+    /// <summary>Gets structured artifacts formatted for display.</summary>
+    public IReadOnlyList<PipelineArtifactViewModel> ArtifactItems => (Artifacts ?? [])
+        .OrderBy(artifact => StageSortOrder(artifact.StageName))
+        .ThenBy(artifact => artifact.StageName)
+        .ThenBy(artifact => artifact.Name)
+        .ThenBy(artifact => artifact.CreatedAt)
+        .Select(PipelineArtifactViewModel.FromArtifact)
+        .ToArray();
+
     /// <summary>Gets policy-relevant evidence rows formatted for compact policy display.</summary>
     public IReadOnlyList<PipelineEvidenceViewModel> PolicyItems => EvidenceItems
         .Where(evidence => evidence.Kind is "policy-rationale" or "gate-outcome" or "required-action")
@@ -76,6 +86,20 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
     /// <summary>Gets the total estimated USD cost across all stage logs, or null if no cost data is available.</summary>
     public decimal? TotalEstimatedCostUsd => Logs.Any(l => l.EstimatedCostUsd.HasValue)
         ? Logs.Sum(l => l.EstimatedCostUsd ?? 0m)
+        : null;
+
+    /// <summary>Gets the total assistant turns observed across all stage logs.</summary>
+    public int TotalTurnCount => Logs.Sum(l => l.TurnCount ?? 0);
+
+    /// <summary>Gets the total tool calls observed across all stage logs.</summary>
+    public int TotalToolCallCount => Logs.Sum(l => l.ToolCallCount ?? 0);
+
+    /// <summary>Gets the total failed tool calls observed across all stage logs.</summary>
+    public int TotalFailedToolCallCount => Logs.Sum(l => l.FailedToolCallCount ?? 0);
+
+    /// <summary>Gets the total model API duration across all stage logs, or null if no duration data is available.</summary>
+    public TimeSpan? TotalModelDuration => Logs.Any(l => l.DurationMs.HasValue)
+        ? TimeSpan.FromMilliseconds(Logs.Sum(l => l.DurationMs ?? 0d))
         : null;
 
     /// <summary>Gets whether this terminal run can be requeued from its current stage.</summary>
@@ -146,6 +170,19 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
 
         return int.MaxValue;
     }
+}
+
+/// <summary>
+/// Displays a captured plan as a standalone review document.
+/// </summary>
+/// <param name="Run">The pipeline run that produced the plan.</param>
+/// <param name="Plan">The structured plan review details.</param>
+public sealed record PipelinePlanDocumentViewModel(PipelineRun Run, PipelinePlanReviewViewModel Plan)
+{
+    /// <summary>Gets the GitHub issue URL, when available.</summary>
+    public string IssueUrl => string.IsNullOrWhiteSpace(Run.IssueUrl)
+        ? $"https://github.com/{Run.Repository}/issues/{Run.IssueNumber}"
+        : Run.IssueUrl;
 }
 
 /// <summary>
@@ -423,6 +460,51 @@ public sealed record PipelineEvidenceViewModel(
         => string.IsNullOrWhiteSpace(stageName)
             ? "Pipeline"
             : char.ToUpperInvariant(stageName[0]) + stageName[1..];
+}
+
+/// <summary>
+/// Formats a persisted pipeline artifact for display in the run details page.
+/// </summary>
+/// <param name="StageName">The stage that produced the artifact.</param>
+/// <param name="Name">The artifact name.</param>
+/// <param name="Value">The artifact value or summary.</param>
+/// <param name="Uri">The artifact URI, when available.</param>
+/// <param name="MediaType">The artifact media type, when available.</param>
+/// <param name="ContractVersion">The contract version that produced the artifact, when available.</param>
+/// <param name="CreatedAt">When the artifact was captured.</param>
+public sealed record PipelineArtifactViewModel(
+    string StageName,
+    string Name,
+    string? Value,
+    string? Uri,
+    string? MediaType,
+    string? ContractVersion,
+    DateTime CreatedAt)
+{
+    /// <summary>Gets the artifact label formatted for display.</summary>
+    public string Label => Humanize(Name);
+
+    /// <summary>Gets the producing stage formatted for display.</summary>
+    public string StageLabel => Humanize(StageName);
+
+    /// <summary>Gets whether the artifact has a display value.</summary>
+    public bool HasValue => !string.IsNullOrWhiteSpace(Value);
+
+    /// <summary>Gets whether the artifact has a URI.</summary>
+    public bool HasUri => !string.IsNullOrWhiteSpace(Uri);
+
+    /// <summary>Creates a view model from a persisted artifact row.</summary>
+    /// <param name="artifact">The persisted artifact.</param>
+    /// <returns>The formatted artifact view model.</returns>
+    public static PipelineArtifactViewModel FromArtifact(PipelineArtifact artifact)
+        => new(artifact.StageName, artifact.Name, artifact.Value, artifact.Uri, artifact.MediaType, artifact.ContractVersion, artifact.CreatedAt);
+
+    private static string Humanize(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "Unknown";
+        return string.Join(' ', value.Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => char.ToUpperInvariant(word[0]) + word[1..]));
+    }
 }
 
 /// <summary>

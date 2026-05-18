@@ -106,6 +106,23 @@ public sealed class CyberpilotOptionsTests
     }
 
     [Fact]
+    public void Parse_StageModelOptions_SetOverrideAndFallbackMaps()
+    {
+        var options = CyberpilotOptions.Parse([
+            "42",
+            "--repo-root",
+            RepoRoot,
+            "--stage-model",
+            "review=gpt-4.1",
+            "--stage-fallback-model",
+            "review=claude-haiku-4.5",
+        ]);
+
+        Assert.Equal("gpt-4.1", options.StageModelOverrides!["review"]);
+        Assert.Equal("claude-haiku-4.5", options.StageModelFallbacks!["review"]);
+    }
+
+    [Fact]
     public void Parse_DefaultPipelineDefinition_UsesDefaultDefinitionMetadata()
     {
         var options = CyberpilotOptions.Parse(["--check-model", "--repo-root", RepoRoot]);
