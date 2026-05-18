@@ -87,6 +87,8 @@ Remaining ~151 failures are not captured — most likely pre-hook write denials 
 
 **Done when:** Failed tool calls include a reason code queryable from `cyberpilot.db`. Run a benchmark issue and confirm no invisible failures remain.
 
+✅ **Implemented** (`65bb602`) — `FailedToolCallRecord` added to `StageExecutionMetrics`, `PipelineToolFailures` table created with EF migration, `StageExecutionMetricsCollector` tracks ToolCallId→ToolName and captures error code/message per failure.
+
 ---
 
 #### Step 2: Fix review self-review block
@@ -97,6 +99,8 @@ Remaining ~151 failures are not captured — most likely pre-hook write denials 
 
 **Done when:** Zero self-review errors in a benchmark review stage.
 
+✅ **Implemented** (`e9b75f4`) — `LooksLikeSelfReviewAttempt` added to `StageToolPolicyHooks`, denies `powershell` calls matching `gh pr review .*(--approve|--request-changes)` with an instructive reason. 3 tests added.
+
 ---
 
 #### Step 3: Fix PowerShell multi-arg errors
@@ -106,6 +110,8 @@ Remaining ~151 failures are not captured — most likely pre-hook write denials 
 **Fix:** Improve the `powershell` tool description to explicitly state the command must be a single string. Evaluate whether a pre-tool hook can detect and reject split-arg inputs before they reach PowerShell.
 
 **Done when:** Zero `accepts N arg(s), received N` errors in a benchmark run.
+
+✅ **Implemented** (`4319297`) — `LooksLikePowershellArrayArgs` added to `StageToolPolicyHooks`, detects top-level array or `{ command: [...] }` array and denies with a corrective message. 2 tests added.
 
 ---
 
@@ -125,9 +131,9 @@ Add 2–3 attempt retry with exponential backoff in `GitHubCli` or `GitHubApiIss
 
 | Root cause | Candidate fix | Status |
 | --- | --- | --- |
-| Failure reasons not logged | Log `ToolExecutionCompleteData.Error` (code + message) per failed call | **Step 1** |
-| Review agent tries to approve its own PR | Block `gh pr review --approve/request-changes` in pre-tool hook | **Step 2** |
-| Agent passes multi-word commands as separate PowerShell args | Improve PowerShell tool description; detect split-arg in pre-hook | **Step 3** |
+| Failure reasons not logged | Log `ToolExecutionCompleteData.Error` (code + message) per failed call | ✅ Done (`65bb602`) |
+| Review agent tries to approve its own PR | Block `gh pr review --approve/request-changes` in pre-tool hook | ✅ Done (`e9b75f4`) |
+| Agent passes multi-word commands as separate PowerShell args | Detect array command arg in pre-hook; deny with corrective message | ✅ Done (`4319297`) |
 | Model retries a failing tool in a loop | Post-tool hook: inject retry hint on repeat failure | **Step 4** |
 | GitHub API TLS timeouts | Add retry with backoff for transient network failures | **Step 5** |
 | Tool times out on slow operations | Add per-tool timeout config with a sensible default | Not started |
