@@ -153,7 +153,19 @@ Copy one row per stage per run. Most values come from the database queries above
 
 | Run ID | Scenario | Stage | Model | Cyberpilot SHA | Aspire1 SHA | Input tokens | Output tokens | Cache read | Cache write | Turns | Tool calls | Failed calls | Duration ms | Est. cost USD | Valid JSON? | Artifact valid? | Notes |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
-| 724eb0c39c5940b5b8e67be0eca1d06a | baseline-aspire-docs (#34) | triage | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 257,663 | 3,636 | 210,728 | 0 | 7 | 12 | 6 | 74,222 | $0.8275 | | | Run 1 |
+| edd0d6eae50d46558cf3e53093f9d672 | baseline-aspire-ui (#32) | triage | claude-sonnet-4.6 | a81f824 | 8a4cadc | 326,516 | 4,760 | 275,241 | 0 | 8 | 16 | 7 | 102,850 | $1.0509 | | | Run 2 |
+| edd0d6eae50d46558cf3e53093f9d672 | baseline-aspire-ui (#32) | plan | claude-sonnet-4.6 | a81f824 | 8a4cadc | 600,431 | 13,954 | 545,895 | 0 | 14 | 26 | 11 | 279,911 | $2.0106 | | | |
+| edd0d6eae50d46558cf3e53093f9d672 | baseline-aspire-ui (#32) | implement | claude-sonnet-4.6 | a81f824 | 8a4cadc | 1,872,397 | 14,153 | 1,811,224 | 0 | 35 | 46 | 12 | 264,846 | $5.8295 | | | |
+| edd0d6eae50d46558cf3e53093f9d672 | baseline-aspire-ui (#32) | review | claude-sonnet-4.6 | a81f824 | 8a4cadc | 318,057 | 6,024 | 280,005 | 0 | 8 | 13 | 5 | 123,087 | $1.0445 | | | Approved |
+| edd0d6eae50d46558cf3e53093f9d672 | baseline-aspire-ui (#32) | docs | claude-sonnet-4.6 | a81f824 | 8a4cadc | 1,270,548 | 8,914 | 1,221,176 | 0 | 26 | 32 | 8 | 163,378 | $3.9454 | | | |
+| | **TOTALS** | | | | | **4,387,949** | **47,805** | **4,133,541** | **0** | **91** | **133** | **43** | **934,072** | **$13.88** | | | SkipDeliver=true. 1 review cycle. |
+| 50b6b02138094e97ac84ae41671e9026 | baseline-aspire-helper (#33) | triage |claude-sonnet-4.6 | a81f824 | 8a4cadc | 183,325 | 3,228 | 143,578 | 0 | 5 | 6 | 2 | 73,439 | $0.5984 | | | Run 2 |
+| 50b6b02138094e97ac84ae41671e9026 | baseline-aspire-helper (#33) | plan | claude-sonnet-4.6 | a81f824 | 8a4cadc | 490,504 | 7,793 | 442,672 | 0 | 11 | 17 | 8 | 166,174 | $1.5884 | | | |
+| 50b6b02138094e97ac84ae41671e9026 | baseline-aspire-helper (#33) | implement | claude-sonnet-4.6 | a81f824 | 8a4cadc | 627,580 | 6,540 | 571,697 | 0 | 13 | 17 | 9 | 139,990 | $1.9808 | | | |
+| 50b6b02138094e97ac84ae41671e9026 | baseline-aspire-helper (#33) | review | claude-sonnet-4.6 | a81f824 | 8a4cadc | 677,487 | 8,756 | 626,457 | 0 | 14 | 22 | 11 | 172,804 | $2.1638 | | | Approved |
+| 50b6b02138094e97ac84ae41671e9026 | baseline-aspire-helper (#33) | docs | claude-sonnet-4.6 | a81f824 | 8a4cadc | 221,389 | 3,457 | 188,752 | 0 | 6 | 8 | 2 | 74,054 | $0.7160 | | | |
+| | **TOTALS** | | | | | **2,200,285** | **29,774** | **1,973,156** | **0** | **49** | **70** | **32** | **626,461** | **$7.05** | | | SkipDeliver=true. 1 review cycle. |
+| 724eb0c39c5940b5b8e67be0eca1d06a | baseline-aspire-docs (#34) | triage |claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 257,663 | 3,636 | 210,728 | 0 | 7 | 12 | 6 | 74,222 | $0.8275 | | | Run 1 |
 | 724eb0c39c5940b5b8e67be0eca1d06a | baseline-aspire-docs (#34) | plan | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 563,743 | 9,957 | 517,837 | 0 | 13 | 26 | 11 | 188,522 | $1.8406 | | | |
 | 724eb0c39c5940b5b8e67be0eca1d06a | baseline-aspire-docs (#34) | implement | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 1,121,720 | 11,000 | 1,072,668 | 0 | 25 | 30 | 10 | 196,739 | $3.5302 | | | |
 | 724eb0c39c5940b5b8e67be0eca1d06a | baseline-aspire-docs (#34) | review | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 552,044 | 10,297 | 512,849 | 0 | 14 | 18 | 7 | 196,873 | $1.8106 | | | Approved |
