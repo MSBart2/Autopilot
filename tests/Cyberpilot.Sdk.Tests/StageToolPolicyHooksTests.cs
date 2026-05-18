@@ -23,6 +23,51 @@ public sealed class StageToolPolicyHooksTests
     }
 
     [Fact]
+    public void EvaluatePreToolUse_ForSelfReviewApprove_DeniesCall()
+    {
+        var hooks = CreateHooks("review");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "powershell",
+            ToolArgs = new { command = "gh pr review 42 --approve --body \"LGTM\"" },
+        });
+
+        Assert.Equal("deny", output.PermissionDecision);
+        Assert.False(output.SuppressOutput);
+        Assert.Contains("GitHub does not allow", output.PermissionDecisionReason);
+    }
+
+    [Fact]
+    public void EvaluatePreToolUse_ForSelfReviewRequestChanges_DeniesCall()
+    {
+        var hooks = CreateHooks("review");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "powershell",
+            ToolArgs = new { command = "gh pr review 42 --request-changes --body \"needs work\"" },
+        });
+
+        Assert.Equal("deny", output.PermissionDecision);
+        Assert.Contains("GitHub does not allow", output.PermissionDecisionReason);
+    }
+
+    [Fact]
+    public void EvaluatePreToolUse_ForPrReviewComment_AllowsCall()
+    {
+        var hooks = CreateHooks("review");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "powershell",
+            ToolArgs = new { command = "gh pr review 42 --comment --body \"looks good\"" },
+        });
+
+        Assert.Equal("allow", output.PermissionDecision);
+    }
+
+    [Fact]
     public void EvaluatePreToolUse_ForReadOnlyStageWriteCommand_DeniesCall()
     {
         var hooks = CreateHooks("review");

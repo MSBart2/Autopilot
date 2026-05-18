@@ -40,6 +40,16 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
             return Allow("Harness read-only tool.");
         }
 
+        if (LooksLikeSelfReviewAttempt(input.ToolName, input.ToolArgs))
+        {
+            return new PreToolUseHookOutput
+            {
+                PermissionDecision = "deny",
+                PermissionDecisionReason = "GitHub does not allow a user to approve or request changes on a pull request they authored. Do not post a pr review verdict — summarize your findings in the issue comment instead.",
+                SuppressOutput = false,
+            };
+        }
+
         if (!AllowsWrites(stage.Name) && LooksLikeWriteOperation(input.ToolName, input.ToolArgs))
         {
             return new PreToolUseHookOutput
@@ -88,6 +98,19 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
     private static bool AllowsWrites(string stageName)
     {
         return WriteEnabledStages.Contains(stageName);
+    }
+
+    private static bool LooksLikeSelfReviewAttempt(string toolName, object? args)
+    {
+        // GitHub rejects approve/request-changes reviews on PRs authored by the same user.
+        // Detect: powershell calling `gh pr review --approve` or `--request-changes`
+        if (!string.Equals(toolName, "powershell", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var serializedArgs = Serialize(args);
+        return SelfReviewCommandRegex().IsMatch(serializedArgs);
     }
 
     private static bool LooksLikeWriteOperation(string toolName, object? args)
@@ -141,6 +164,9 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
 
     [GeneratedRegex("(api[_-]?key|token|secret|password|authorization|bearer)(\\s*[=:]\\s*)([^\\s,;]+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SecretLikeValueRegex();
+
+    [GeneratedRegex(@"gh\s+pr\s+review\b.*--(approve|request-changes)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SelfReviewCommandRegex();
 
     [GeneratedRegex("(write|edit|create|delete|remove|rename|move|apply[_-]?patch|push|merge|commit)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex WriteToolNameRegex();
