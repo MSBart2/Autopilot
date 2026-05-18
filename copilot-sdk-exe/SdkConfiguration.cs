@@ -93,6 +93,7 @@ internal sealed class SdkConfiguration
                 ? RuntimePreferences.CommandStyle
                 : optionPreferences.CommandStyle,
             CaptureToolOutputArtifacts = optionPreferences.CaptureToolOutputArtifacts || RuntimePreferences.CaptureToolOutputArtifacts,
+            UseHarnessSystemMessage = optionPreferences.UseHarnessSystemMessage || RuntimePreferences.UseHarnessSystemMessage,
         };
     }
 
@@ -171,6 +172,12 @@ internal sealed class SdkConfiguration
             current = current with { CaptureToolOutputArtifacts = captureToolOutput.GetBoolean() };
         }
 
+        if (cyberpilot.TryGetProperty("UseHarnessSystemMessage", out var useHarnessSystemMessage)
+            && useHarnessSystemMessage.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            current = current with { UseHarnessSystemMessage = useHarnessSystemMessage.GetBoolean() };
+        }
+
         runtimePreferences = current;
     }
 
@@ -204,6 +211,11 @@ internal sealed class SdkConfiguration
         if (bool.TryParse(Environment.GetEnvironmentVariable("Cyberpilot__CaptureToolOutputArtifacts"), out var captureToolOutputArtifacts))
         {
             current = current with { CaptureToolOutputArtifacts = captureToolOutputArtifacts };
+        }
+
+        if (bool.TryParse(Environment.GetEnvironmentVariable("Cyberpilot__UseHarnessSystemMessage"), out var useHarnessSystemMessage))
+        {
+            current = current with { UseHarnessSystemMessage = useHarnessSystemMessage };
         }
 
         runtimePreferences = current;

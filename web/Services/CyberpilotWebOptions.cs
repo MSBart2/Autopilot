@@ -34,6 +34,9 @@ public sealed class CyberpilotWebOptions
     /// <summary>Gets or sets whether shaped tool output should be persisted as diagnostic artifacts.</summary>
     public bool CaptureToolOutputArtifacts { get; set; }
 
+    /// <summary>Gets or sets whether harness law (output rules, JSON safety, command guidance) is injected as an appended SDK system message instead of repeating in every user prompt.</summary>
+    public bool UseHarnessSystemMessage { get; set; }
+
     /// <summary>Gets or sets the JSON file path for operator-managed pipeline definitions.</summary>
     public string PipelineDefinitionFilePath { get; set; } = Path.Combine("App_Data", "pipeline-definitions.json");
 }

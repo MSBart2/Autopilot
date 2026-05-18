@@ -1,6 +1,7 @@
 ---
 name: commit
 agent: agent
+model: Claude Haiku 4.5 (copilot)
 ---
 
 # Snarky Commit

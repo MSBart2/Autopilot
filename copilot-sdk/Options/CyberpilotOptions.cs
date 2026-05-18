@@ -71,6 +71,8 @@ internal sealed record CyberpilotOptions(
             "                       Preferred command syntax guidance for agents. Defaults to auto.",
             "  --capture-tool-output-artifacts",
             "                       Persist shaped tool output as diagnostic artifacts. Defaults to off.",
+            "  --use-harness-system-message",
+            "                       Inject harness law via SDK system message (append) instead of repeating it in the user prompt. Defaults to off.",
             "  --db <connection>  Persist this run to the shared Cyberpilot database.",
             "  --config <path>    Load repo/token pairs from an appsettings-style JSON file.",
             "  --skip-deliver      Run through docs but stop before merge/deliver.",
@@ -196,6 +198,9 @@ internal sealed record CyberpilotOptions(
                 case "--capture-tool-output-artifacts":
                     parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithCaptureToolOutputArtifacts(true) };
                     break;
+                case "--use-harness-system-message":
+                    parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithUseHarnessSystemMessage(true) };
+                    break;
                 case "--skip-deliver":
                     parsed = parsed with { SkipDeliver = true };
                     break;
@@ -242,6 +247,8 @@ internal sealed record CyberpilotOptions(
     public CommandStylePreference CommandStyle => Preferences.CommandStyle;
 
     public bool CaptureToolOutputArtifacts => Preferences.CaptureToolOutputArtifacts;
+
+    public bool UseHarnessSystemMessage => Preferences.UseHarnessSystemMessage;
 
     private static TimeSpan ParsePositiveMinutes(string value, string optionName)
     {
@@ -321,5 +328,11 @@ internal static class CyberpilotRuntimePreferenceExtensions
     {
         var current = preferences ?? CyberpilotRuntimePreferences.Default;
         return current with { CaptureToolOutputArtifacts = captureToolOutputArtifacts };
+    }
+
+    public static CyberpilotRuntimePreferences WithUseHarnessSystemMessage(this CyberpilotRuntimePreferences? preferences, bool useHarnessSystemMessage)
+    {
+        var current = preferences ?? CyberpilotRuntimePreferences.Default;
+        return current with { UseHarnessSystemMessage = useHarnessSystemMessage };
     }
 }

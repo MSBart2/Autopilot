@@ -8,7 +8,7 @@ namespace Cyberpilot.Copilot;
 
 internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSink progressSink, TextWriter error) : IStageRunner
 {
-    public async Task<StageResult> RunAsync(StageDefinition stage, string prompt, TimeSpan timeout, string model, PipelineExecutionContext context, CancellationToken cancellationToken = default)
+    public async Task<StageResult> RunAsync(StageDefinition stage, BuiltPrompt builtPrompt, TimeSpan timeout, string model, PipelineExecutionContext context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -28,6 +28,9 @@ internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSin
             OnPermissionRequest = PermissionHandler.ApproveAll,
             Tools = toolProvider.CreateTools(),
             Hooks = toolPolicy.CreateHooks(),
+            SystemMessage = builtPrompt.SystemMessageContent is not null
+                ? new SystemMessageConfig { Mode = SystemMessageMode.Append, Content = builtPrompt.SystemMessageContent }
+                : null,
         });
 
         var streamed = new StringBuilder();
@@ -62,7 +65,7 @@ internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSin
             }
         });
 
-        var response = await session.SendAndWaitAsync(new MessageOptions { Prompt = prompt }, timeout, cancellationToken);
+        var response = await session.SendAndWaitAsync(new MessageOptions { Prompt = builtPrompt.UserMessage }, timeout, cancellationToken);
         progressSink.OnMessage("step", string.Empty);
 
         var content = response?.Data.Content;

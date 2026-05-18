@@ -160,7 +160,8 @@ public sealed class CyberpilotPipelineService(
                 StageModelFallbacks: request.StageModelFallbacks,
                 RuntimePreferences: new CyberpilotRuntimePreferences(
                     options.Value.CommandStyle,
-                    options.Value.CaptureToolOutputArtifacts)), sink, cancellationToken);
+                    options.Value.CaptureToolOutputArtifacts,
+                    options.Value.UseHarnessSystemMessage)), sink, cancellationToken);
 
             run.Status = result.Status;
             run.BranchName = result.BranchName;

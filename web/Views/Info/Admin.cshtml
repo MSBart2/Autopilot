@@ -94,6 +94,19 @@
                                     </td>
                                 </tr>
                                 <tr>
+                                    <td><code>Cyberpilot:UseHarnessSystemMessage</code></td>
+                                    <td>
+                                        @if (Model.Options.UseHarnessSystemMessage)
+                                        {
+                                            <span class="badge text-bg-info text-dark">true &mdash; harness law injected via SDK system message (append)</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge text-bg-secondary">false &mdash; harness law included in every user prompt</span>
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
                                     <td><code>Cyberpilot:ApproveAll</code></td>
                                     <td>
                                         @if (Model.Options.ApproveAll)
@@ -197,6 +210,7 @@
                                 "MaxStageRetries": 3,                // Maximum retry attempts per stage per run
                                 "CommandStyle": "Auto",              // Auto, Windows, or Linux command guidance for agents
                                 "CaptureToolOutputArtifacts": false, // Capture verbose tool output artifacts for diagnostics
+                                "UseHarnessSystemMessage": false,    // Inject harness law via SDK system message (append); off by default
 
                                 "Repositories": [                    // Pre-configured repos available in the issue launcher
                                 {
@@ -289,6 +303,16 @@
                                                     <code>tool-hook-*</code>
                                                     and deterministic <code>tool-output-*</code> artifacts. Leave <code>false</code> for
                                                     normal runs to keep the artifact ledger focused on stage-owned outputs.
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><code>UseHarnessSystemMessage</code></td>
+                                                <td>bool</td>
+                                                <td>
+                                                    When <code>true</code>, injects harness law (controller identity, output formatting, JSON
+                                                    safety, command guidance) as an appended SDK system message instead of repeating it in
+                                                    every stage user prompt. Reduces per-prompt token usage and enables prompt caching. Off by
+                                                    default pending A/B validation.
                                                 </td>
                                             </tr>
                                             <tr>

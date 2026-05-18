@@ -43,8 +43,8 @@ internal sealed class StageExecutor(
             progressSink.OnDispatch(DispatchType.ModelFallback, $"Stage '{stage.Name}' using fallback model '{modelSelection.SelectedModel}' because '{modelSelection.ConfiguredModel}' is unavailable.");
         }
 
-        var prompt = await promptBuilder.BuildAsync(stageDefinition, mission, policyProfile, context, cancellationToken);
-        var result = await stageRunner.RunAsync(stage, prompt, timeout, modelSelection.SelectedModel, context, cancellationToken);
+        var builtPrompt = await promptBuilder.BuildAsync(stageDefinition, mission, policyProfile, context, cancellationToken);
+        var result = await stageRunner.RunAsync(stage, builtPrompt, timeout, modelSelection.SelectedModel, context, cancellationToken);
         result = ApplyModelSelection(result, modelSelection);
         result = AddToolArtifacts(stage.Name, result, context.GetToolArtifacts(stage.Name));
         if (!result.IsValid)

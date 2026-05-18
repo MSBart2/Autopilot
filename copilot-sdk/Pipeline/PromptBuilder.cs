@@ -1,8 +1,13 @@
 namespace Cyberpilot.Pipeline;
 
+/// <summary>The result of building a stage prompt, optionally split between a system message and user message.</summary>
+/// <param name="UserMessage">The user-facing prompt containing runtime context, harness context, and the stage agent prompt.</param>
+/// <param name="SystemMessageContent">When non-null, harness law content to inject via <c>SessionConfig.SystemMessage</c> (append mode).</param>
+internal sealed record BuiltPrompt(string UserMessage, string? SystemMessageContent);
+
 internal interface IPromptBuilder
 {
-	Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, PipelineExecutionContext? context = null, CancellationToken cancellationToken = default);
+	Task<BuiltPrompt> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, PipelineExecutionContext? context = null, CancellationToken cancellationToken = default);
 }
 
 internal sealed class PromptBuilder(
@@ -12,7 +17,7 @@ internal sealed class PromptBuilder(
 	string? targetRepositoryProfileSummary = null,
 	CyberpilotRuntimePreferences? runtimePreferences = null) : IPromptBuilder
 {
-	public async Task<string> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, PipelineExecutionContext? context = null, CancellationToken cancellationToken = default)
+	public async Task<BuiltPrompt> BuildAsync(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, PipelineExecutionContext? context = null, CancellationToken cancellationToken = default)
 	{
 		var stage = stageDefinition.Stage;
 		var promptPath = Path.Combine(agentPromptRoot, ".github", "agents", stage.PromptFile);
@@ -26,6 +31,60 @@ internal sealed class PromptBuilder(
 		var harnessContext = BuildHarnessContext(stage.Name, context);
 		var commandGuidance = BuildCommandGuidance(runtimePreferences);
 
+		if (runtimePreferences?.UseHarnessSystemMessage == true)
+		{
+			var systemContent = BuildHarnessSystemMessage(commandGuidance);
+			var userContent = BuildUserMessage(stageDefinition, mission, policyProfile, stage, harnessContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, stagePrompt);
+			return new BuiltPrompt(userContent, systemContent);
+		}
+
+		return new BuiltPrompt(BuildFullPrompt(stageDefinition, mission, policyProfile, stage, harnessContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, commandGuidance, stagePrompt), null);
+	}
+
+	private string BuildUserMessage(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string stagePrompt)
+	{
+		return $$"""
+			Target issue: #{{issueNumber}}
+			Repository root: {{repoRoot}}
+			Agent prompt root: {{agentPromptRoot}}
+			Stage: {{stage.Name}}
+			Mission: {{mission}}
+			Policy profile: {{policyProfile.Name}}
+			Stage result contract version: {{stageDefinition.Contract.Version}}
+			Required artifacts: {{requiredArtifacts}}
+			{{harnessContext}}
+
+			At the very end of your response, include a fenced JSON block with the best available stage result. The JSON must include `contract_version` and every required artifact for this stage when you have enough information to produce artifacts:
+
+			```json
+			{
+			  "status": "GO",
+			  "decision": "approved",
+			  "contract_version": "{{stageDefinition.Contract.Version}}",
+			  "artifacts": {{artifactExample}},
+			  "evidence": [
+			    { "name": "summary", "summary": "brief evidence summary" }
+			  ],
+			  "policy_rationale": "why this result satisfies the {{policyProfile.Name}} policy profile",
+			  "required_actions": [],
+			  "issue_number": {{issueNumber}}
+			}
+			```
+
+			Use these status values when applicable: GO, STOP, DUPLICATE.
+			Use these review decision values when applicable: approved, changes_requested, comment.
+			When status is STOP or the result needs human correction, populate `required_actions` with concrete next steps.
+			{{repositoryProfileContext}}
+			{{reportingGuidance}}
+
+			<stage-agent-prompt>
+			{{stagePrompt}}
+			</stage-agent-prompt>
+			""";
+	}
+
+	private string BuildFullPrompt(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string commandGuidance, string stagePrompt)
+	{
 		return $$"""
 			You are running as the Cyberpilot SDK cyberpilot controller.
 
@@ -86,6 +145,37 @@ internal sealed class PromptBuilder(
 			<stage-agent-prompt>
 			{{stagePrompt}}
 			</stage-agent-prompt>
+			""";
+	}
+
+	private static string BuildHarnessSystemMessage(string commandGuidance)
+	{
+		return $$"""
+			You are running as the Cyberpilot SDK cyberpilot controller.
+
+			The controller has already applied the permanent `sdk` provenance label and the correct SDK stage label for this stage.
+			Do not manage the `sdk` label or any `sdk/*` labels yourself. Do not close the issue.
+
+			Execute the stage instructions below yourself. Treat the harness context and structured artifacts as the primary workflow state. Use issue and pull request comments as human-readable reports, not as the canonical state store.
+			Do not delegate to background agents or wait for specialist agent tasks. When the imported prompt asks for specialist input, perform that specialist analysis directly in this SDK session and include the result in the stage summary.
+
+			## Output Formatting
+
+			Structure your streaming output using markdown so the dashboard can render it clearly:
+			- Use `## Section Title` headers to separate major phases of your work (e.g., `## Reading the Issue`, `## Analysis`, `## Building`)
+			- Use bullet lists (`- item`) for key findings, changes, or decisions
+			- Use **bold** for important terms, file paths, or status outcomes
+			- Use tables when comparing options or listing structured data
+			- Keep paragraphs short and punchy — your personality should shine through the structure
+			- End with a clear summary section (e.g., `## Result` or `## Verdict`)
+
+			## JSON Output Safety
+
+			The final fenced `json` block must contain exactly one valid JSON object. Do not put prose, markdown, or another fenced block inside the final JSON fence.
+			If an artifact contains markdown, store it as a normal JSON string: escape line breaks as `\n`, escape double quotes, and never paste raw multi-line markdown directly into the JSON block.
+			Do not include nested triple-backtick fences inside artifact strings. If you must quote code in an artifact, use indented code blocks or short inline snippets instead.
+			After the final fenced `json` block, do not write any additional text.
+			{{commandGuidance}}
 			""";
 	}
 

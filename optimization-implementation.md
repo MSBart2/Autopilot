@@ -68,7 +68,7 @@ Remaining ~151 failures are not captured — most likely pre-hook write denials 
 - [x] Determine what fraction of failures are pre-hook write denials in read-only stages vs. tool execution errors.
 - [x] Confirm whether the self-review error is from a stage prompt instructing the agent to approve PRs, and fix the prompt or add a pre-hook denial.
 - [x] Investigate the PowerShell multi-arg errors — determine which commands trigger them and whether tightening the tool description prevents them.
-- [ ] Determine whether failures are retried by the model (wasted turns) or silently skipped.
+- [x] Determine whether failures are retried by the model (wasted turns) or silently skipped.
 
 ### Implementation steps
 
@@ -136,15 +136,15 @@ Add 2–3 attempt retry with exponential backoff in `GitHubCli` or `GitHubApiIss
 | Failure reasons not logged | Log `ToolExecutionCompleteData.Error` (code + message) per failed call | ✅ Done (`65bb602`) |
 | Review agent tries to approve its own PR | Block `gh pr review --approve/request-changes` in pre-tool hook | ✅ Done (`e9b75f4`) |
 | Agent passes multi-word commands as separate PowerShell args | Detect array command arg in pre-hook; deny with corrective message | ✅ Done (`4319297`) |
-| Model retries a failing tool in a loop | Post-tool hook: inject retry hint on repeat failure | **Step 4** |
-| GitHub API TLS timeouts | Add retry with backoff for transient network failures | **Step 5** |
-| Tool times out on slow operations | Add per-tool timeout config with a sensible default | Not started |
+| Model retries a failing tool in a loop | Post-tool hook: inject retry hint on repeat failure | Deferred |
+| GitHub API TLS timeouts | Add retry with backoff for transient network failures | Deferred |
+| Tool times out on slow operations | Add per-tool timeout config with a sensible default | Deferred |
 | Read-only stage agent attempts durable side effects through scripts | Block mutation patterns across shell/script wrappers; make denial visible; align triage/plan prompts to return artifacts instead of posting comments | ✅ Done |
 
 ### Success criteria
 
-- [ ] `FailedToolCallCount / ToolCallCount` drops below 20% on a full benchmark run.
-- [ ] No regression in stage output quality or valid JSON rate.
+- [x] `FailedToolCallCount / ToolCallCount` drops below 20% on a full benchmark run.
+- [x] No regression in stage output quality or valid JSON rate.
 - [x] Per-stage failure counts recorded in `metrics.md` before and after each fix.
 - [x] Failed tool calls include a logged reason code — no more invisible failures.
 
@@ -159,14 +159,19 @@ Add 2–3 attempt retry with exponential backoff in `GitHubCli` or `GitHubApiIss
 
 
 
-- [ ] Draft compact Cyberpilot harness system prompt.
-- [ ] Split prompt responsibilities:
+## Milestone 2: System Prompt Restructuring
+
+Split prompt responsibilities so the SDK `SystemMessage` carries harness law (identity, output format, JSON safety, command guidance) and the user message carries only runtime facts and the stage agent prompt. This eliminates repeated boilerplate from every stage call and enables prompt caching.
+
+- [x] Draft compact Cyberpilot harness system prompt.
+- [x] Split prompt responsibilities:
   - system prompt = harness law
   - structured context = runtime facts
   - stage prompt = role and judgment criteria
   - stage mission = current task
-- [ ] Wire system prompt behind config or feature flag; do not enable by default.
-- [ ] Verify whether SDK `SystemMessage` augments or replaces default Copilot runtime behavior.
+- [x] Wire system prompt behind config or feature flag; do not enable by default.
+- [x] Verify whether SDK `SystemMessage` augments or replaces default Copilot runtime behavior.
+  - **Finding:** `SessionConfig.SystemMessage` accepts a `SystemMessageConfig` with `Mode = SystemMessageMode.Append` (appends to default) or `Replace` (full override). Cyberpilot uses `Append` so built-in tool guidance is preserved.
 - [ ] Run A/B comparison on `baseline-pr-review`.
 - [ ] Record valid JSON rate, turns, tool calls, token usage, prompt size, and runtime.
 
