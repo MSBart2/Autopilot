@@ -401,11 +401,114 @@
 
     .plan-review-artifact a {
         display: inline-flex;
+        max-width: 100%;
         margin-top: .55rem;
         font-size: .78rem;
         font-weight: 800;
         text-decoration: none;
         color: var(--oc-green);
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .plan-document-shell {
+        max-width: 1180px;
+    }
+
+    .plan-document-hero,
+    .plan-document-main,
+    .plan-document-card {
+        border: 1px solid rgba(34, 211, 238, .18);
+        border-radius: var(--oc-radius);
+        background:
+            linear-gradient(135deg, rgba(12, 18, 33, .94), rgba(6, 10, 18, .80)),
+            linear-gradient(90deg, rgba(34, 211, 238, .06), transparent 50%, rgba(52, 211, 153, .04));
+        box-shadow: var(--oc-shadow);
+    }
+
+    .plan-document-hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .plan-document-hero h1,
+    .plan-document-section-header h2 {
+        margin: 0;
+        color: var(--oc-text);
+        font-weight: 900;
+        letter-spacing: 0;
+    }
+
+    .plan-document-hero h1 {
+        font-size: clamp(1.45rem, 2vw, 2rem);
+    }
+
+    .plan-document-hero p:not(.eyebrow) {
+        max-width: 70ch;
+        margin: .45rem 0 0;
+        color: var(--oc-muted);
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+    }
+
+    .plan-document-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
+        gap: 1rem;
+        align-items: start;
+    }
+
+    .plan-document-main,
+    .plan-document-card {
+        overflow: hidden;
+    }
+
+    .plan-document-section-header,
+    .plan-document-card {
+        padding: .9rem;
+    }
+
+    .plan-document-section-header {
+        border-bottom: 1px solid rgba(34, 211, 238, .14);
+    }
+
+    .plan-document-pre {
+        min-height: 28rem;
+        max-height: none;
+        margin: 0;
+        padding: 1rem;
+        color: var(--oc-muted);
+        background: rgba(2, 6, 23, .45);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        overflow: auto;
+    }
+
+    .plan-document-aside {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .plan-document-list {
+        margin: 0;
+        padding-left: 1.1rem;
+        color: var(--oc-muted);
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 900px) {
+        .plan-document-hero {
+            flex-direction: column;
+        }
+
+        .plan-document-grid {
+            grid-template-columns: 1fr;
+        }
     }
 
     .plan-review-full {
@@ -824,11 +927,13 @@
 
     .evidence-item {
         min-width: 0;
+        max-width: 100%;
         padding: .75rem;
         border: 1px solid var(--oc-line-soft);
         border-left: 4px solid var(--oc-blue);
         border-radius: 8px;
         background: var(--oc-panel-3);
+        overflow: hidden;
     }
 
     .evidence-kind-stage-artifact {
@@ -849,6 +954,7 @@
         justify-content: space-between;
         gap: .5rem;
         margin-bottom: .45rem;
+        min-width: 0;
     }
 
     .evidence-kind,
@@ -857,6 +963,8 @@
         font-weight: 900;
         text-transform: uppercase;
         letter-spacing: .08em;
+        min-width: 0;
+        overflow-wrap: anywhere;
     }
 
     .evidence-kind {
@@ -890,15 +998,20 @@
         margin-top: .55rem;
         color: var(--oc-dim);
         font-size: .72rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
     }
 
     .evidence-link {
         display: inline-flex;
+        max-width: 100%;
         margin-top: .55rem;
         font-size: .78rem;
         font-weight: 800;
         text-decoration: none;
         color: var(--oc-cyan);
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     @media (max-width: 720px) {
@@ -1384,14 +1497,14 @@
 
     .agent-token-badge {
         font-size: .74rem;
-        color: var(--bs-secondary-color);
+        color: rgba(255, 255, 255, 0.75);
         margin-top: .25rem;
     }
 
     .agent-cost-line {
         font-size: .72rem;
-        color: var(--bs-secondary-color);
-        opacity: .8;
+        color: rgba(255, 255, 255, 0.65);
+        opacity: 1;
     }
 
     .agent-state-note {
