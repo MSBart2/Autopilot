@@ -39,9 +39,9 @@ These issues in `MSBart2/Aspire1` are scoped to give useful signal without deliv
 
 | Scenario ID | Issue | Complexity | Purpose |
 | --- | --- | --- | --- |
-| `baseline-aspire-docs` | [#32 Observability runbook](https://github.com/MSBart2/aspire1/issues/32) | Small / docs | Low-complexity baseline; minimal code noise |
+| `baseline-aspire-ui` | [#32 Diagnostics panel](https://github.com/MSBart2/aspire1/issues/32) | Larger / cross-cutting | Architecture discovery, UI, feature flags, review |
 | `baseline-aspire-helper` | [#33 Weather summary helper](https://github.com/MSBart2/aspire1/issues/33) | Medium / code + tests | Discovery, implementation, validation, review |
-| `baseline-aspire-ui` | [#34 Diagnostics panel](https://github.com/MSBart2/aspire1/issues/34) | Larger / cross-cutting | Architecture discovery, UI, feature flags, review |
+| `baseline-aspire-docs` | [#34 Observability runbook](https://github.com/MSBart2/aspire1/issues/34) | Small / docs | Low-complexity baseline; minimal code noise |
 | `baseline-pr-review` | TBD PR from a benchmark run | — / PR-first review | Review → docs → deliver without issue routing overhead |
 
 ## Recommended baseline cadence
@@ -153,7 +153,15 @@ Copy one row per stage per run. Most values come from the database queries above
 
 | Run ID | Scenario | Stage | Model | Cyberpilot SHA | Aspire1 SHA | Input tokens | Output tokens | Cache read | Cache write | Turns | Tool calls | Failed calls | Duration ms | Est. cost USD | Valid JSON? | Artifact valid? | Notes |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
-| | | | | | | | | | | | | | | | | | |
+| 84f798d700f34998906e6d85e7d38bde | baseline-aspire-ui (#32) | triage | claude-sonnet-4.6 | d40d3c2 | df3abae | 453,418 | 4,897 | 408,513 | 0 | 12 | 19 | 7 | 113,201 | $1.4337 | | | Run 1 — **full delivery** (skip-deliver bug) |
+| 84f798d700f34998906e6d85e7d38bde | baseline-aspire-ui (#32) | plan | claude-sonnet-4.6 | d40d3c2 | df3abae | 820,454 | 10,748 | 759,679 | 0 | 17 | 35 | 19 | 218,745 | $2.6226 | | | |
+| 84f798d700f34998906e6d85e7d38bde | baseline-aspire-ui (#32) | implement (1) | claude-sonnet-4.6 | d40d3c2 | df3abae | 1,590,580 | 13,757 | 1,530,552 | 0 | 30 | 41 | 17 | 236,872 | $4.9781 | | | Review requested changes → rework |
+| 84f798d700f34998906e6d85e7d38bde | baseline-aspire-ui (#32) | review (1) | claude-sonnet-4.6 | d40d3c2 | df3abae | 548,042 | 14,933 | 492,910 | 0 | 11 | 17 | 10 | 294,423 | $1.8681 | | | Changes requested |
+| 84f798d700f34998906e6d85e7d38bde | baseline-aspire-ui (#32) | implement (2) | claude-sonnet-4.6 | d40d3c2 | df3abae | 1,192,763 | 9,823 | 1,134,431 | 0 | 23 | 35 | 14 | 196,635 | $3.7256 | | | |
+| 84f798d700f34998906e6d85e7d38bde | baseline-aspire-ui (#32) | review (2) | claude-sonnet-4.6 | d40d3c2 | df3abae | 604,907 | 9,763 | 546,548 | 0 | 14 | 24 | 12 | 197,900 | $1.9612 | | | Approved |
+| 84f798d700f34998906e6d85e7d38bde | baseline-aspire-ui (#32) | docs | claude-sonnet-4.6 | d40d3c2 | df3abae | 1,156,106 | 10,375 | 1,097,041 | 0 | 21 | 33 | 16 | 203,533 | $3.6239 | | | |
+| 84f798d700f34998906e6d85e7d38bde | baseline-aspire-ui (#32) | deliver | claude-sonnet-4.6 | d40d3c2 | df3abae | 293,203 | 4,600 | 261,169 | 0 | 8 | 9 | 5 | 107,281 | $0.9486 | | | Ran due to skip-deliver bug |
+| | **TOTALS** | | | | | **6,659,473** | **78,896** | **6,230,843** | **0** | **136** | **213** | **100** | **1,568,590** | **$21.16** | | | SkipDeliver=false (bug). Full delivery. 2 review cycles. |
 
 ## Experiment results log
 
