@@ -33,7 +33,43 @@ This tracker turns `optimization-plan.md` into measurable implementation work. M
 - [ ] Metrics are recorded at stage granularity.
 - [ ] We can identify the most expensive stage by tokens, turns, and time.
 
-## Milestone 2: Harness system prompt spike
+## Milestone 1.5: Tool failure rate reduction
+
+Baseline runs show ~34–38% of tool calls failing across all stages (44/131 on #33 run 1, 43/133 on #32 run 2). This is the highest-leverage near-term target — reducing failures drives down turns, tokens, duration, and cost without requiring prompt or architecture changes.
+
+### Investigation tasks
+
+- [ ] Query `PipelineStageLogs` to identify which stages have the highest `FailedToolCallCount / ToolCallCount` ratio.
+- [ ] Correlate failed tool calls with stage output logs to identify the most common failure modes (bad args, missing files, permission errors, tool not found, timeout, etc.).
+- [ ] Determine whether failures are retried by the model (wasted turns) or silently skipped.
+- [ ] Identify whether any failures are expected/benign (e.g. probing for a file that may not exist) vs. avoidable errors.
+
+### Candidate fixes
+
+| Root cause | Candidate fix | Status |
+| --- | --- | --- |
+| Model passes bad args to known tools | Improve tool descriptions / arg validation error messages | Not started |
+| Model retries a failing tool in a loop | Add post-tool hook to detect repeat failures and surface a hint | Not started |
+| Tool times out on slow operations | Add per-tool timeout config with a sensible default | Not started |
+| Tool not available in current stage policy | Tighten stage tool policy so unavailable tools are never offered | Not started |
+| Model probes for files that don't exist | Structured context pre-populates known file paths | Not started |
+
+### Success criteria
+
+- [ ] `FailedToolCallCount / ToolCallCount` drops below 20% on a full benchmark run.
+- [ ] No regression in stage output quality or valid JSON rate.
+- [ ] Per-stage failure counts recorded in `metrics.md` before and after each fix.
+
+### Baseline failure rates (for comparison)
+
+| Run | Scenario | Failed / Total | Rate |
+| --- | --- | --- | --- |
+| `9e82c517` | #33 run 1 | 44 / 131 | 34% |
+| `50b6b021` | #33 run 2 | 32 / 70 | 46% |
+| `724eb0c3` | #34 run 1 | 46 / 121 | 38% |
+| `edd0d6ea` | #32 run 2 | 43 / 133 | 32% |
+
+
 
 - [ ] Draft compact Cyberpilot harness system prompt.
 - [ ] Split prompt responsibilities:
@@ -168,7 +204,8 @@ This tracker turns `optimization-plan.md` into measurable implementation work. M
 
 | Date | Decision | Reason | Revisit when |
 | --- | --- | --- | --- |
-| TBD | Use stage-level metrics as primary optimization unit | Stage totals reveal bottlenecks better than run totals | Metrics model changes |
+| 2026-05-18 | Use stage-level metrics as primary optimization unit | Stage totals reveal bottlenecks better than run totals | Metrics model changes |
+| 2026-05-18 | Start with tool failure rate reduction before prompt/context work | Baseline shows 32–46% failure rate — highest-leverage fix with no architecture risk | Failure root causes identified |
 | TBD | Start with PR-first review for prompt/context A/B tests | It isolates review routing and avoids full pipeline noise | Full issue baselines are available |
 
 ## Open questions
