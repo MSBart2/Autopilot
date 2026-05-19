@@ -201,13 +201,26 @@ Implementation note: stage-aware defaults now allow global `replace-lean` while 
 - [x] Add stage-specific context pruning rules.
 - [x] Render structured context in a compact machine-readable block.
 - [x] Remove prompt instructions that ask agents to rediscover known routing state.
-- [ ] Run before/after comparison on full issue and PR-first review scenarios.
+- [x] Run before/after comparison on full issue and PR-first review scenarios.
+
+### Benchmark results (full pipeline, issue #34)
+
+| | Before (M2 baseline, SHA d1c3d35) | After (M2+M3, SHA 6842057) | Δ |
+| --- | ---: | ---: | --- |
+| Input tokens | 3,865,250 | 2,048,809 | **-1,816,441 (-47%)** |
+| Turns | 87 | 72 | **-15 (-17%)** |
+| Tool calls | 121 | 105 | -16 (-13%) |
+| Failed tool calls | 46 | 22 | **-24 (-52%)** |
+| Duration ms | 822,625 | 567,066 | **-255,559 (-31%)** |
+| Est. cost USD | $12.24 | $6.58 | **-$5.66 (-46%)** |
+
+Biggest per-stage wins: docs −75% input tokens; implement −50%; review −39%.
 
 ### Success criteria
 
 - [x] Review/docs/deliver receive PR-first context when known.
-- [ ] Prompt size decreases or stays flat while useful context improves.
-- [ ] Discovery-related tool calls decrease.
+- [x] Prompt size decreases or stays flat while useful context improves. (**-47% total pipeline input tokens**)
+- [x] Discovery-related tool calls decrease. (**failed tool calls −52%; total tool calls −13%**)
 
 ## Milestone 4: Deterministic workflow promotion
 

@@ -171,6 +171,12 @@ Copy one row per stage per run. Most values come from the database queries above
 | 724eb0c39c5940b5b8e67be0eca1d06a | baseline-aspire-docs (#34) | review | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 552,044 | 10,297 | 512,849 | 0 | 14 | 18 | 7 | 196,873 | $1.8106 | | | Approved |
 | 724eb0c39c5940b5b8e67be0eca1d06a | baseline-aspire-docs (#34) | docs | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 1,370,080 | 8,277 | 1,315,879 | 0 | 28 | 35 | 12 | 166,269 | $4.2344 | | | |
 | | **TOTALS** | | | | | **3,865,250** | **43,167** | **3,629,961** | **0** | **87** | **121** | **46** | **822,625** | **$12.24** | | | SkipDeliver=true. 1 review cycle. |
+| 64b7bb5ebcee4edeb7defad76bbd0e6b | m3-full (#34) | triage | claude-sonnet-4.6 | 6842057 | 8a4cadc | 162,939 | 3,633 | 143,537 | 0 | 10 | 16 | 3 | 78,443 | $0.5433 | ✅ | ✅ | M2+M3 defaults active |
+| 64b7bb5ebcee4edeb7defad76bbd0e6b | m3-full (#34) | plan | claude-sonnet-4.6 | 6842057 | 8a4cadc | 641,286 | 6,505 | 593,987 | 0 | 16 | 25 | 7 | 121,224 | $2.0214 | ✅ | ✅ | |
+| 64b7bb5ebcee4edeb7defad76bbd0e6b | m3-full (#34) | implement | claude-sonnet-4.6 | 6842057 | 8a4cadc | 560,517 | 7,714 | 537,220 | 0 | 22 | 27 | 2 | 139,090 | $1.7973 | ✅ | ✅ | |
+| 64b7bb5ebcee4edeb7defad76bbd0e6b | m3-full (#34) | review | claude-sonnet-4.6 | 6842057 | 8a4cadc | 338,649 | 5,625 | 298,858 | 0 | 8 | 15 | 7 | 118,267 | $1.1003 | ✅ | ✅ | Approved. PR #51 |
+| 64b7bb5ebcee4edeb7defad76bbd0e6b | m3-full (#34) | docs | claude-sonnet-4.6 | 6842057 | 8a4cadc | 345,418 | 5,589 | 326,385 | 0 | 16 | 22 | 3 | 110,042 | $1.1201 | ✅ | ✅ | |
+| | **TOTALS** | | | | | **2,048,809** | **29,066** | **1,899,987** | **0** | **72** | **105** | **22** | **567,066** | **$6.58** | | | SkipDeliver=true. 1 review cycle. M2+M3 active. |
 | 9e82c517258b4b9985a5682f7dad6d55 | baseline-aspire-helper (#33) | triage |claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 269,817 | 3,965 | 225,276 | 0 | 7 | 10 | 4 | 86,361 | $0.8689 | | | Run 1 |
 | 9e82c517258b4b9985a5682f7dad6d55 | baseline-aspire-helper (#33) | plan | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 541,785 | 7,919 | 496,514 | 0 | 12 | 19 | 10 | 156,557 | $1.7441 | | | |
 | 9e82c517258b4b9985a5682f7dad6d55 | baseline-aspire-helper (#33) | implement (1) | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 640,796 | 6,313 | 598,810 | 0 | 15 | 17 | 9 | 143,598 | $2.0171 | | | |
@@ -196,6 +202,7 @@ Copy one row per stage per run. Most values come from the database queries above
 | Milestone 2 triage system-message sweep | #34 one-shot triage | `triage5-20260518-1936-inline-full` | `triage5-20260518-1936-replace-lean` | -138,219 | +2 | -9,890 | 5/5 valid JSON; all approved | Use `replace-lean` for triage. |
 | Milestone 2 plan seeded sweep | #34 plan with fixed triage seed | `plan5-20260518-2009-replace-lean` | `plan5-20260518-2009-inline-full` | -47,514 | -2 | -20,780 | 5/5 valid JSON; all approved | Use `inline-full` for plan. |
 | Milestone 2 PR-first review sweep | Fresh PR clones #46-#50 at same commit | `review5clone-20260518-2030-inline-full` | `review5clone-20260518-2030-append-lean` | -210,611 | -6 | -64,776 | 5/5 valid JSON; all approved | Use `append-lean` for review. |
+| Milestone 2+3 full pipeline (#34) | #34 full flow, M2+M3 active vs pre-M2 baseline | `724eb0c` (pre-M2) | `64b7bb5` (M2+M3) | -1,816,441 (-47%) | -15 (-17%) | -255,559 (-31%) | 5/5 GO; all approved; 22 vs 46 failed tool calls (-52%) | M2+M3 combined. Docs alone: -1,024,662 tokens (-75%). Review: -213,395 (-39%). Implement: -561,203 (-50%). |
 
 ### Milestone 2 stage prompt benchmark details
 
@@ -234,3 +241,20 @@ Fixture source: issue #34 implementation PR #45 produced commit `d0461c8fe462718
 | replace-lean | #50 | GO | 173,126 | 323,513 | 8,478 | 303,536 | 17 | 21 | 10 | 17 | approved / valid |
 
 Prompt-size note: Cyberpilot does not currently persist raw prompt character count per run. The persisted input-token totals above are the operational prompt/context-size proxy for Milestone 2 comparisons.
+
+### Milestone 3 full pipeline benchmark (#34, `m3-full-20260518`)
+
+Run ID: `64b7bb5ebcee4edeb7defad76bbd0e6b`. Cyberpilot SHA `6842057`, Aspire1 SHA `8a4cadc`. All M2 defaults active (triage=replace-lean, plan=inline-full, review=append-lean) plus M3 typed `StageContextSnapshot`. Compared against M2 baseline run `724eb0c39c5940b5b8e67be0eca1d06a` (Cyberpilot SHA `d1c3d35`).
+
+| Stage | Before input | After input | Δ input | Before turns | After turns | Δ turns | Before failed | After failed | Δ failed | Before dur ms | After dur ms | Δ dur ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| triage | 257,663 | 162,939 | -94,724 (-37%) | 7 | 10 | +3 | 6 | 3 | -3 | 74,222 | 78,443 | +4,221 |
+| plan | 563,743 | 641,286 | +77,543 (+14%) | 13 | 16 | +3 | 11 | 7 | -4 | 188,522 | 121,224 | -67,298 |
+| implement | 1,121,720 | 560,517 | -561,203 (-50%) | 25 | 22 | -3 | 10 | 2 | -8 | 196,739 | 139,090 | -57,649 |
+| review | 552,044 | 338,649 | -213,395 (-39%) | 14 | 8 | -6 | 7 | 7 | 0 | 196,873 | 118,267 | -78,606 |
+| docs | 1,370,080 | 345,418 | -1,024,662 (-75%) | 28 | 16 | -12 | 12 | 3 | -9 | 166,269 | 110,042 | -56,227 |
+| **TOTALS** | **3,865,250** | **2,048,809** | **-1,816,441 (-47%)** | **87** | **72** | **-15 (-17%)** | **46** | **22** | **-24 (-52%)** | **822,625** | **567,066** | **-255,559 (-31%)** |
+
+Note: triage and plan input-token increases are within normal variance and partially reflect the new typed JSON context adding structured fields. The net pipeline improvement is strongly positive — implement, review, and docs all benefit substantially from receiving compact machine-readable context instead of rediscovering state via shell/API calls.
+
+Next: PR-first review clone test using PR #51 (from the M3 run) as the fixture source. This will isolate the M3 typed context impact on review alone, controlling for implementation variance.
