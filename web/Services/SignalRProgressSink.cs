@@ -75,15 +75,14 @@ public sealed class SignalRProgressSink(
     public void OnStageCompleted(StageDefinition stage, StageResult result)
     {
         FlushBufferAsync().GetAwaiter().GetResult();
-        var estimatedCost = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens);
         if (currentLog is not null)
         {
             currentLog.Status = result.Status;
             currentLog.CompletedAt = DateTime.UtcNow;
             currentLog.InputTokens = result.InputTokens;
             currentLog.OutputTokens = result.OutputTokens;
-            currentLog.EstimatedCostUsd = estimatedCost;
             ApplyMetrics(currentLog, result, model);
+            currentLog.EstimatedCostUsd = ModelPricingService.Estimate(ResolveCostModel(result, currentLog, model), result.InputTokens, result.OutputTokens);
             currentLog.StageResultJson = JsonSerializer.Serialize(result);
             currentLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
                 ? PipelineDefinitionDefaults.ContractVersion
@@ -103,7 +102,7 @@ public sealed class SignalRProgressSink(
             result.Decision,
             inputTokens = result.InputTokens,
             outputTokens = result.OutputTokens,
-            estimatedCostUsd = estimatedCost,
+            estimatedCostUsd = currentLog?.EstimatedCostUsd,
             model = currentLog?.Model,
             turnCount = currentLog?.TurnCount,
             toolCallCount = currentLog?.ToolCallCount,
@@ -140,6 +139,13 @@ public sealed class SignalRProgressSink(
     {
         return values is null || values.Count == 0 ? null : string.Join(",", values);
     }
+
+    private static string ResolveCostModel(StageResult result, PipelineStageLog log, string configuredModel)
+        => !string.IsNullOrWhiteSpace(result.SelectedModel)
+            ? result.SelectedModel
+            : !string.IsNullOrWhiteSpace(log.Model)
+                ? log.Model
+                : configuredModel;
 
     /// <inheritdoc />
     public void OnBranchReady(string branchName)

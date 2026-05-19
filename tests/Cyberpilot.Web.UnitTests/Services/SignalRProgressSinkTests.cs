@@ -242,6 +242,8 @@ public class SignalRProgressSinkTests : IDisposable
             "approved",
             true,
             null,
+            InputTokens: 1_000_000,
+            OutputTokens: 500_000,
             ConfiguredModel: "gpt-4.1",
             SelectedModel: "claude-haiku-4.5",
             FallbackModel: "claude-haiku-4.5",
@@ -253,6 +255,7 @@ public class SignalRProgressSinkTests : IDisposable
         Assert.Equal("claude-haiku-4.5", log.SelectedModel);
         Assert.Equal("claude-haiku-4.5", log.FallbackModel);
         Assert.Equal("gpt-4.1 unavailable", log.FallbackReason);
+        Assert.Equal(2.8m, log.EstimatedCostUsd);
     }
 
     [Fact]

@@ -48,8 +48,8 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
             currentLog.CompletedAt = DateTime.UtcNow;
             currentLog.InputTokens = result.InputTokens;
             currentLog.OutputTokens = result.OutputTokens;
-            currentLog.EstimatedCostUsd = ModelPricingService.Estimate(model, result.InputTokens, result.OutputTokens);
             ApplyMetrics(currentLog, result, model);
+            currentLog.EstimatedCostUsd = ModelPricingService.Estimate(ResolveCostModel(result, currentLog, model), result.InputTokens, result.OutputTokens);
             currentLog.StageResultJson = JsonSerializer.Serialize(result);
             currentLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
                 ? PipelineDefinitionDefaults.ContractVersion
@@ -89,6 +89,13 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
     {
         return values is null || values.Count == 0 ? null : string.Join(",", values);
     }
+
+    private static string ResolveCostModel(StageResult result, PipelineStageLog log, string configuredModel)
+        => !string.IsNullOrWhiteSpace(result.SelectedModel)
+            ? result.SelectedModel
+            : !string.IsNullOrWhiteSpace(log.Model)
+                ? log.Model
+                : configuredModel;
 
     /// <inheritdoc />
     public void OnBranchReady(string branchName)
