@@ -4,7 +4,7 @@ namespace Cyberpilot.Pipeline;
 /// Configures runtime behavior that affects prompt guidance and diagnostic artifact capture.
 /// </summary>
 /// <param name="CommandStyle">The shell command style agents should prefer.</param>
-/// <param name="CaptureToolOutputArtifacts">Whether shaped tool output should be persisted as diagnostic artifacts.</param>
+/// <param name="CaptureToolOutputArtifacts">Whether detailed redacted tool output should be persisted as diagnostic artifacts.</param>
 /// <param name="SystemMessageMode">Controls whether harness law is injected as an SDK system message (append or replace) instead of repeating it in every user prompt.</param>
 /// <param name="SystemMessageProfile">Controls how verbose the SDK system message harness guidance should be.</param>
 /// <param name="StageSystemMessages">Per-stage system message defaults used when the CLI does not explicitly set system-message options.</param>

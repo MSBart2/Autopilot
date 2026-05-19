@@ -76,7 +76,7 @@ internal sealed record CyberpilotOptions(
             "  --command-style <auto|windows|linux>",
             "                       Preferred command syntax guidance for agents. Defaults to auto.",
             "  --capture-tool-output-artifacts",
-            "                       Persist shaped tool output as diagnostic artifacts. Defaults to off.",
+            "                       Persist detailed redacted tool output as diagnostic artifacts. Defaults to off.",
             "  --use-harness-system-message",
             "                       Alias for --system-message-mode append. Inject harness law via SDK system message instead of repeating it in the user prompt.",
             "  --system-message-mode <none|append|replace>",

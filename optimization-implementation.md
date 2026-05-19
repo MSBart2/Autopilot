@@ -294,17 +294,19 @@ Validation evidence is stable after compacting output: ad hoc PowerShell validat
 
 ## Milestone 5: Hook-based output shaping and safety
 
-- [ ] Add stage tool policy model.
-- [ ] Implement pre-tool guardrails for write restrictions, default timeouts, and allowed tools.
-- [ ] Implement post-tool redaction for secret-looking output.
-- [ ] Implement post-tool truncation/summarization for noisy output.
-- [ ] Persist raw/detailed output separately from compact model context where useful.
+- [x] Add stage tool policy model.
+- [x] Implement pre-tool guardrails for write restrictions and allowed tools; default timeout shaping remains deferred until a measured need appears.
+- [x] Implement post-tool redaction for secret-looking output.
+- [x] Implement post-tool truncation/summarization for noisy output.
+- [x] Persist raw/detailed output separately from compact model context where useful.
 - [ ] Compare token usage before/after noisy output shaping.
+
+Started with the least brittle version of hooks: post-tool output shaping rather than broader behavior policing. `StageToolPolicyHooks` now uses a small `ToolOutputShapingPolicy` that returns compact model-facing summaries for redacted or noisy tool results while optionally preserving larger redacted detail as `tool-output-*-detail` artifacts when `CaptureToolOutputArtifacts` is enabled. Existing pre-tool write guards remain in place, but M5 intentionally avoids expanding hard denial rules until metrics show a specific need.
 
 ### Success criteria
 
-- [ ] Read-only stages cannot perform broad writes.
-- [ ] Secret-looking output is redacted before model context.
+- [x] Read-only stages cannot perform broad writes.
+- [x] Secret-looking output is redacted before model context.
 - [ ] Token usage from tool output decreases or stays flat without reducing human auditability.
 
 ## Milestone 6: Per-stage model tiers and fallback

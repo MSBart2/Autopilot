@@ -215,8 +215,12 @@ public sealed class StageToolPolicyHooksTests
         });
 
         var modified = Assert.IsType<string>(output.ModifiedResult);
-        Assert.Contains("token=[REDACTED]", modified);
-        Assert.Contains("...[truncated]", modified);
+        Assert.Contains("Cyberpilot compacted this tool output", modified);
+        Assert.Contains("Redacted secrets: yes", modified);
+        Assert.Contains("Truncated for model context: yes", modified);
+        Assert.Contains("Detailed redacted artifact: not captured", modified);
+        Assert.DoesNotContain("abc123", modified);
+        Assert.True(modified.Length < secretOutput.Length);
         Assert.Contains("Enable tool output artifact capture", output.AdditionalContext);
         Assert.Empty(context.GetToolArtifacts("review"));
     }
@@ -235,9 +239,12 @@ public sealed class StageToolPolicyHooksTests
         });
 
         var modified = Assert.IsType<string>(output.ModifiedResult);
-        Assert.Contains("Full shaped output is recorded", output.AdditionalContext);
+        Assert.Contains("Detailed redacted artifact: tool-output-run_in_terminal-detail", modified);
+        Assert.Contains("Detailed redacted output is recorded", output.AdditionalContext);
         var artifact = Assert.Single(context.GetToolArtifacts("review"));
-        Assert.Equal("tool-hook-run_in_terminal", artifact.Name);
+        Assert.Equal("tool-output-run_in_terminal-detail", artifact.Name);
+        Assert.Contains("token=[REDACTED]", artifact.Value);
+        Assert.Contains("Artifact truncated: no", artifact.Value);
         Assert.DoesNotContain("abc123", artifact.Value);
     }
 

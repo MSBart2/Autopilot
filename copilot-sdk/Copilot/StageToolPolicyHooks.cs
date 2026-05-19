@@ -8,7 +8,11 @@ namespace Cyberpilot.Copilot;
 
 internal sealed partial class StageToolPolicyHooks(StageDefinition stage, PipelineExecutionContext context)
 {
-    private const int MaxToolResultLength = 4000;
+    private static readonly ToolOutputShapingPolicy DefaultOutputPolicy = new(
+        MaxModelContextLength: 1200,
+        MaxModelContextLines: 60,
+        MaxDetailedArtifactLength: 16000);
+
     private static readonly HashSet<string> WriteEnabledStages = new(StringComparer.OrdinalIgnoreCase)
     {
         "implement",
@@ -81,26 +85,36 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
     {
         ArgumentNullException.ThrowIfNull(input);
 
+        var policy = DefaultOutputPolicy;
         var raw = Serialize(input.ToolResult);
         var redacted = SecretLikeValueRegex().Replace(raw, "$1$2[REDACTED]");
-        var shaped = Truncate(redacted, MaxToolResultLength);
-        var changed = !string.Equals(raw, shaped, StringComparison.Ordinal);
+        var redactedSecrets = !string.Equals(raw, redacted, StringComparison.Ordinal);
+        var truncatedForModel = redacted.Length > policy.MaxModelContextLength;
+        var changed = redactedSecrets || truncatedForModel;
+        var artifact = context.Options.CaptureToolOutputArtifacts && !string.IsNullOrWhiteSpace(redacted)
+            ? PersistDetailedToolOutput(input.ToolName, raw.Length, redacted, redactedSecrets, policy)
+            : null;
 
-        if (context.Options.CaptureToolOutputArtifacts && !string.IsNullOrWhiteSpace(shaped))
+        if (!changed)
         {
-            var artifactName = $"tool-hook-{SanitizeName(input.ToolName)}";
-            var uri = $"cyberpilot://tool-output/{Uri.EscapeDataString(stage.Name)}/{Uri.EscapeDataString(input.ToolName)}/{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
-            context.RecordToolArtifact(stage.Name, new StageArtifact(artifactName, shaped, uri, "text/plain"));
+            return new PostToolUseHookOutput();
         }
+
+        var compactResult = BuildCompactToolResult(
+            input.ToolName,
+            raw.Length,
+            redacted,
+            redactedSecrets,
+            truncatedForModel,
+            artifact,
+            policy);
 
         return new PostToolUseHookOutput
         {
-            ModifiedResult = changed ? shaped : null,
-            AdditionalContext = changed
-                ? context.Options.CaptureToolOutputArtifacts
-                    ? "Tool output was redacted or truncated by Cyberpilot stage policy. Full shaped output is recorded as a run artifact."
-                    : "Tool output was redacted or truncated by Cyberpilot stage policy. Enable tool output artifact capture to persist shaped output for diagnostics."
-                : null,
+            ModifiedResult = compactResult,
+            AdditionalContext = artifact is not null
+                ? "Tool output was redacted or compacted by Cyberpilot stage policy. Detailed redacted output is recorded as a run artifact; use the compact excerpt for model reasoning."
+                : "Tool output was redacted or compacted by Cyberpilot stage policy. Enable tool output artifact capture to persist detailed redacted output for diagnostics.",
         };
     }
 
@@ -218,6 +232,95 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
         return string.Concat(value.AsSpan(0, maxLength), "...[truncated]");
     }
 
+    private StageArtifact PersistDetailedToolOutput(
+        string toolName,
+        int originalLength,
+        string redactedOutput,
+        bool redactedSecrets,
+        ToolOutputShapingPolicy policy)
+    {
+        var artifactName = $"tool-output-{SanitizeName(toolName)}-detail";
+        var uri = $"cyberpilot://tool-output/{Uri.EscapeDataString(stage.Name)}/{Uri.EscapeDataString(toolName)}/{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+        var artifactValue = BuildDetailedArtifactValue(toolName, originalLength, redactedOutput, redactedSecrets, policy);
+        var artifact = new StageArtifact(artifactName, artifactValue, uri, "text/plain");
+        context.RecordToolArtifact(stage.Name, artifact);
+        return artifact;
+    }
+
+    private string BuildCompactToolResult(
+        string toolName,
+        int originalLength,
+        string redactedOutput,
+        bool redactedSecrets,
+        bool truncatedForModel,
+        StageArtifact? artifact,
+        ToolOutputShapingPolicy policy)
+    {
+        var excerpt = Tail(redactedOutput, policy.MaxModelContextLines);
+        if (excerpt.Length > policy.MaxModelContextLength)
+        {
+            excerpt = $"...[leading output omitted]{Environment.NewLine}{TailChars(excerpt, policy.MaxModelContextLength)}";
+        }
+
+        var artifactReference = artifact is null
+            ? "not captured"
+            : $"{artifact.Name} ({artifact.Uri})";
+
+        return string.Join(Environment.NewLine, [
+            "Cyberpilot compacted this tool output for model context.",
+            $"Stage: {stage.Name}",
+            $"Tool: {toolName}",
+            $"Original characters: {originalLength}",
+            $"Redacted secrets: {FormatBool(redactedSecrets)}",
+            $"Truncated for model context: {FormatBool(truncatedForModel)}",
+            $"Detailed redacted artifact: {artifactReference}",
+            "",
+            "Output excerpt (tail):",
+            excerpt,
+        ]);
+    }
+
+    private static string BuildDetailedArtifactValue(
+        string toolName,
+        int originalLength,
+        string redactedOutput,
+        bool redactedSecrets,
+        ToolOutputShapingPolicy policy)
+    {
+        var artifactTruncated = redactedOutput.Length > policy.MaxDetailedArtifactLength;
+        var output = artifactTruncated
+            ? string.Concat(redactedOutput.AsSpan(0, policy.MaxDetailedArtifactLength), "...[detailed artifact truncated]")
+            : redactedOutput;
+
+        return string.Join(Environment.NewLine, [
+            $"Tool: {toolName}",
+            $"Original characters: {originalLength}",
+            $"Redacted characters: {redactedOutput.Length}",
+            $"Redacted secrets: {FormatBool(redactedSecrets)}",
+            $"Artifact truncated: {FormatBool(artifactTruncated)}",
+            "",
+            output,
+        ]);
+    }
+
+    private static string Tail(string value, int maxLines)
+    {
+        var lines = value.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        return string.Join(Environment.NewLine, lines.Skip(Math.Max(0, lines.Length - maxLines)));
+    }
+
+    private static string TailChars(string value, int maxLength)
+    {
+        if (value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return value[^maxLength..];
+    }
+
+    private static string FormatBool(bool value) => value ? "yes" : "no";
+
     private static string SanitizeName(string value)
     {
         var sanitized = ToolNameSafeCharactersRegex().Replace(value, "-").Trim('-');
@@ -244,4 +347,9 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
 
     [GeneratedRegex("[^a-zA-Z0-9_-]+", RegexOptions.CultureInvariant)]
     private static partial Regex ToolNameSafeCharactersRegex();
+
+    private sealed record ToolOutputShapingPolicy(
+        int MaxModelContextLength,
+        int MaxModelContextLines,
+        int MaxDetailedArtifactLength);
 }
