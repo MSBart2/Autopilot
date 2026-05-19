@@ -215,96 +215,12 @@ internal sealed class PromptBuilder(
 		{
 			"",
 			"## Harness Context",
-			$"- Issue: #{context.IssueNumber}",
-			$"- Repository: {ValueOrPending(context.Repository)}",
-			$"- Repository root: {context.RepoRoot}",
-			$"- Pipeline definition: {context.Definition.Name} v{context.Definition.Version.Value}",
-			$"- Current stage: {stageName}",
+			"```json",
+			context.CreateStageContext(stageName).ToCompactJson(),
+			"```",
 		};
-
-		if (ShouldIncludeBranch(stageName))
-		{
-			lines.Add($"- Head branch: {ValueOrPending(context.HeadBranch)}");
-		}
-
-		if (ShouldIncludePullRequest(stageName))
-		{
-			lines.Add($"- Pull request: {FormatPullRequest(context)}");
-		}
-
-		var priorStages = FilterPriorStages(stageName, context.StageHistory);
-		if (priorStages.Count > 0)
-		{
-			lines.Add("- Prior stage summaries:");
-			foreach (var priorStage in priorStages)
-			{
-				lines.Add($"  - {priorStage.StageName}: {priorStage.Status} / {priorStage.Decision}{FormatError(priorStage.Error)}");
-				foreach (var artifact in priorStage.Artifacts.Take(3))
-				{
-					lines.Add($"    - artifact: {artifact}");
-				}
-				foreach (var evidence in priorStage.Evidence.Take(2))
-				{
-					lines.Add($"    - evidence: {evidence}");
-				}
-			}
-		}
 
 		return string.Join(Environment.NewLine, lines);
-	}
-
-	private static bool ShouldIncludeBranch(string stageName)
-	{
-		return !stageName.Equals("triage", StringComparison.OrdinalIgnoreCase);
-	}
-
-	private static bool ShouldIncludePullRequest(string stageName)
-	{
-		return stageName.Equals("review", StringComparison.OrdinalIgnoreCase)
-			|| stageName.Equals("docs", StringComparison.OrdinalIgnoreCase)
-			|| stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase);
-	}
-
-	private static IReadOnlyList<StageExecutionSummary> FilterPriorStages(string stageName, IReadOnlyList<StageExecutionSummary> summaries)
-	{
-		var includedStages = stageName.ToLowerInvariant() switch
-		{
-			"plan" => new[] { "triage" },
-			"implement" => ["triage", "plan"],
-			"review" => ["plan", "implement"],
-			"docs" => ["implement", "review"],
-			"deliver" => ["review", "docs"],
-			_ => [],
-		};
-
-		return summaries
-			.Where(summary => includedStages.Contains(summary.StageName, StringComparer.OrdinalIgnoreCase))
-			.ToArray();
-	}
-
-	private static string FormatPullRequest(PipelineExecutionContext context)
-	{
-		if (!string.IsNullOrWhiteSpace(context.PrUrl) && context.PrNumber.HasValue)
-		{
-			return $"#{context.PrNumber.Value} at {context.PrUrl}";
-		}
-
-		if (!string.IsNullOrWhiteSpace(context.PrUrl))
-		{
-			return context.PrUrl;
-		}
-
-		return "not known yet";
-	}
-
-	private static string FormatError(string? error)
-	{
-		return string.IsNullOrWhiteSpace(error) ? string.Empty : $" ({error})";
-	}
-
-	private static string ValueOrPending(string? value)
-	{
-		return string.IsNullOrWhiteSpace(value) ? "not known yet" : value;
 	}
 
 	private static string BuildRepositoryProfileContext(string? profileSummary)

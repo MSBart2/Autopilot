@@ -146,6 +146,7 @@ public partial class PipelinesController : Controller
         string? token,
         string? retryReason = null,
         string? prHeadBranch = null,
+        int? prNumber = null,
         IReadOnlyDictionary<string, string>? stageModelOverrides = null,
         IReadOnlyDictionary<string, string>? stageModelFallbacks = null)
     {
@@ -168,6 +169,7 @@ public partial class PipelinesController : Controller
             System.IO.File.Exists(_pipelineAdminStore.DefinitionFilePath) ? _pipelineAdminStore.DefinitionFilePath : null,
             string.IsNullOrWhiteSpace(retryReason) ? null : retryReason,
             string.IsNullOrWhiteSpace(prHeadBranch) ? null : prHeadBranch,
+            prNumber,
             stageModelOverrides,
             stageModelFallbacks));
     }

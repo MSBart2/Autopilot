@@ -12,9 +12,15 @@ internal sealed class PipelineExecutionContext(CyberpilotOptions options, Pipeli
 
     public string FinalStage { get; set; } = "not-started";
 
+    public string? RunId => Options.RunId;
+
     public string? BranchName { get; set; }
 
     public string? PrUrl { get; set; }
+
+    public string? BaseBranch { get; set; }
+
+    public int? KnownPullRequestNumber { get; set; }
 
     public List<StageResult> StageResults { get; } = [];
 
@@ -29,6 +35,8 @@ internal sealed class PipelineExecutionContext(CyberpilotOptions options, Pipeli
     public string? HeadBranch => string.IsNullOrWhiteSpace(Options.PrHeadBranch) ? BranchName : Options.PrHeadBranch;
 
     public int? PrNumber => TryParsePullRequestNumber(PrUrl);
+
+    public int? PullRequestNumber => KnownPullRequestNumber ?? PrNumber ?? Options.PrNumber;
 
     public void RecordToolArtifact(string stageName, StageArtifact artifact)
     {
@@ -54,6 +62,11 @@ internal sealed class PipelineExecutionContext(CyberpilotOptions options, Pipeli
     {
         StageResults.Add(result);
         StageHistory.Add(StageExecutionSummary.FromResult(stageName, result));
+    }
+
+    internal StageContextSnapshot CreateStageContext(string stageName)
+    {
+        return StageContextSnapshot.Create(stageName, this);
     }
 
     private static int? TryParsePullRequestNumber(string? prUrl)

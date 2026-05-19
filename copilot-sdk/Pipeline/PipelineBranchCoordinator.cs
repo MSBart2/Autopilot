@@ -4,7 +4,7 @@ using Cyberpilot.Options;
 
 namespace Cyberpilot.Pipeline;
 
-internal sealed record BranchRoutingResult(PipelineStart Start, string? BranchName, string? PrUrl);
+internal sealed record BranchRoutingResult(PipelineStart Start, string? BranchName, string? PrUrl, string? BaseBranch = null, int? PrNumber = null);
 
 internal sealed class PipelineBranchCoordinator(
     CyberpilotOptions options,
@@ -55,7 +55,7 @@ internal sealed class PipelineBranchCoordinator(
             progressSink.OnDispatch(DispatchType.Routing, $"Existing PR #{existingPr.Number} found for issue #{options.IssueNumber} — fast-forwarding to Review");
             console.WriteSuccess($"Found open PR #{existingPr.Number} ({existingPr.HeadBranch}). Skipping triage/plan/implement.");
             var review = definition.Stage("review");
-            return new BranchRoutingResult(new PipelineStart(definition.IndexOf(review.Name), review, true), existingPr.HeadBranch, existingPr.Url);
+            return new BranchRoutingResult(new PipelineStart(definition.IndexOf(review.Name), review, true), existingPr.HeadBranch, existingPr.Url, existingPr.BaseBranch, existingPr.Number);
         }
         catch (Exception ex)
         {

@@ -29,9 +29,10 @@ public sealed class PipelineContextToolProviderTests
         Assert.Equal(42, response.Data.IssueNumber);
         Assert.Equal("owner/repo", response.Data.Repository);
         Assert.Equal("feature/issue-42-review", response.Data.BranchName);
-        Assert.Equal(17, response.Data.PullRequestNumber);
+        Assert.Equal(17, response.Data.PullRequest?.Number);
         Assert.Equal("review", response.Data.CurrentStage);
-        var history = Assert.Single(response.Data.StageHistory);
+        Assert.Contains("plan:approved", response.Data.KnownApprovals);
+        var history = Assert.Single(response.Data.PriorStages);
         Assert.Equal("plan", history.StageName);
         Assert.Contains("plan-comment: Plan ready.", history.Artifacts);
     }
@@ -69,6 +70,7 @@ public sealed class PipelineContextToolProviderTests
         Assert.Equal("Improve review flow", response.Data.Title);
         Assert.Equal("OPEN", response.Data.State);
         Assert.Equal("alice", response.Data.AuthorLogin);
+        Assert.Equal("main", context.BaseBranch);
         Assert.Equal("sdk/review", Assert.Single(response.Data.Labels));
         Assert.NotNull(response.DetailedOutput);
         Assert.Equal("tool-output-get_pr_details", response.DetailedOutput.ArtifactName);
@@ -89,6 +91,21 @@ public sealed class PipelineContextToolProviderTests
         Assert.NotNull(response.Error);
         Assert.Equal("missing_pr", response.Error.Code);
         Assert.Contains("No pull request is known", response.Error.Message);
+    }
+
+    [Fact]
+    public async Task GetPullRequestDetailsAsync_WithExplicitPrNumberDoesNotUseIssueNumber()
+    {
+        var context = CreateContext(prHeadBranch: "feature/issue-34", prNumber: 46);
+        var cli = new FakeGitHubCli("""{"number":46}""");
+        var provider = new PipelineContextToolProvider(context, Stage("review"), cli);
+
+        var response = await provider.GetPullRequestDetailsAsync();
+
+        Assert.True(response.Success);
+        Assert.Contains("46", cli.LastArgs!);
+        Assert.DoesNotContain("42", cli.LastArgs!);
+        Assert.Equal(46, context.CreateStageContext("review").PullRequest?.Number);
     }
 
     [Fact]
@@ -140,7 +157,7 @@ public sealed class PipelineContextToolProviderTests
         Assert.Empty(context.GetToolArtifacts("review"));
     }
 
-    private static PipelineExecutionContext CreateContext(bool captureToolOutputArtifacts = false)
+    private static PipelineExecutionContext CreateContext(bool captureToolOutputArtifacts = false, string? prHeadBranch = null, int? prNumber = null)
     {
         return new PipelineExecutionContext(
             new CyberpilotOptions(
@@ -158,6 +175,8 @@ public sealed class PipelineContextToolProviderTests
                 null,
                 null,
                 false,
+                PrHeadBranch: prHeadBranch,
+                PrNumber: prNumber,
                 RuntimePreferences: new CyberpilotRuntimePreferences(CaptureToolOutputArtifacts: captureToolOutputArtifacts)),
             DefaultPipelineDefinitionProvider.Definition);
     }

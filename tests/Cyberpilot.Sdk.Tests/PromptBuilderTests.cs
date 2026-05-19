@@ -196,13 +196,14 @@ public sealed class PromptBuilderTests
             context);
 
         Assert.Contains("## Harness Context", prompt.UserMessage);
-        Assert.Contains("- Issue: #42", prompt.UserMessage);
-        Assert.Contains("- Repository: owner/repo", prompt.UserMessage);
-        Assert.Contains("- Head branch: cyberpilot/issue-42", prompt.UserMessage);
-        Assert.Contains("- Pull request: #123 at https://github.com/owner/repo/pull/123", prompt.UserMessage);
-        Assert.Contains("- plan: GO / approved", prompt.UserMessage);
-        Assert.Contains("artifact: pull-request: PR #123 is ready.", prompt.UserMessage);
-        Assert.DoesNotContain("triage:", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"issue_number\":42", prompt.UserMessage);
+        Assert.Contains("\"repository\":\"owner/repo\"", prompt.UserMessage);
+        Assert.Contains("\"head_branch\":\"cyberpilot/issue-42\"", prompt.UserMessage);
+        Assert.Contains("\"pull_request\":{\"number\":123", prompt.UserMessage);
+        Assert.Contains("\"stage_name\":\"plan\"", prompt.UserMessage);
+        Assert.Contains("\"pull-request: PR #123 is ready.\"", prompt.UserMessage);
+        Assert.DoesNotContain("\"stage_name\":\"triage\"", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"known_approvals\":[\"plan:approved\",\"implement:approved\"]", prompt.UserMessage);
         Assert.Contains("structured artifacts as the primary workflow state", prompt.UserMessage);
     }
 
@@ -226,8 +227,9 @@ public sealed class PromptBuilderTests
             context);
 
         Assert.Contains("## Harness Context", prompt.UserMessage);
-        Assert.DoesNotContain("Head branch:", prompt.UserMessage);
-        Assert.DoesNotContain("Pull request:", prompt.UserMessage);
+        Assert.Contains("\"current_stage\":\"triage\"", prompt.UserMessage);
+        Assert.DoesNotContain("\"head_branch\"", prompt.UserMessage);
+        Assert.DoesNotContain("\"pull_request\"", prompt.UserMessage);
     }
 
     private static PolicyProfile StandardPolicy() => new("standard", PolicyStrictness.Standard);

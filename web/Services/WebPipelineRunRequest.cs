@@ -20,6 +20,7 @@ namespace Cyberpilot.Web.Services;
 /// <param name="ContractVersion">The stage result contract version selected for this run.</param>
 /// <param name="PipelineDefinitionFilePath">The optional JSON pipeline definition file path.</param>
 /// <param name="RetryReason">The operator-provided retry reason for the next matching start stage.</param>
+/// <param name="PrNumber">The known pull request number for PR-first review runs.</param>
 /// <param name="StageModelOverrides">Per-stage model overrides for this queued run.</param>
 /// <param name="StageModelFallbacks">Per-stage fallback models for this queued run.</param>
 public sealed record WebPipelineRunRequest(
@@ -41,5 +42,6 @@ public sealed record WebPipelineRunRequest(
     string? PipelineDefinitionFilePath = null,
     string? RetryReason = null,
     string? PrHeadBranch = null,
+    int? PrNumber = null,
     IReadOnlyDictionary<string, string>? StageModelOverrides = null,
     IReadOnlyDictionary<string, string>? StageModelFallbacks = null);

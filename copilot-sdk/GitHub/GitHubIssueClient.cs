@@ -170,7 +170,7 @@ internal sealed class GitHubIssueClient(IGitHubCli cli) : IGitHubIssueClient
     {
         // Search for open PRs whose title or body mentions the issue number
         var result = await cli.RunAsync(
-            ["pr", "list", "--state", "open", "--search", $"issue {issueNumber}", "--json", "number,url,headRefName,state", "--limit", "10"],
+            ["pr", "list", "--state", "open", "--search", $"issue {issueNumber}", "--json", "number,url,headRefName,baseRefName,state", "--limit", "10"],
             allowFailure: true, cancellationToken);
         if (string.IsNullOrWhiteSpace(result)) return null;
 
@@ -182,8 +182,9 @@ internal sealed class GitHubIssueClient(IGitHubCli cli) : IGitHubIssueClient
             {
                 var number = pr.TryGetProperty("number", out var n) ? n.GetInt32() : 0;
                 var url = pr.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
+                var baseRef = pr.TryGetProperty("baseRefName", out var b) ? b.GetString() : null;
                 var state = pr.TryGetProperty("state", out var s) ? s.GetString() ?? "OPEN" : "OPEN";
-                return new GitHubPullRequestInfo(number, url, headRef, state);
+                return new GitHubPullRequestInfo(number, url, headRef, baseRef, state);
             }
         }
 

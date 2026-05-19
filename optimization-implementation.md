@@ -196,16 +196,16 @@ Implementation note: stage-aware defaults now allow global `replace-lean` while 
 
 ## Milestone 3: Harness-owned structured context
 
-- [ ] Define a typed stage context model.
-- [ ] Populate issue number, PR number, PR URL, branch, base branch, repository, run ID, prior artifacts, and known approvals.
-- [ ] Add stage-specific context pruning rules.
-- [ ] Render structured context in a compact machine-readable block.
-- [ ] Remove prompt instructions that ask agents to rediscover known routing state.
+- [x] Define a typed stage context model.
+- [x] Populate issue number, PR number, PR URL, branch, base branch, repository, run ID, prior artifacts, and known approvals.
+- [x] Add stage-specific context pruning rules.
+- [x] Render structured context in a compact machine-readable block.
+- [x] Remove prompt instructions that ask agents to rediscover known routing state.
 - [ ] Run before/after comparison on full issue and PR-first review scenarios.
 
 ### Success criteria
 
-- [ ] Review/docs/deliver receive PR-first context when known.
+- [x] Review/docs/deliver receive PR-first context when known.
 - [ ] Prompt size decreases or stays flat while useful context improves.
 - [ ] Discovery-related tool calls decrease.
 

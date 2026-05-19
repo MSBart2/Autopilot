@@ -156,12 +156,14 @@ public sealed class CyberpilotPipelineService(
                 TargetRepositoryProfileSummary: profile.ToSummary(),
                 PipelineDefinitionFilePath: request.PipelineDefinitionFilePath,
                 PrHeadBranch: request.PrHeadBranch,
+                PrNumber: request.PrNumber,
                 StageModelOverrides: request.StageModelOverrides,
                 StageModelFallbacks: request.StageModelFallbacks,
                 RuntimePreferences: new CyberpilotRuntimePreferences(
                     options.Value.CommandStyle,
                     options.Value.CaptureToolOutputArtifacts,
-                    options.Value.SystemMessageMode)), sink, cancellationToken);
+                    options.Value.SystemMessageMode),
+                RunId: run.Id), sink, cancellationToken);
 
             run.Status = result.Status;
             run.BranchName = result.BranchName;

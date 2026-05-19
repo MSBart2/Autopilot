@@ -325,7 +325,7 @@ public partial class PipelinesController
         _dbContext.PipelineRuns.Add(run);
         await _dbContext.SaveChangesAsync();
 
-        await EnqueueRunAsync(run, repoRoot, token, prHeadBranch: request.HeadBranch);
+        await EnqueueRunAsync(run, repoRoot, token, prHeadBranch: request.HeadBranch, prNumber: prNumber);
 
         TempData["PipelineNotice"] = $"Review → Docs → Deliver started for PR #{prNumber} on branch {request.HeadBranch}.";
         return RedirectToAction(nameof(Details), new { id = run.Id });

@@ -55,13 +55,14 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
 
             var labels = new SdkLabelService(issueClient, output);
             var run = dbContext is null ? null : await CreateRunAsync(dbContext, options, cancellationToken);
-            var seededStageResults = await LoadSeededStageResultsAsync(options, dbContext, cancellationToken);
+            var runOptions = run is null ? options : options with { RunId = run.Id };
+            var seededStageResults = await LoadSeededStageResultsAsync(runOptions, dbContext, cancellationToken);
             var branchProvisioner = new BranchProvisioner();
-            var progressSink = CreateProgressSink(dbContext, run, options);
-            var promptBuilder = new PromptBuilder(options.RepoRoot, options.AgentPromptRoot ?? options.RepoRoot, options.IssueNumber, runtimePreferences: options.RuntimePreferences);
-            var stageRunner = new CopilotStageRunner(options.RepoRoot, progressSink, error);
+            var progressSink = CreateProgressSink(dbContext, run, runOptions);
+            var promptBuilder = new PromptBuilder(runOptions.RepoRoot, runOptions.AgentPromptRoot ?? runOptions.RepoRoot, runOptions.IssueNumber, runtimePreferences: runOptions.RuntimePreferences);
+            var stageRunner = new CopilotStageRunner(runOptions.RepoRoot, progressSink, error);
             var modelChecker = new CopilotModelAvailabilityChecker();
-            var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output, seededStageResults);
+            var runner = new SdkCyberpilotRunner(runOptions, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output, seededStageResults);
             var exitCode = await runner.RunAsync(cancellationToken);
             if (dbContext is not null && run is not null)
             {
@@ -141,13 +142,14 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             var labels = new SdkLabelService(issueClient, output);
             var variant = $"{variantBase}-iter-{iteration}";
             var run = dbContext is null ? null : await CreateRunAsync(dbContext, options, cancellationToken, variant, iteration, repeatGroup);
-            var seededStageResults = await LoadSeededStageResultsAsync(options, dbContext, cancellationToken);
+            var runOptions = run is null ? options : options with { RunId = run.Id };
+            var seededStageResults = await LoadSeededStageResultsAsync(runOptions, dbContext, cancellationToken);
             var branchProvisioner = new BranchProvisioner();
-            var progressSink = CreateProgressSink(dbContext, run, options);
-            var promptBuilder = new PromptBuilder(options.RepoRoot, options.AgentPromptRoot ?? options.RepoRoot, options.IssueNumber, runtimePreferences: options.RuntimePreferences);
-            var stageRunner = new CopilotStageRunner(options.RepoRoot, progressSink, error);
+            var progressSink = CreateProgressSink(dbContext, run, runOptions);
+            var promptBuilder = new PromptBuilder(runOptions.RepoRoot, runOptions.AgentPromptRoot ?? runOptions.RepoRoot, runOptions.IssueNumber, runtimePreferences: runOptions.RuntimePreferences);
+            var stageRunner = new CopilotStageRunner(runOptions.RepoRoot, progressSink, error);
             var modelChecker = new CopilotModelAvailabilityChecker();
-            var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output, seededStageResults);
+            var runner = new SdkCyberpilotRunner(runOptions, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output, seededStageResults);
             var exitCode = await runner.RunAsync(cancellationToken);
 
             if (dbContext is not null && run is not null)

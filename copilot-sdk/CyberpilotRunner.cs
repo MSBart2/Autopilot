@@ -72,10 +72,12 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
             request.ShouldPauseDecisionAsync,
             request.PipelineDefinitionFilePath,
             request.PrHeadBranch,
+            request.PrNumber,
             request.AgentPromptRoot,
             request.StageModelOverrides,
             request.StageModelFallbacks,
-            RuntimePreferences: request.RuntimePreferences);
+            RuntimePreferences: request.RuntimePreferences,
+            RunId: request.RunId);
 
         var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output);
         var exitCode = await runner.RunAsync(cancellationToken);

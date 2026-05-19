@@ -178,8 +178,9 @@ public sealed class GitHubApiIssueClient : IGitHubIssueClient
             {
                 var number = pr.TryGetProperty("number", out var n) ? n.GetInt32() : 0;
                 var url = pr.TryGetProperty("html_url", out var u) ? u.GetString() ?? "" : "";
+                var baseRef = pr.TryGetProperty("base", out var b) && b.TryGetProperty("ref", out var br) ? br.GetString() : null;
                 var state = pr.TryGetProperty("state", out var s) ? s.GetString() ?? "open" : "open";
-                return new GitHubPullRequestInfo(number, url, headRef, state);
+                return new GitHubPullRequestInfo(number, url, headRef, baseRef, state);
             }
         }
 

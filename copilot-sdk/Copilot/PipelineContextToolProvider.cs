@@ -7,8 +7,6 @@ namespace Cyberpilot.Copilot;
 
 internal sealed class PipelineContextToolProvider(PipelineExecutionContext context, StageDefinition stage, IGitHubCli gitHubCli)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = false };
-
     public ICollection<AIFunction> CreateTools()
     {
         return
@@ -28,27 +26,17 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
         ];
     }
 
-    public Task<PipelineToolResponse<PipelineContextToolResult>> GetPipelineContextAsync(CancellationToken cancellationToken = default)
+    public Task<PipelineToolResponse<StageContextSnapshot>> GetPipelineContextAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var result = new PipelineContextToolResult(
-            context.IssueNumber,
-            context.Repository,
-            context.RepoRoot,
-            context.BranchName,
-            context.HeadBranch,
-            context.PrNumber,
-            context.PrUrl,
-            stage.Name,
-            context.FinalStage,
-            context.StageHistory.Select(StageHistoryToolItem.FromSummary).ToArray());
+        var result = context.CreateStageContext(stage.Name);
 
-        return Task.FromResult(PipelineToolResponse<PipelineContextToolResult>.Ok(result));
+        return Task.FromResult(PipelineToolResponse<StageContextSnapshot>.Ok(result));
     }
 
     public async Task<PipelineToolResponse<PullRequestDetailsToolResult>> GetPullRequestDetailsAsync(CancellationToken cancellationToken = default)
     {
-        var prNumber = context.PrNumber;
+        var prNumber = context.PullRequestNumber;
         if (prNumber is null or <= 0)
         {
             return PipelineToolResponse<PullRequestDetailsToolResult>.Fail("missing_pr", "No pull request is known for this run. Create or link a PR before requesting PR details.");
@@ -77,6 +65,8 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
                 ReadInt(root, "additions"),
                 ReadInt(root, "deletions"),
                 ReadLabels(root));
+            context.PrUrl = result.Url ?? context.PrUrl;
+            context.BaseBranch = result.BaseRefName ?? context.BaseBranch;
             var reference = PersistToolOutput("get_pr_details", raw, "application/json");
             return PipelineToolResponse<PullRequestDetailsToolResult>.Ok(result, reference);
         }
@@ -88,7 +78,7 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
 
     public async Task<PipelineToolResponse<PullRequestDiffSummaryToolResult>> GetPullRequestDiffSummaryAsync(int maxFiles = 40, CancellationToken cancellationToken = default)
     {
-        var prNumber = context.PrNumber;
+        var prNumber = context.PullRequestNumber;
         if (prNumber is null or <= 0)
         {
             return PipelineToolResponse<PullRequestDiffSummaryToolResult>.Fail("missing_pr", "No pull request is known for this run. Create or link a PR before requesting a diff summary.");
@@ -208,26 +198,6 @@ internal sealed record PipelineToolResponse<T>(bool Success, T? Data, PipelineTo
 internal sealed record PipelineToolError(string Code, string Message);
 
 internal sealed record ToolOutputReference(string ArtifactName, string Uri);
-
-internal sealed record PipelineContextToolResult(
-    int IssueNumber,
-    string? Repository,
-    string RepoRoot,
-    string? BranchName,
-    string? HeadBranch,
-    int? PullRequestNumber,
-    string? PullRequestUrl,
-    string CurrentStage,
-    string FinalStage,
-    IReadOnlyList<StageHistoryToolItem> StageHistory);
-
-internal sealed record StageHistoryToolItem(string StageName, string Status, string Decision, string? Error, IReadOnlyList<string> Artifacts, IReadOnlyList<string> Evidence)
-{
-    public static StageHistoryToolItem FromSummary(StageExecutionSummary summary)
-    {
-        return new StageHistoryToolItem(summary.StageName, summary.Status, summary.Decision, summary.Error, summary.Artifacts, summary.Evidence);
-    }
-}
 
 internal sealed record PullRequestDetailsToolResult(
     int Number,

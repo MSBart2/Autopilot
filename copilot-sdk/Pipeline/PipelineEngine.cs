@@ -37,6 +37,8 @@ internal sealed class PipelineEngine(
         start = routing.Start;
         context.BranchName = routing.BranchName;
         context.PrUrl = routing.PrUrl;
+        context.BaseBranch = routing.BaseBranch;
+        context.KnownPullRequestNumber = routing.PrNumber;
 
         if (ShouldRun(start, "triage", out _))
         {
@@ -265,7 +267,7 @@ internal sealed class PipelineEngine(
             await labels.SetStageAsync(Options.IssueNumber, reviewStage.Label, cancellationToken);
             var reviewPrompt = string.IsNullOrEmpty(Options.PrHeadBranch)
                 ? $"Review the linked PR for issue #{Options.IssueNumber}. This is review cycle {cycle} of 2."
-                : $"Review PR #{Options.IssueNumber} (branch: {Options.PrHeadBranch}). Go directly to the PR — no need to look up an issue. This is review cycle {cycle} of 2.";
+                : $"Review PR #{context.PullRequestNumber ?? Options.IssueNumber} (branch: {Options.PrHeadBranch}). Go directly to the PR — no need to look up an issue. This is review cycle {cycle} of 2.";
             review = await RunStageAsync(reviewStage, reviewPrompt, cancellationToken);
 
             if (!StageStatus.IsGo(review))

@@ -25,6 +25,7 @@ internal sealed record CyberpilotOptions(
     Func<PipelinePauseContext, CancellationToken, Task<PipelinePauseDecision>>? ShouldPauseDecisionAsync = null,
     string? PipelineDefinitionFilePath = null,
     string? PrHeadBranch = null,
+    int? PrNumber = null,
     string? AgentPromptRoot = null,
     IReadOnlyDictionary<string, string>? StageModelOverrides = null,
     IReadOnlyDictionary<string, string>? StageModelFallbacks = null,
@@ -34,7 +35,8 @@ internal sealed record CyberpilotOptions(
     string? OnlyStage = null,
     int BenchmarkRepeat = 1,
     string? ExperimentVariant = null,
-    IReadOnlyDictionary<string, string>? SeedStageResultVariants = null)
+    IReadOnlyDictionary<string, string>? SeedStageResultVariants = null,
+    string? RunId = null)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);
@@ -84,6 +86,8 @@ internal sealed record CyberpilotOptions(
             "  --only-stage <name>  Run only this stage then stop (e.g. triage, plan, implement). Implies --start-stage.",
             "  --pr-head-branch <branch>",
             "                       Known pull request head branch for PR-first review runs.",
+            "  --pr-number <number>",
+            "                       Known pull request number for PR-first review runs.",
             "  --repeat <n>         Run the stage N times, resetting between iterations. Use with --only-stage for benchmarking.",
             "  --variant <name>     Tag these runs in the database with an experiment variant name.",
             "  --seed-stage-result <stage>=<variant>",
@@ -128,6 +132,7 @@ internal sealed record CyberpilotOptions(
             PolicyProfileName: parsed.PolicyProfileName,
             PipelineDefinitionFilePath: parsed.PipelineDefinitionFilePath,
             PrHeadBranch: string.IsNullOrWhiteSpace(parsed.PrHeadBranch) ? null : parsed.PrHeadBranch,
+            PrNumber: parsed.PrNumber,
             AgentPromptRoot: string.IsNullOrWhiteSpace(parsed.AgentPromptRoot) ? null : Path.GetFullPath(parsed.AgentPromptRoot),
             StageModelOverrides: parsed.StageModelOverrides,
             StageModelFallbacks: parsed.StageModelFallbacks,
@@ -160,6 +165,7 @@ internal sealed record CyberpilotOptions(
         string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
         string? PipelineDefinitionFilePath = null,
         string? PrHeadBranch = null,
+        int? PrNumber = null,
         string? AgentPromptRoot = null,
         IReadOnlyDictionary<string, string>? StageModelOverrides = null,
         IReadOnlyDictionary<string, string>? StageModelFallbacks = null,
@@ -240,6 +246,9 @@ internal sealed record CyberpilotOptions(
                     break;
                 case "--pr-head-branch":
                     parsed = parsed with { PrHeadBranch = RequireNonEmptyValue(args, ref index, arg) };
+                    break;
+                case "--pr-number":
+                    parsed = parsed with { PrNumber = ParsePositiveInt(RequireValue(args, ref index, arg), arg) };
                     break;
                 case "--repeat":
                     parsed = parsed with { BenchmarkRepeat = ParsePositiveInt(RequireValue(args, ref index, arg), arg) };
