@@ -139,6 +139,19 @@ public sealed class CyberpilotOptionsTests
     }
 
     [Fact]
+    public void Parse_ParallelReviewDimensions_SetsRuntimePreference()
+    {
+        var options = CyberpilotOptions.Parse([
+            "42",
+            "--repo-root",
+            RepoRoot,
+            "--parallel-review-dimensions",
+        ]);
+
+        Assert.True(options.ParallelReviewDimensions);
+    }
+
+    [Fact]
     public void Parse_DefaultPipelineDefinition_UsesDefaultDefinitionMetadata()
     {
         var options = CyberpilotOptions.Parse(["--check-model", "--repo-root", RepoRoot]);

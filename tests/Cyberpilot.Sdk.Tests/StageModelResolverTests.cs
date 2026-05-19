@@ -171,6 +171,32 @@ public sealed class StageModelResolverTests
         Assert.Equal("claude-opus-4.6", selection.SelectedModel);
     }
 
+    [Fact]
+    public async Task ResolveAsync_ForReviewDimension_UsesReviewTier()
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-sonnet-4.6" });
+        var resolver = new StageModelResolver(CreateOptions(), checker);
+
+        var selection = await resolver.ResolveAsync(Stage("review:security"), null, CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("claude-sonnet-4.6", selection.ConfiguredModel);
+        Assert.Equal("claude-sonnet-4.6", selection.SelectedModel);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_ForReviewDimension_UsesReviewStageOverride()
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "gpt-4.1" });
+        var resolver = new StageModelResolver(CreateOptions(stageModels: new Dictionary<string, string> { ["review"] = "gpt-4.1" }), checker);
+
+        var selection = await resolver.ResolveAsync(Stage("review:security"), null, CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("gpt-4.1", selection.ConfiguredModel);
+        Assert.Equal("gpt-4.1", selection.SelectedModel);
+    }
+
     private static CyberpilotOptions CreateOptions(
         string model = "claude-sonnet-4.6",
         IReadOnlyDictionary<string, string>? stageModels = null,

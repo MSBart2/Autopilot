@@ -75,22 +75,23 @@ public sealed class SignalRProgressSink(
     public void OnStageCompleted(StageDefinition stage, StageResult result)
     {
         FlushBufferAsync().GetAwaiter().GetResult();
-        if (currentLog is not null)
+        var stageLog = ResolveStageLog(stage);
+        if (stageLog is not null)
         {
-            currentLog.Status = result.Status;
-            currentLog.CompletedAt = DateTime.UtcNow;
-            currentLog.InputTokens = result.InputTokens;
-            currentLog.OutputTokens = result.OutputTokens;
-            ApplyMetrics(currentLog, result, model);
-            ApplySessionMetadata(currentLog, result, currentLog.CompletedAt.Value);
-            currentLog.EstimatedCostUsd = ModelPricingService.Estimate(ResolveCostModel(result, currentLog, model), result.InputTokens, result.OutputTokens);
-            currentLog.StageResultJson = JsonSerializer.Serialize(result);
-            currentLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
+            stageLog.Status = result.Status;
+            stageLog.CompletedAt = DateTime.UtcNow;
+            stageLog.InputTokens = result.InputTokens;
+            stageLog.OutputTokens = result.OutputTokens;
+            ApplyMetrics(stageLog, result, model);
+            ApplySessionMetadata(stageLog, result, stageLog.CompletedAt.Value);
+            stageLog.EstimatedCostUsd = ModelPricingService.Estimate(ResolveCostModel(result, stageLog, model), result.InputTokens, result.OutputTokens);
+            stageLog.StageResultJson = JsonSerializer.Serialize(result);
+            stageLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
                 ? PipelineDefinitionDefaults.ContractVersion
                 : result.ContractVersion;
-            dbContext.PipelineArtifacts.AddRange(PipelineArtifact.FromStageResult(runId, stage.Name, currentLog, result));
-            dbContext.PipelineEvidence.AddRange(PipelineEvidence.FromStageResult(runId, stage.Name, currentLog, result));
-            dbContext.PipelineToolFailures.AddRange(PipelineToolFailure.FromStageResult(runId, stage.Name, currentLog, result));
+            dbContext.PipelineArtifacts.AddRange(PipelineArtifact.FromStageResult(runId, stage.Name, stageLog, result));
+            dbContext.PipelineEvidence.AddRange(PipelineEvidence.FromStageResult(runId, stage.Name, stageLog, result));
+            dbContext.PipelineToolFailures.AddRange(PipelineToolFailure.FromStageResult(runId, stage.Name, stageLog, result));
         }
 
         dbContext.SaveChanges();
@@ -103,13 +104,13 @@ public sealed class SignalRProgressSink(
             result.Decision,
             inputTokens = result.InputTokens,
             outputTokens = result.OutputTokens,
-            estimatedCostUsd = currentLog?.EstimatedCostUsd,
-            model = currentLog?.Model,
-            turnCount = currentLog?.TurnCount,
-            toolCallCount = currentLog?.ToolCallCount,
-            failedToolCallCount = currentLog?.FailedToolCallCount,
-            durationMs = currentLog?.DurationMs,
-            sessionErrorCount = currentLog?.SessionErrorCount,
+            estimatedCostUsd = stageLog?.EstimatedCostUsd,
+            model = stageLog?.Model,
+            turnCount = stageLog?.TurnCount,
+            toolCallCount = stageLog?.ToolCallCount,
+            failedToolCallCount = stageLog?.FailedToolCallCount,
+            durationMs = stageLog?.DurationMs,
+            sessionErrorCount = stageLog?.SessionErrorCount,
         }).GetAwaiter().GetResult();
     }
 
@@ -157,6 +158,24 @@ public sealed class SignalRProgressSink(
             : !string.IsNullOrWhiteSpace(log.Model)
                 ? log.Model
                 : configuredModel;
+
+    private PipelineStageLog? ResolveStageLog(StageDefinition stage)
+    {
+        if (currentLog is not null
+            && currentLog.RunId.Equals(runId, StringComparison.OrdinalIgnoreCase)
+            && currentLog.StageName.Equals(stage.Name, StringComparison.OrdinalIgnoreCase)
+            && currentLog.CompletedAt is null)
+        {
+            return currentLog;
+        }
+
+        return dbContext.PipelineStageLogs
+            .Where(log => log.RunId == runId
+                && log.StageName == stage.Name
+                && log.CompletedAt == null)
+            .OrderByDescending(log => log.StartedAt)
+            .FirstOrDefault();
+    }
 
     /// <inheritdoc />
     public void OnBranchReady(string branchName)

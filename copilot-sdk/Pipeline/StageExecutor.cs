@@ -15,15 +15,17 @@ internal sealed class StageExecutor(
         string mission,
         PolicyProfile policyProfile,
         PipelineExecutionContext context,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ICyberpilotProgressSink? stageProgressSink = null)
     {
         var stage = stageDefinition.Stage;
+        var sink = stageProgressSink ?? progressSink;
         console.WriteHeader($"Stage: {stage.DisplayName}");
         console.WriteDetail("Issue", $"#{issueNumber}");
         console.WriteDetail("Label", stage.Label);
         console.WriteDetail("Timeout", PipelineConsoleWriter.FormatDuration(timeout));
 
-        progressSink.OnStageStarted(stage, issueNumber);
+        sink.OnStageStarted(stage, issueNumber);
         var modelSelection = await modelResolver.ResolveAsync(stage, context, cancellationToken);
         if (!modelSelection.IsAvailable)
         {
@@ -33,18 +35,18 @@ internal sealed class StageExecutor(
                 false,
                 modelSelection.Error,
                 RequiredActions: [$"Choose an available model for stage '{stage.Name}' or configure a working fallback model."]), modelSelection);
-            progressSink.OnStageCompleted(stage, unavailableResult);
+            sink.OnStageCompleted(stage, unavailableResult);
             console.WriteFailure($"Stage {stage.DisplayName} model unavailable: {modelSelection.Error}");
             return unavailableResult;
         }
 
         if (!string.Equals(modelSelection.ConfiguredModel, modelSelection.SelectedModel, StringComparison.OrdinalIgnoreCase))
         {
-            progressSink.OnDispatch(DispatchType.ModelFallback, $"Stage '{stage.Name}' using fallback model '{modelSelection.SelectedModel}' because '{modelSelection.ConfiguredModel}' is unavailable.");
+            sink.OnDispatch(DispatchType.ModelFallback, $"Stage '{stage.Name}' using fallback model '{modelSelection.SelectedModel}' because '{modelSelection.ConfiguredModel}' is unavailable.");
         }
 
         var builtPrompt = await promptBuilder.BuildAsync(stageDefinition, mission, policyProfile, context, cancellationToken);
-        var result = await stageRunner.RunAsync(stage, builtPrompt, timeout, modelSelection.SelectedModel, context, cancellationToken);
+        var result = await stageRunner.RunAsync(stage, builtPrompt, timeout, modelSelection.SelectedModel, context, sink, cancellationToken);
         result = ApplyModelSelection(result, modelSelection);
         result = AddToolArtifacts(stage.Name, result, context.GetToolArtifacts(stage.Name));
         if (!result.IsValid)
@@ -64,12 +66,12 @@ internal sealed class StageExecutor(
                 RequiredActions = validation.RequiredActions,
             };
             console.WriteFailure($"Stage {stage.DisplayName} failed artifact validation: {validation.Error}");
-            progressSink.OnStageCompleted(stage, invalidResult);
+            sink.OnStageCompleted(stage, invalidResult);
             return invalidResult;
         }
 
         console.WriteSuccess($"Stage {stage.DisplayName} complete");
-        progressSink.OnStageCompleted(stage, result);
+        sink.OnStageCompleted(stage, result);
         console.WriteDetail("Status", result.Status);
         console.WriteDetail("Decision", result.Decision);
         return result;

@@ -348,28 +348,34 @@ Implementation: `CopilotStageRunner` now creates deterministic SDK session IDs (
 
 ## Milestone 8: Parallel review dimensions
 
-- [ ] Prototype harness-level read-only sessions for security, quality, architecture, tests, and docs review dimensions.
-- [ ] Merge dimension outputs into deterministic final verdict input.
-- [ ] Capture dimension-specific metrics.
-- [ ] Compare wall-clock time and total token cost against current review.
+- [x] Prototype harness-level read-only sessions for security, quality, architecture, tests, and docs review dimensions.
+- [x] Merge dimension outputs into deterministic final verdict input.
+- [x] Capture dimension-specific metrics.
+- [x] Compare wall-clock time and total token cost against current review.
+
+Implementation: `--parallel-review-dimensions` enables a review-only prototype that launches synthetic `review:*` stages for architecture, security, quality, tests/build, and docs. Each dimension runs as an isolated read-only SDK session with a specialist prompt/persona, while the parent harness emits `review_dimension` dispatch events and persists normal stage-log rows for each dimension. `ReviewDimensionAggregator` merges all results into one deterministic `review` stage result: invalid or non-GO dimensions fail closed with `STOP`, any dimension requesting changes produces `changes_requested`, and otherwise the review approves. Dimension rows keep their own session IDs, token/cost metrics, tool counts, artifacts, and evidence; the aggregate `review-verdict` artifact shows the participant table and wall-clock duration.
+
+Benchmark result: Review-only comparison on Aspire1 issue #34 / PR #51 showed first-cycle parallel review wall-clock at ~140s versus ~194s for the single-session review (~28% faster). The tradeoff is higher total usage: parallel dimensions consumed 778,865 input / 24,027 output tokens and about $2.70 estimated cost across dimension logs versus 562,771 input / 9,142 output tokens and about $1.83 for the single review. The full parallel run continued into the normal rework loop after changes_requested, so total run wall-clock is not comparable to the single failed review run.
 
 ### Success criteria
 
-- [ ] Review dimensions run concurrently.
-- [ ] One failed dimension does not hide other results.
-- [ ] Final verdict remains deterministic and policy-driven.
+- [x] Review dimensions run concurrently.
+- [x] One failed dimension does not hide other results.
+- [x] Final verdict remains deterministic and policy-driven.
 
 ## Milestone 9: MCP evaluation
 
-- [ ] Evaluate GitHub MCP server against custom GitHub tools.
-- [ ] Evaluate filesystem MCP against existing repo tools and stage policies.
-- [ ] Evaluate SQLite/database access options.
-- [ ] Document which integrations should stay custom tools vs MCP.
+- [x] Evaluate GitHub MCP server against custom GitHub tools.
+- [x] Evaluate filesystem MCP against existing repo tools and stage policies.
+- [x] Evaluate SQLite/database access options.
+- [x] Document which integrations should stay custom tools vs MCP.
+
+Implementation: MCP was evaluated but not adopted in the SDK harness. GitHub and SQLite/database access stay native Cyberpilot tools because they need typed payloads, deterministic error codes, harness-owned audit trails, and stage-specific mutation policy. Filesystem MCP was the closest candidate, but it does not currently beat existing local read/search tools enough to justify extra process startup, dependency, permission, and troubleshooting surface. Revisit MCP only when a mature server provides clear capability Cyberpilot cannot match with simpler native tools.
 
 ### Success criteria
 
-- [ ] Any enabled MCP server is stage-scoped, permission-scoped, observable, and recoverable.
-- [ ] MCP is used only where it beats custom tools for control, maturity, and maintenance cost.
+- [x] No MCP server is enabled until it can be stage-scoped, permission-scoped, observable, and recoverable.
+- [x] MCP is used only where it beats custom tools for control, maturity, and maintenance cost.
 
 ## Decision log
 

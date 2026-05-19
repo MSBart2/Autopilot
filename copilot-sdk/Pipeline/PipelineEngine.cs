@@ -268,7 +268,9 @@ internal sealed class PipelineEngine(
             var reviewPrompt = string.IsNullOrEmpty(Options.PrHeadBranch)
                 ? $"Review the linked PR for issue #{Options.IssueNumber}. This is review cycle {cycle} of 2."
                 : $"Review PR #{context.PullRequestNumber ?? Options.IssueNumber} (branch: {Options.PrHeadBranch}). Go directly to the PR — no need to look up an issue. This is review cycle {cycle} of 2.";
-            review = await RunStageAsync(reviewStage, reviewPrompt, cancellationToken);
+            review = Options.ParallelReviewDimensions
+                ? await RunParallelReviewStageAsync(reviewStage, reviewPrompt, cycle, cancellationToken)
+                : await RunStageAsync(reviewStage, reviewPrompt, cancellationToken);
 
             if (!StageStatus.IsGo(review))
             {
@@ -352,6 +354,33 @@ internal sealed class PipelineEngine(
         }
 
         var result = await stageExecutor.RunAsync(stageDefinition, Options.IssueNumber, Options.StageTimeout, mission, context.Definition.PolicyProfile, context, cancellationToken);
+        var afterGateResult = await RunGatesAsync(stageDefinition, GateTiming.AfterStage, cancellationToken, result);
+        if (afterGateResult is not null)
+        {
+            context.RecordStageResult(stageDefinition.Stage.Name, afterGateResult);
+            return afterGateResult;
+        }
+
+        context.RecordStageResult(stageDefinition.Stage.Name, result);
+        return result;
+    }
+
+    private async Task<StageResult> RunParallelReviewStageAsync(StageDefinition stage, string mission, int cycle, CancellationToken cancellationToken)
+    {
+        context.FinalStage = stage.Name;
+        var stageDefinition = context.Definition.PipelineStage(stage.Name);
+        var beforeGateResult = await RunGatesAsync(stageDefinition, GateTiming.BeforeStage, cancellationToken);
+        if (beforeGateResult is not null)
+        {
+            context.RecordStageResult(stageDefinition.Stage.Name, beforeGateResult);
+            return beforeGateResult;
+        }
+
+        progressSink.OnStageStarted(stage, Options.IssueNumber);
+        var orchestrator = new ParallelReviewDimensionOrchestrator(stageExecutor, progressSink, console);
+        var result = await orchestrator.RunAsync(mission, cycle, Options.StageTimeout, context.Definition.PolicyProfile, context, cancellationToken);
+        progressSink.OnStageCompleted(stage, result);
+
         var afterGateResult = await RunGatesAsync(stageDefinition, GateTiming.AfterStage, cancellationToken, result);
         if (afterGateResult is not null)
         {

@@ -147,6 +147,7 @@ internal sealed class SdkConfiguration
                 ? RuntimePreferences.CommandStyle
                 : optionPreferences.CommandStyle,
             CaptureToolOutputArtifacts = optionPreferences.CaptureToolOutputArtifacts || RuntimePreferences.CaptureToolOutputArtifacts,
+            ParallelReviewDimensions = optionPreferences.ParallelReviewDimensions || RuntimePreferences.ParallelReviewDimensions,
             SystemMessageMode = optionPreferences.SystemMessageModeConfigured
                 ? optionPreferences.SystemMessageMode
                 : RuntimePreferences.SystemMessageMode,
@@ -254,6 +255,12 @@ internal sealed class SdkConfiguration
             current = current with { SystemMessageProfile = parsedProfile };
         }
 
+        if (cyberpilot.TryGetProperty("ParallelReviewDimensions", out var parallelReviewDimensions)
+            && parallelReviewDimensions.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            current = current with { ParallelReviewDimensions = parallelReviewDimensions.GetBoolean() };
+        }
+
         if (cyberpilot.TryGetProperty("StageSystemMessages", out var stageSystemMessagesEl)
             && stageSystemMessagesEl.ValueKind == JsonValueKind.Object)
         {
@@ -353,6 +360,11 @@ internal sealed class SdkConfiguration
         if (TryParseSystemMessageProfile(Environment.GetEnvironmentVariable("Cyberpilot__SystemMessageProfile"), out var systemMessageProfile))
         {
             current = current with { SystemMessageProfile = systemMessageProfile };
+        }
+
+        if (bool.TryParse(Environment.GetEnvironmentVariable("Cyberpilot__ParallelReviewDimensions"), out var parallelReviewDimensions))
+        {
+            current = current with { ParallelReviewDimensions = parallelReviewDimensions };
         }
 
         runtimePreferences = current;

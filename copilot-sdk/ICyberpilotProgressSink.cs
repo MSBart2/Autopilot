@@ -86,6 +86,9 @@ public static class DispatchType
     /// <summary>Per-stage model fallback selection.</summary>
     public const string ModelFallback = "model_fallback";
 
+    /// <summary>Parallel review dimension orchestration.</summary>
+    public const string ReviewDimension = "review_dimension";
+
     /// <summary>Skip-deliver or early termination.</summary>
     public const string Skip = "skip";
 

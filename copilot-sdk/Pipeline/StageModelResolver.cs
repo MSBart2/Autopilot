@@ -93,6 +93,15 @@ internal sealed class StageModelResolver(CyberpilotOptions options, IModelAvaila
             return true;
         }
 
+        var baseStageName = GetBaseStageName(stageName);
+        if (!baseStageName.Equals(stageName, StringComparison.OrdinalIgnoreCase)
+            && models.TryGetValue(baseStageName, out var baseStageModel)
+            && !string.IsNullOrWhiteSpace(baseStageModel))
+        {
+            model = baseStageModel;
+            return true;
+        }
+
         if (models.TryGetValue("*", out var wildcard) && !string.IsNullOrWhiteSpace(wildcard))
         {
             model = wildcard;
@@ -104,6 +113,7 @@ internal sealed class StageModelResolver(CyberpilotOptions options, IModelAvaila
 
     private static ModelTier? ResolveStageTier(string stageName, string baseModel, PipelineExecutionContext? context)
     {
+        stageName = GetBaseStageName(stageName);
         if (!DefaultStageTiers.TryGetValue(stageName, out var defaultTier))
         {
             return null;
@@ -150,6 +160,12 @@ internal sealed class StageModelResolver(CyberpilotOptions options, IModelAvaila
         }
 
         return found;
+    }
+
+    private static string GetBaseStageName(string stageName)
+    {
+        var separator = stageName.IndexOf(':', StringComparison.Ordinal);
+        return separator > 0 ? stageName[..separator] : stageName;
     }
 
     private static bool TryResolveTieredModel(string baseModel, ModelTier? tier, out string model)

@@ -83,6 +83,8 @@ internal sealed record CyberpilotOptions(
             "                       How to deliver harness law to the SDK session. none=inline (default), append=add after built-in Copilot guidance, replace=replace built-in guidance entirely.",
             "  --system-message-profile <full|lean>",
             "                       System-message harness guidance profile. full=current guidance, lean=compact benchmark guidance.",
+            "  --parallel-review-dimensions",
+            "                       Run read-only review specialist dimensions concurrently and merge a deterministic verdict.",
             "  --only-stage <name>  Run only this stage then stop (e.g. triage, plan, implement). Implies --start-stage.",
             "  --pr-head-branch <branch>",
             "                       Known pull request head branch for PR-first review runs.",
@@ -237,6 +239,9 @@ internal sealed record CyberpilotOptions(
                 case "--system-message-profile":
                     parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithSystemMessageProfile(ParseSystemMessageProfile(RequireNonEmptyValue(args, ref index, arg), arg)) };
                     break;
+                case "--parallel-review-dimensions":
+                    parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithParallelReviewDimensions(true) };
+                    break;
                 case "--only-stage":
                     parsed = parsed with { OnlyStage = RequireNonEmptyValue(args, ref index, arg).ToLowerInvariant() };
                     break;
@@ -305,6 +310,8 @@ internal sealed record CyberpilotOptions(
     public HarnessSystemMessageMode SystemMessageMode => Preferences.SystemMessageMode;
 
     public HarnessSystemMessageProfile SystemMessageProfile => Preferences.SystemMessageProfile;
+
+    public bool ParallelReviewDimensions => Preferences.ParallelReviewDimensions;
 
     private static TimeSpan ParsePositiveMinutes(string value, string optionName)
     {
@@ -449,5 +456,11 @@ internal static class CyberpilotRuntimePreferenceExtensions
     {
         var current = preferences ?? CyberpilotRuntimePreferences.Default;
         return current with { SystemMessageProfile = profile, SystemMessageProfileConfigured = true };
+    }
+
+    public static CyberpilotRuntimePreferences WithParallelReviewDimensions(this CyberpilotRuntimePreferences? preferences, bool parallelReviewDimensions)
+    {
+        var current = preferences ?? CyberpilotRuntimePreferences.Default;
+        return current with { ParallelReviewDimensions = parallelReviewDimensions };
     }
 }

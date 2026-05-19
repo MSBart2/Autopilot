@@ -5,6 +5,7 @@ namespace Cyberpilot.Pipeline;
 internal sealed class PipelineExecutionContext(CyberpilotOptions options, PipelineDefinition definition)
 {
     private readonly Dictionary<string, List<StageArtifact>> toolArtifacts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object toolArtifactsLock = new();
 
     public CyberpilotOptions Options { get; } = options;
 
@@ -43,19 +44,25 @@ internal sealed class PipelineExecutionContext(CyberpilotOptions options, Pipeli
         ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
         ArgumentNullException.ThrowIfNull(artifact);
 
-        if (!toolArtifacts.TryGetValue(stageName, out var artifacts))
+        lock (toolArtifactsLock)
         {
-            artifacts = [];
-            toolArtifacts[stageName] = artifacts;
-        }
+            if (!toolArtifacts.TryGetValue(stageName, out var artifacts))
+            {
+                artifacts = [];
+                toolArtifacts[stageName] = artifacts;
+            }
 
-        artifacts.Add(artifact);
+            artifacts.Add(artifact);
+        }
     }
 
     public IReadOnlyList<StageArtifact> GetToolArtifacts(string stageName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
-        return toolArtifacts.TryGetValue(stageName, out var artifacts) ? artifacts.ToArray() : [];
+        lock (toolArtifactsLock)
+        {
+            return toolArtifacts.TryGetValue(stageName, out var artifacts) ? artifacts.ToArray() : [];
+        }
     }
 
     public void RecordStageResult(string stageName, StageResult result)

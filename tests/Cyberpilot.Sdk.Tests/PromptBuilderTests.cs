@@ -216,6 +216,28 @@ public sealed class PromptBuilderTests
     }
 
     [Fact]
+    public async Task BuildAsync_ForReviewDimension_IncludesDeterministicPrToolGuidance()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "security-reviewer.agent.md"), "security instructions");
+        var builder = new PromptBuilder(targetRepo.Path, agentRepo.Path, 42);
+
+        var prompt = await builder.BuildAsync(
+            Stage("REVIEW/SECURITY", "review:security", "security-reviewer.agent.md", "sdk/review", ["review-dimension-security"]),
+            "run security review dimension",
+            StandardPolicy(),
+            Context(targetRepo.Path));
+
+        Assert.Contains("security instructions", prompt.UserMessage);
+        Assert.Contains("Required artifacts: `review-dimension-security`", prompt.UserMessage);
+        Assert.Contains("## Deterministic PR Tools", prompt.UserMessage);
+        Assert.Contains("get_pr_diff_summary", prompt.UserMessage);
+    }
+
+    [Fact]
     public async Task BuildAsync_ForTriageContext_PrunesBranchAndPullRequest()
     {
         using var targetRepo = new TempDirectory();

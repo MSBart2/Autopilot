@@ -232,7 +232,7 @@ internal sealed class PromptBuilder(
 
 	private static string BuildStageToolGuidance(string stageName)
 	{
-		if (!stageName.Equals("review", StringComparison.OrdinalIgnoreCase)
+		if (!IsReviewStage(stageName)
 		    && !stageName.Equals("docs", StringComparison.OrdinalIgnoreCase)
 		    && !stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase))
 		{
@@ -254,6 +254,12 @@ internal sealed class PromptBuilder(
 
 			If the imported stage prompt asks you to post a started/progress/verdict/verification/landing comment, call `render_stage_comment` and return the rendered body in the required stage artifact instead of using shell or GitHub commands to post from the SDK session.
 			""";
+	}
+
+	private static bool IsReviewStage(string stageName)
+	{
+		return stageName.Equals("review", StringComparison.OrdinalIgnoreCase)
+		    || stageName.StartsWith("review:", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private static string BuildRepositoryProfileContext(string? profileSummary)

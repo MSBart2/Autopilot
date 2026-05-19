@@ -11,6 +11,7 @@ The executable harness lives in [../copilot-sdk-exe/](../copilot-sdk-exe) and re
 - uses the GitHub issue thread as the pipeline state file
 - supports the review rework loop with a maximum of two review cycles
 - supports selectable pipeline definitions, including built-in and JSON-backed definitions
+- can run review dimensions in parallel with `--parallel-review-dimensions`
 - records structured stage results, evidence, policy rationale, and required actions
 - treats human approval gates as resumable pauses instead of failed runs
 - checks Copilot model availability before applying issue labels or running stages
@@ -37,6 +38,8 @@ Use `--db "Data Source=<path>"` to persist EXE-triggered runs into the SDK-owned
 
 The default SDK model is `claude-sonnet-4.6`. Use `--model` when you need a different Copilot model available to your account. Family-tiered defaults use a small same-family sibling for `triage`, `docs`, and `deliver` (`claude-haiku-4.5` for Claude, `gpt-5-mini` for GPT), and at least a medium same-family model for `plan`, `implement`, and `review` (`claude-sonnet-4.6` for Claude, `gpt-5.4` for GPT). Prior stage results can emit `recommended_model_tier`; Cyberpilot uses that signal to escalate `plan`, `implement`, or `review` up to the large tier (`claude-opus-4.6` or `gpt-5.5`) without silently downgrading stages or a large run-level model. Tiered models fall back to the base model if unavailable. Use `--stage-model <stage>=<model>` and `--stage-fallback-model <stage>=<model>` for explicit overrides.
 
+Use `--parallel-review-dimensions` to prototype Milestone 8 review-time parallelism. The review stage dispatches read-only architecture, security, quality, tests/build, and docs SDK sessions at the same time, persists them as `review:*` stage logs, and deterministically merges their structured outputs into the final `review-verdict`. The console and run history include `review_dimension` dispatch events so operators can see which specialist participants ran and when they completed.
+
 Each SDK stage attempt gets a stable resumable session ID in the form `cyberpilot-{runId}-{stageName}-{attempt}`. Run history records the session ID, lifecycle state, resume eligibility, blocked reason, and cleanup deadline on `PipelineStageLog`. Live session steering/queueing is intentionally deferred until there is a stronger product need.
 
 Useful options:
@@ -49,6 +52,7 @@ dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- --check-mode
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --skip-deliver
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --allow-missing-docs
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --model claude-sonnet-4.6
+dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --skip-deliver --parallel-review-dimensions
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --stage-timeout-minutes 20
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo-root C:\Users\rdpuser\Source\Cyberpilot
 dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 135 --repo rbmathis/Cyberpilot --approve-all --pipeline-definition bugfix

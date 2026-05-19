@@ -6,11 +6,19 @@ using Microsoft.Extensions.AI;
 
 namespace Cyberpilot.Copilot;
 
-internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSink progressSink, TextWriter error) : IStageRunner
+internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSink defaultProgressSink, TextWriter error) : IStageRunner
 {
-    public async Task<StageResult> RunAsync(StageDefinition stage, BuiltPrompt builtPrompt, TimeSpan timeout, string model, PipelineExecutionContext context, CancellationToken cancellationToken = default)
+    public async Task<StageResult> RunAsync(
+        StageDefinition stage,
+        BuiltPrompt builtPrompt,
+        TimeSpan timeout,
+        string model,
+        PipelineExecutionContext context,
+        ICyberpilotProgressSink progressSink,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
+        var sink = progressSink ?? defaultProgressSink;
 
         await using var client = new CopilotClient(new CopilotClientOptions
         {
@@ -61,7 +69,7 @@ internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSin
                     metricsCollector.RecordToolExecutionComplete(toolComplete.Data);
                     break;
                 case AssistantMessageDeltaEvent delta:
-                    progressSink.OnStreamDelta(delta.Data.DeltaContent);
+                    sink.OnStreamDelta(delta.Data.DeltaContent);
                     streamed.Append(delta.Data.DeltaContent);
                     break;
                 case SessionErrorEvent sessionError:
@@ -75,7 +83,7 @@ internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSin
         });
 
         var response = await session.SendAndWaitAsync(new MessageOptions { Prompt = builtPrompt.UserMessage }, timeout, cancellationToken);
-        progressSink.OnMessage("step", string.Empty);
+        sink.OnMessage("step", string.Empty);
 
         var content = response?.Data.Content;
         if (string.IsNullOrWhiteSpace(content))

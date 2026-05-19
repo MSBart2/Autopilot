@@ -7,6 +7,7 @@ namespace Cyberpilot.Pipeline;
 /// <param name="CaptureToolOutputArtifacts">Whether detailed redacted tool output should be persisted as diagnostic artifacts.</param>
 /// <param name="SystemMessageMode">Controls whether harness law is injected as an SDK system message (append or replace) instead of repeating it in every user prompt.</param>
 /// <param name="SystemMessageProfile">Controls how verbose the SDK system message harness guidance should be.</param>
+/// <param name="ParallelReviewDimensions">Whether the review stage should run read-only specialist review dimensions in parallel.</param>
 /// <param name="StageSystemMessages">Per-stage system message defaults used when the CLI does not explicitly set system-message options.</param>
 /// <param name="SystemMessageModeConfigured">Whether the system-message mode was explicitly configured by the current invocation.</param>
 /// <param name="SystemMessageProfileConfigured">Whether the system-message profile was explicitly configured by the current invocation.</param>
@@ -15,6 +16,7 @@ public sealed record CyberpilotRuntimePreferences(
     bool CaptureToolOutputArtifacts = false,
     HarnessSystemMessageMode SystemMessageMode = HarnessSystemMessageMode.None,
     HarnessSystemMessageProfile SystemMessageProfile = HarnessSystemMessageProfile.Full,
+    bool ParallelReviewDimensions = false,
     IReadOnlyDictionary<string, HarnessStageSystemMessage>? StageSystemMessages = null,
     bool SystemMessageModeConfigured = false,
     bool SystemMessageProfileConfigured = false)
