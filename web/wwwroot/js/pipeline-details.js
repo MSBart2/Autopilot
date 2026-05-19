@@ -147,8 +147,50 @@
         return safe;
     }
 
+    // Strip JSON blobs, pre-section thinking prose, and short tool-call interjections
+    // so only the agent's actual narrative sections are rendered.
+    function cleanAgentOutput(text) {
+        // Remove fenced json / bare json code blocks
+        let out = text.replace(/```(?:json)?\s*\n[\s\S]*?\n```/gi, '');
+
+        // Ensure ## section headers always start on their own line
+        out = out.replace(/([^\n])(#{2,4} )/g, '$1\n\n$2');
+
+        // Split common tool-call interjections onto their own lines when concatenated mid-text.
+        // Lookbehind ensures we only split when the pattern is preceded by non-newline content.
+        out = out.replace(/(?<=[^\n])(Good\.|Great\.|Perfect\.|Right\.|Excellent\.|Noted\.|Let me |Now let me )/g, '\n$1');
+
+        // Drop everything before the first ## header (tool-call noise before the narrative)
+        const firstHeader = out.search(/^#{2,4} /m);
+        if (firstHeader > 0) out = out.slice(firstHeader);
+
+        // Filter short tool-call interjection lines within sections
+        out = out.split('\n').filter(line => {
+            const t = line.trim();
+            if (!t) return true;                      // keep blank lines for spacing
+            if (t.startsWith('#')) return true;       // section headers
+            if (t.startsWith('|')) return true;       // table rows
+            if (/^[-*]\s/.test(t)) return true;       // bullet items
+            if (t.startsWith('`')) return true;       // code lines
+            if (t.length < 120 && /^(Good\.?|Great\.?|Perfect\.?|Right\.?|Excellent\.?|Noted\.?|Let me|Now let me|Moving on|I'll now|I can see|I need to|Looking at|Starting with|Checking|Next,|First,?\s+I)/i.test(t)) return false;
+            return true;
+        }).join('\n');
+
+        return out.trim();
+    }
+
     function labelize(key) {
         return key.replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    function chip(text, cls) { return `<span class="chip ${cls}">${escapeHtml(text)}</span>`; }
+    function difficultyChip(v) {
+        const cls = v === 'hard' ? 'chip-hard' : v === 'medium' ? 'chip-medium' : 'chip-neutral';
+        return chip(v, cls);
+    }
+    function priorityChip(v) {
+        const cls = v === 'critical' ? 'chip-critical' : v === 'high' ? 'chip-high' : 'chip-neutral';
+        return chip(v, cls);
     }
 
     function tryReadSummaryObject(text) {
@@ -259,31 +301,43 @@
     }
 
 
-    function renderSummary(stage, summary, raw) {
+    function renderSummary(stage, summary) {
         const status = String(summary.status ?? 'unknown').toLowerCase();
         const completionLabel = COMPLETION_TEXT[stage] ?? 'Agent result';
-        const statusTitle = status === 'stop' ? 'Investigation halted' : status === 'duplicate' ? 'Duplicate located' : status === 'go' ? completionLabel : 'Agent result';
-        const fields = Object.entries(summary)
-            .filter(([key]) => key !== 'status')
-            .map(([key, value]) => `
-              <div class="output-field">
-                <span class="output-field-label">${escapeHtml(labelize(key))}</span>
-                ${renderValue(value)}
-              </div>`)
-            .join('');
+        const titles = { stop: '🚫 Investigation Halted', duplicate: '🔁 Duplicate Located', go: `✅ ${completionLabel}` };
+        const statusTitle = titles[status] ?? 'Agent Result';
+        const statusChipCls = status === 'go' ? 'chip-go' : status === 'stop' ? 'chip-stop' : 'chip-neutral';
 
-        return `
-          <div class="output-summary">
-            <div class="output-verdict status-${escapeHtml(status)}">
-              <strong>${escapeHtml(statusTitle)}</strong>
-              <span>${escapeHtml((AGENTS[stage]?.display ?? stage).toUpperCase())} returned ${escapeHtml(String(summary.status ?? 'UNKNOWN'))}</span>
-            </div>
-            <div class="output-field-grid">${fields}</div>
-            <details class="output-details">
-              <summary>Raw transcript</summary>
-              <pre class="output-raw">${escapeHtml(raw)}</pre>
-            </details>
-          </div>`;
+        const verdictRow = `<div class="output-verdict status-${escapeHtml(status)}">
+          <strong>${escapeHtml(statusTitle)}</strong>
+          ${chip(String(summary.status ?? 'UNKNOWN').toUpperCase(), statusChipCls)}
+        </div>`;
+
+        const meta = [];
+        if (summary.type)                   meta.push(chip(summary.type, 'chip-neutral'));
+        if (summary.difficulty)             meta.push(difficultyChip(summary.difficulty));
+        if (summary.priority)               meta.push(priorityChip(summary.priority));
+        if (summary.recommended_model_tier) meta.push(chip('model: ' + summary.recommended_model_tier, 'chip-neutral'));
+        const metaRow = meta.length
+            ? `<div class="summary-chips-row"><span class="summary-section-label">classification</span>${meta.join('')}</div>`
+            : '';
+
+        const agents = Array.isArray(summary.agents) ? summary.agents : [];
+        const agentsRow = agents.length
+            ? `<div class="summary-chips-row"><span class="summary-section-label">agents</span>${agents.map(a => chip(a, 'chip-agent')).join('')}</div>`
+            : '';
+
+        const scope = Array.isArray(summary.scope) ? summary.scope : [];
+        const scopeRow = scope.length
+            ? `<div class="summary-chips-row"><span class="summary-section-label">scope</span>${scope.map(s => chip(s, 'chip-scope')).join('')}</div>`
+            : '';
+
+        const related = [...(summary.related_issues ?? []), ...(summary.related_prs ?? [])];
+        const relatedRow = related.length
+            ? `<div class="summary-chips-row"><span class="summary-section-label">related</span>${related.map(r => chip('#' + r, 'chip-neutral')).join('')}</div>`
+            : '';
+
+        return `<div class="output-summary">${verdictRow}${metaRow}${agentsRow}${scopeRow}${relatedRow}</div>`;
     }
 
     function renderMarkdownLite(text) {
@@ -323,9 +377,9 @@
                 if (rows.length > 0) {
                     const [header, ...body] = rows;
                     html.push('<table class="output-table"><thead><tr>');
-                    html.push(header.map(cell => `<th>${escapeHtml(cell)}</th>`).join(''));
+                    html.push(header.map(cell => `<th>${inlineMarkdown(cell)}</th>`).join(''));
                     html.push('</tr></thead><tbody>');
-                    html.push(body.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join(''));
+                    html.push(body.map(row => `<tr>${row.map(cell => `<td>${inlineMarkdown(cell)}</td>`).join('')}</tr>`).join(''));
                     html.push('</tbody></table>');
                 }
                 continue;
@@ -334,12 +388,12 @@
             const bullet = /^[-*]\s+(.+)$/.exec(trimmed);
             if (bullet) {
                 if (!inList) { html.push('<ul>'); inList = true; }
-                html.push(`<li>${escapeHtml(bullet[1])}</li>`);
+                html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
                 continue;
             }
 
             if (inList) { html.push('</ul>'); inList = false; }
-            html.push(`<p>${escapeHtml(trimmed)}</p>`);
+            html.push(`<p>${inlineMarkdown(trimmed)}</p>`);
         }
 
         if (inList) html.push('</ul>');
@@ -414,9 +468,20 @@
         if (!raw.trim()) {
             out.innerHTML = '<span class="output-empty">Waiting for output...</span>';
         } else if (summary) {
-            out.innerHTML = renderSummary(out.dataset.stage ?? '', summary, raw);
+            const cleaned = cleanAgentOutput(raw);
+            const hasNarrative = /^#{2,4} /m.test(cleaned);
+            let html = '';
+            if (hasNarrative) {
+                const narrativeId = `narrative-${out.dataset.stage ?? 'stage'}-${Date.now()}`;
+                html += `<span class="narrative-toggle" onclick="const b=document.getElementById('${narrativeId}');const open=b.style.display==='block';b.style.display=open?'none':'block';this.textContent=open?'▸ Show full narrative':'▾ Hide narrative'">▸ Show full narrative</span>`;
+                html += `<div id="${narrativeId}" class="narrative-collapsed"><div class="output-narrative">${renderMarkdownLite(cleaned)}</div></div>`;
+            }
+            html += renderSummary(out.dataset.stage ?? '', summary);
+            html += `<details class="output-details"><summary>Raw transcript</summary><pre class="output-raw">${escapeHtml(raw)}</pre></details>`;
+            out.innerHTML = html;
         } else if (/^\s*#{2,4}\s+/m.test(raw) || /^\s*[-*]\s+/m.test(raw)) {
-            out.innerHTML = renderMarkdownLite(raw);
+            const cleaned = cleanAgentOutput(raw);
+            out.innerHTML = renderMarkdownLite(cleaned || raw);
         } else {
             const prose = renderSmartProse(raw);
             if (prose) {
