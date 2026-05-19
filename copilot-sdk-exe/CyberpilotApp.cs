@@ -33,6 +33,12 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             var configuration = SdkConfiguration.Load(options.ConfigPath, options.RepoRoot);
             options = configuration.ApplyTo(options);
 
+            if (options.IssueNumber <= 0 && !options.CheckLabelsOnly && !options.CheckModelOnly && !options.ResetMode)
+            {
+                error.WriteLine("No issue number found. Pass an issue number (e.g. 'run issue 34') or set 'BenchmarkIssue' in appsettings.");
+                return 1;
+            }
+
             var issueClient = CreateIssueClient(options, configuration);
             await using var dbContext = await CreateDbContextAsync(options, cancellationToken);
 

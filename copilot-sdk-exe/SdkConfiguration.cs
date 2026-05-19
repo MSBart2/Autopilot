@@ -9,16 +9,32 @@ internal sealed class SdkConfiguration
 {
     private readonly IReadOnlyList<SdkRepositoryConnection> repositories;
 
-    private SdkConfiguration(string? defaultRepository, IReadOnlyList<SdkRepositoryConnection> repositories, CyberpilotRuntimePreferences? runtimePreferences)
+    private SdkConfiguration(string? defaultRepository, IReadOnlyList<SdkRepositoryConnection> repositories, CyberpilotRuntimePreferences? runtimePreferences,
+        string? agentPromptRoot, string? databaseConnectionString, bool? approveAll, int? benchmarkIssue, string? benchmarkRepository)
     {
         DefaultRepository = defaultRepository;
         this.repositories = repositories;
         RuntimePreferences = runtimePreferences ?? CyberpilotRuntimePreferences.Default;
+        AgentPromptRoot = agentPromptRoot;
+        DatabaseConnectionString = databaseConnectionString;
+        ApproveAll = approveAll;
+        BenchmarkIssue = benchmarkIssue;
+        BenchmarkRepository = benchmarkRepository;
     }
 
     public string? DefaultRepository { get; }
 
     public CyberpilotRuntimePreferences RuntimePreferences { get; }
+
+    public string? AgentPromptRoot { get; }
+
+    public string? DatabaseConnectionString { get; }
+
+    public bool? ApproveAll { get; }
+
+    public int? BenchmarkIssue { get; }
+
+    public string? BenchmarkRepository { get; }
 
     public static SdkConfiguration Load(string? configPath, string repoRoot)
     {
@@ -33,17 +49,25 @@ internal sealed class SdkConfiguration
 
         LoadEnvironment(ref defaultRepository, repositories);
         CyberpilotRuntimePreferences? runtimePreferences = null;
+        string? agentPromptRoot = null;
+        string? databaseConnectionString = null;
+        bool? approveAll = null;
+        int? benchmarkIssue = null;
+        string? benchmarkRepository = null;
         foreach (var source in sources)
         {
             LoadRuntimePreferences(source, ref runtimePreferences);
+            LoadGlobalDefaults(source, ref agentPromptRoot, ref databaseConnectionString, ref approveAll, ref benchmarkIssue, ref benchmarkRepository);
         }
 
         LoadRuntimePreferencesFromEnvironment(ref runtimePreferences);
-        return new SdkConfiguration(defaultRepository, repositories.Values.ToArray(), runtimePreferences);
+        return new SdkConfiguration(defaultRepository, repositories.Values.ToArray(), runtimePreferences, agentPromptRoot, databaseConnectionString, approveAll, benchmarkIssue, benchmarkRepository);
     }
 
     public CyberpilotOptions ApplyTo(CyberpilotOptions options)
     {
+        options = ApplyGlobalDefaults(options);
+
         if (!string.IsNullOrWhiteSpace(options.Repository))
         {
             var tokenRepository = FindRepository(options.Repository);
@@ -61,6 +85,36 @@ internal sealed class SdkConfiguration
         return string.IsNullOrWhiteSpace(configuredRepository.RepoRoot)
             ? options with { Repository = configuredRepository.Repository, RuntimePreferences = MergeRuntimePreferences(options.RuntimePreferences) }
             : options with { Repository = configuredRepository.Repository, RepoRoot = Path.GetFullPath(configuredRepository.RepoRoot), RuntimePreferences = MergeRuntimePreferences(options.RuntimePreferences) };
+    }
+
+    private CyberpilotOptions ApplyGlobalDefaults(CyberpilotOptions options)
+    {
+        if (AgentPromptRoot is not null && options.AgentPromptRoot is null)
+        {
+            options = options with { AgentPromptRoot = Path.GetFullPath(AgentPromptRoot) };
+        }
+
+        if (DatabaseConnectionString is not null && options.DatabaseConnectionString is null)
+        {
+            options = options with { DatabaseConnectionString = DatabaseConnectionString };
+        }
+
+        if (ApproveAll == true && !options.ApproveAll)
+        {
+            options = options with { ApproveAll = true };
+        }
+
+        if (BenchmarkIssue is > 0 && options.IssueNumber <= 0)
+        {
+            options = options with { IssueNumber = BenchmarkIssue.Value };
+        }
+
+        if (BenchmarkRepository is not null && string.IsNullOrWhiteSpace(options.Repository))
+        {
+            options = options with { Repository = BenchmarkRepository };
+        }
+
+        return options;
     }
 
     public string? GetToken(string? repository)
@@ -187,6 +241,52 @@ internal sealed class SdkConfiguration
         }
 
         runtimePreferences = current;
+    }
+
+    private static void LoadGlobalDefaults(string path, ref string? agentPromptRoot, ref string? databaseConnectionString, ref bool? approveAll, ref int? benchmarkIssue, ref string? benchmarkRepository)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        if (!document.RootElement.TryGetProperty("Cyberpilot", out var cyberpilot))
+        {
+            return;
+        }
+
+        if (cyberpilot.TryGetProperty("AgentPromptRoot", out var agentPromptRootEl))
+        {
+            var value = agentPromptRootEl.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                agentPromptRoot = value;
+            }
+        }
+
+        if (cyberpilot.TryGetProperty("Database", out var databaseEl))
+        {
+            var value = databaseEl.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                databaseConnectionString = value;
+            }
+        }
+
+        if (cyberpilot.TryGetProperty("ApproveAll", out var approveAllEl)
+            && approveAllEl.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            approveAll = approveAllEl.GetBoolean();
+        }
+
+        if (cyberpilot.TryGetProperty("BenchmarkIssue", out var benchmarkIssueEl)
+            && benchmarkIssueEl.TryGetInt32(out var benchmarkIssueValue)
+            && benchmarkIssueValue > 0)
+        {
+            benchmarkIssue = benchmarkIssueValue;
+        }
+
+        if (cyberpilot.TryGetProperty("BenchmarkRepository", out var benchmarkRepositoryEl)
+            && GitHubRepositoryParser.TryNormalize(benchmarkRepositoryEl.GetString(), out var normalizedBenchmarkRepository))
+        {
+            benchmarkRepository = normalizedBenchmarkRepository;
+        }
     }
 
     private static void LoadEnvironment(ref string? defaultRepository, Dictionary<string, SdkRepositoryConnection> repositories)
