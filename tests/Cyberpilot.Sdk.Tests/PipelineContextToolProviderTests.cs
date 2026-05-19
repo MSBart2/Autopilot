@@ -198,6 +198,19 @@ public sealed class PipelineContextToolProviderTests
         Assert.Equal("unsupported_comment_kind", response.Error.Code);
     }
 
+    [Fact]
+    public async Task RenderStageCommentAsync_TruncatesLargeSummaries()
+    {
+        var provider = new PipelineContextToolProvider(CreateContext(prNumber: 17), Stage("review"), new FakeGitHubCli());
+
+        var response = await provider.RenderStageCommentAsync("review-verdict", new string('x', 3_200));
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Data);
+        Assert.Contains("...[truncated]", response.Data.Body);
+        Assert.True(response.Data.Body.Length < 3_100);
+    }
+
     private static PipelineExecutionContext CreateContext(bool captureToolOutputArtifacts = false, string? prHeadBranch = null, int? prNumber = null)
     {
         return new PipelineExecutionContext(

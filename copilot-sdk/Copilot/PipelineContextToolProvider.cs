@@ -8,6 +8,8 @@ namespace Cyberpilot.Copilot;
 
 internal sealed class PipelineContextToolProvider(PipelineExecutionContext context, StageDefinition stage, IGitHubCli gitHubCli)
 {
+    private const int MaxRenderedCommentSummaryLength = 2800;
+
     public ICollection<AIFunction> CreateTools()
     {
         return
@@ -140,8 +142,9 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
         }
 
         var target = context.PullRequestNumber is > 0 ? $"PR #{context.PullRequestNumber}" : $"issue #{context.Options.IssueNumber}";
+        var compactSummary = Truncate(summary.Trim(), MaxRenderedCommentSummaryLength);
         var heading = BuildStageCommentHeading(stage.Name, normalizedKind, context.Options.IssueNumber);
-        var body = BuildStageCommentBody(heading, normalizedKind, summary.Trim(), target);
+        var body = BuildStageCommentBody(heading, normalizedKind, compactSummary, target);
         var result = new StageCommentToolResult(
             stage.Name,
             normalizedKind,
