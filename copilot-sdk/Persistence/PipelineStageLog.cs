@@ -64,6 +64,25 @@ public sealed class PipelineStageLog
     [StringLength(1000)]
     public string? FallbackReason { get; set; }
 
+    /// <summary>Gets or sets the stable Copilot SDK session identifier used for this stage attempt.</summary>
+    [StringLength(200)]
+    public string? SdkSessionId { get; set; }
+
+    /// <summary>Gets or sets the current persisted session lifecycle state.</summary>
+    [StringLength(40)]
+    public string? SessionState { get; set; }
+
+    /// <summary>Gets or sets whether this stage attempt can be safely resumed.</summary>
+    [StringLength(40)]
+    public string? ResumeEligibility { get; set; }
+
+    /// <summary>Gets or sets why resume is blocked or unavailable, when applicable.</summary>
+    [StringLength(1000)]
+    public string? ResumeBlockedReason { get; set; }
+
+    /// <summary>Gets or sets when resumable session state should be cleaned up.</summary>
+    public DateTime? SessionCleanupAfter { get; set; }
+
     /// <summary>Gets or sets the number of cache read tokens reported for this stage.</summary>
     public int? CacheReadTokens { get; set; }
 

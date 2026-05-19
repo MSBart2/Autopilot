@@ -19,10 +19,13 @@ internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSin
 
         var toolProvider = new PipelineContextToolProvider(context, stage, new GitHubCli(repoRoot, context.Repository));
         var toolPolicy = new StageToolPolicyHooks(stage, context);
+        var attempt = context.StageHistory.Count(summary => summary.StageName.Equals(stage.Name, StringComparison.OrdinalIgnoreCase));
+        var sessionId = StageSessionIdentity.Create(context.RunId, stage.Name, attempt);
 
         await client.StartAsync(cancellationToken);
         await using var session = await client.CreateSessionAsync(new SessionConfig
         {
+            SessionId = sessionId,
             Model = model,
             Streaming = true,
             OnPermissionRequest = PermissionHandler.ApproveAll,
@@ -104,6 +107,7 @@ internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSin
             InputTokens = executionMetrics.InputTokens ?? inputTokens,
             OutputTokens = executionMetrics.OutputTokens ?? outputTokens,
             Metrics = executionMetrics,
+            SdkSessionId = sessionId,
         };
     }
 }

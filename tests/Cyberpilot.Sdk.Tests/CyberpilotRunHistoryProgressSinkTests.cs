@@ -292,6 +292,28 @@ public sealed class CyberpilotRunHistoryProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnStageCompleted_WithSdkSessionId_PersistsResumeMetadata()
+    {
+        var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "claude-sonnet-4.6", _dbContext);
+        var stage = new StageDefinition("PLAN", "plan", "plan.agent.md", "sdk/planning");
+        sink.OnStageStarted(stage, 1);
+
+        var result = StageResult.Empty with
+        {
+            SdkSessionId = "cyberpilot-run-plan-0",
+            Metrics = new StageExecutionMetrics(ReachedIdle: true, WasAborted: false),
+        };
+        sink.OnStageCompleted(stage, result);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("cyberpilot-run-plan-0", log.SdkSessionId);
+        Assert.Equal("completed", log.SessionState);
+        Assert.Equal("not_applicable", log.ResumeEligibility);
+        Assert.Contains("completed successfully", log.ResumeBlockedReason);
+        Assert.NotNull(log.SessionCleanupAfter);
+    }
+
+    [Fact]
     public void OnStageCompleted_WithArtifacts_PersistsArtifactRows()
     {
         var sink = new CyberpilotRunHistoryProgressSink(_run.Id, "claude-sonnet-4.6", _dbContext);

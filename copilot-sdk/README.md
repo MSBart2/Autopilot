@@ -35,7 +35,9 @@ dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 13
 
 Use `--db "Data Source=<path>"` to persist EXE-triggered runs into the SDK-owned EF Core run-history database.
 
-The default SDK model is `claude-sonnet-4.6`. Use `--model` when you need a different Copilot model available to your account. Family-tiered defaults keep `implement` and `review` on the configured base model, while cheaper stages (`triage`, `plan`, `docs`, `deliver`) use a cheaper same-family sibling when available (`claude-haiku-4.5` for Claude, `gpt-5-mini` for GPT) and fall back to the base model if unavailable. Use `--stage-model <stage>=<model>` and `--stage-fallback-model <stage>=<model>` for explicit overrides.
+The default SDK model is `claude-sonnet-4.6`. Use `--model` when you need a different Copilot model available to your account. Family-tiered defaults use a small same-family sibling for `triage`, `docs`, and `deliver` (`claude-haiku-4.5` for Claude, `gpt-5-mini` for GPT), and at least a medium same-family model for `plan`, `implement`, and `review` (`claude-sonnet-4.6` for Claude, `gpt-5.4` for GPT). Prior stage results can emit `recommended_model_tier`; Cyberpilot uses that signal to escalate `plan`, `implement`, or `review` up to the large tier (`claude-opus-4.6` or `gpt-5.5`) without silently downgrading stages or a large run-level model. Tiered models fall back to the base model if unavailable. Use `--stage-model <stage>=<model>` and `--stage-fallback-model <stage>=<model>` for explicit overrides.
+
+Each SDK stage attempt gets a stable resumable session ID in the form `cyberpilot-{runId}-{stageName}-{attempt}`. Run history records the session ID, lifecycle state, resume eligibility, blocked reason, and cleanup deadline on `PipelineStageLog`. Live session steering/queueing is intentionally deferred until there is a stronger product need.
 
 Useful options:
 

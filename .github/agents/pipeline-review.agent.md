@@ -153,6 +153,7 @@ When running under the SDK controller, the prompt wrapper supplies the exact sta
 - Include evidence summaries for architecture, security, quality, test, documentation, CI/build, and PR-review findings.
 - Include `policy_rationale` explaining why the selected policy profile permits approval or requires changes.
 - Include `required_actions` for every blocking change request or unresolved risk, with file/line references where possible.
+- Include `recommended_model_tier` for any follow-up implementation cycle: use `large` when changes requested involve security, architecture, broad refactors, data-risk, or uncertain validation; otherwise use `medium`.
 
 When complete, return:
 - `decision`: "approved" or "changes_requested"

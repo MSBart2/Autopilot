@@ -94,7 +94,8 @@ internal sealed record StageExecutionSummary(
     string Decision,
     string? Error,
     IReadOnlyList<string> Artifacts,
-    IReadOnlyList<string> Evidence)
+    IReadOnlyList<string> Evidence,
+    string? RecommendedModelTier)
 {
     public static StageExecutionSummary FromResult(string stageName, StageResult result)
     {
@@ -104,7 +105,8 @@ internal sealed record StageExecutionSummary(
             result.Decision,
             result.Error,
             result.Artifacts?.Select(artifact => FormatArtifact(artifact)).ToArray() ?? [],
-            result.Evidence?.Select(evidence => FormatEvidence(evidence)).ToArray() ?? []);
+            result.Evidence?.Select(evidence => FormatEvidence(evidence)).ToArray() ?? [],
+            result.RecommendedModelTier);
     }
 
     private static string FormatArtifact(StageArtifact artifact)

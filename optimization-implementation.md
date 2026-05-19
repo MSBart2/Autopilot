@@ -319,7 +319,7 @@ Benchmark result on issue #34 / PR #51: the first M5 run reduced tokens but caus
 - [x] Record selected model, fallback model, and fallback reason per stage.
 - [x] Compare cost/time/quality on cheap stages and review/implement stages.
 
-Existing CLI/web override plumbing already supported `--stage-model`, `--stage-fallback-model`, request-level maps, and per-stage selected/fallback metadata. Milestone 6 adds family-tiered defaults: `triage`, `plan`, `docs`, and `deliver` use a cheaper same-family model when no explicit override exists (`claude-haiku-4.5` for Claude runs, `gpt-5-mini` for GPT runs), while `implement` and `review` stay on the configured base model. If the cheaper family model is unavailable, the resolver falls back to the base model and records the fallback reason.
+Existing CLI/web override plumbing already supported `--stage-model`, `--stage-fallback-model`, request-level maps, and per-stage selected/fallback metadata. Milestone 6 adds family-tiered defaults: `triage`, `docs`, and `deliver` use the small same-family model when no explicit override exists (`claude-haiku-4.5` for Claude runs, `gpt-5-mini` for GPT runs), while `plan`, `implement`, and `review` use at least the medium same-family model (`claude-sonnet-4.6` for Claude runs, `gpt-5.4` for GPT runs) and do not downgrade a large run-level model. Stage results can now emit `recommended_model_tier`; prior-stage recommendations can escalate `plan`, `implement`, or `review` to the large same-family tier (`claude-opus-4.6` / `gpt-5.5`) without silently downgrading stages. If the tiered model is unavailable, the resolver falls back to the base model and records the fallback reason.
 
 Measured triage result: `m6-triage-family-tiered-costfix-20260519` kept the global run model on `claude-sonnet-4.6`, selected `claude-haiku-4.5` for triage, completed GO/approved, and recorded selected-model cost correctly after fixing the persistence sinks in `f0f4df3`. Against the M3 Sonnet triage baseline, corrected Haiku triage moved input tokens 162,939 -> 150,618 (-8%), turns 10 -> 9, failed tool calls 3 -> 0, duration 78,443 ms -> 57,562 ms (-27%), and estimated cost $0.5433 -> $0.1402 (-74%). Review/implement were validated by resolver tests to remain on the configured base model rather than auto-tiering.
 
@@ -331,18 +331,20 @@ Measured triage result: `m6-triage-family-tiered-costfix-20260519` kept the glob
 
 ## Milestone 7: Session persistence and human steering
 
-- [ ] Persist stable SDK session IDs by run/stage/attempt.
-- [ ] Define resume eligibility rules.
-- [ ] Add pause-after-turn concept.
-- [ ] Add immediate steering concept.
-- [ ] Add queued follow-up concept.
-- [ ] Add cleanup rules for abandoned or completed sessions.
+- [x] Persist stable SDK session IDs by run/stage/attempt.
+- [x] Define resume eligibility rules.
+- [ ] Add pause-after-turn concept. Deferred until live steering has a clearer use case.
+- [ ] Add immediate steering concept. Deferred until live steering has a clearer use case.
+- [ ] Add queued follow-up concept. Deferred until live steering has a clearer use case.
+- [x] Add cleanup rules for abandoned or completed sessions.
+
+Implementation: `CopilotStageRunner` now creates deterministic SDK session IDs (`cyberpilot-{runId}-{stageName}-{attempt}`) and passes them through `SessionConfig.SessionId`, so stage attempts can be mapped to persisted Copilot session state. `PipelineStageLog` records `SdkSessionId`, `SessionState`, `ResumeEligibility`, `ResumeBlockedReason`, and `SessionCleanupAfter`. `StageSessionResumePolicy` fails closed for missing/aborted/error sessions, marks interrupted stable sessions eligible, and marks successful idle completions as not-applicable for resume. Live steering/queueing storage was intentionally removed from this milestone so we do not carry unused schema for an uncertain product workflow.
 
 ### Success criteria
 
 - [ ] Operators can intervene without killing a run.
-- [ ] Unsafe resume cases fail closed with clear required actions.
-- [ ] Session cleanup is explicit.
+- [x] Unsafe resume cases fail closed with clear required actions.
+- [x] Session cleanup is explicit.
 
 ## Milestone 8: Parallel review dimensions
 

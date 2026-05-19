@@ -259,6 +259,28 @@ public class SignalRProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnStageCompleted_WithSdkSessionId_WritesResumeMetadata()
+    {
+        var sink = CreateSink("claude-sonnet-4.6");
+        var stage = new StageDefinition("PLAN", "plan", "plan.agent.md", "sdk/planning");
+        sink.OnStageStarted(stage, 42);
+
+        var result = StageResult.Empty with
+        {
+            SdkSessionId = "cyberpilot-run-plan-0",
+            Metrics = new StageExecutionMetrics(ReachedIdle: true, WasAborted: false),
+        };
+        sink.OnStageCompleted(stage, result);
+
+        var log = _dbContext.PipelineStageLogs.Single();
+        Assert.Equal("cyberpilot-run-plan-0", log.SdkSessionId);
+        Assert.Equal("completed", log.SessionState);
+        Assert.Equal("not_applicable", log.ResumeEligibility);
+        Assert.Contains("completed successfully", log.ResumeBlockedReason);
+        Assert.NotNull(log.SessionCleanupAfter);
+    }
+
+    [Fact]
     public void OnStageCompleted_WithArtifacts_WritesArtifactRows()
     {
         var sink = CreateSink("gpt-4.1");

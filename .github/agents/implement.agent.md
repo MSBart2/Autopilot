@@ -181,3 +181,4 @@ When complete, return:
 - `build_status`: pass/fail
 - `test_status`: pass/fail
 - `issue_number`: the issue number
+- `recommended_model_tier`: "medium" for routine review, or "large" when the PR touched security, architecture, data migrations, concurrency, broad cross-cutting behavior, or validation was uncertain

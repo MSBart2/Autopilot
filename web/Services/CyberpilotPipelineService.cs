@@ -206,6 +206,7 @@ public sealed class CyberpilotPipelineService(
             {
                 stageLog.Status = "failed";
                 stageLog.CompletedAt = DateTime.UtcNow;
+                ApplyInterruptedSessionPolicy(stageLog);
             }
 
             // Flush any buffered output from the sink
@@ -241,6 +242,7 @@ public sealed class CyberpilotPipelineService(
             {
                 stageLog.Status = "failed";
                 stageLog.CompletedAt = DateTime.UtcNow;
+                ApplyInterruptedSessionPolicy(stageLog);
             }
         }
 
@@ -252,12 +254,23 @@ public sealed class CyberpilotPipelineService(
         {
             stageLog.Status = "failed";
             stageLog.CompletedAt = DateTime.UtcNow;
+            ApplyInterruptedSessionPolicy(stageLog);
         }
 
         if (interrupted.Length > 0 || orphanedStageLogs.Length > 0)
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private static void ApplyInterruptedSessionPolicy(PipelineStageLog stageLog)
+    {
+        var completedAt = stageLog.CompletedAt ?? DateTime.UtcNow;
+        var resume = StageSessionResumePolicy.Interrupted(stageLog, completedAt);
+        stageLog.SessionState = resume.SessionState;
+        stageLog.ResumeEligibility = resume.ResumeEligibility;
+        stageLog.ResumeBlockedReason = resume.ResumeBlockedReason;
+        stageLog.SessionCleanupAfter = resume.SessionCleanupAfter;
     }
 
     private async Task RequeuePendingRunsAsync(CancellationToken cancellationToken)

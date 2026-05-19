@@ -61,6 +61,7 @@ public sealed class PromptBuilderTests
         Assert.Contains("Required artifacts: `pull-request`, `validation-summary`", prompt.UserMessage);
         Assert.Contains("\"policy_rationale\": \"why this result satisfies the strict policy profile\"", prompt.UserMessage);
         Assert.Contains("\"required_actions\": []", prompt.UserMessage);
+        Assert.Contains("\"recommended_model_tier\": \"small|medium|large\"", prompt.UserMessage);
         Assert.Contains("When status is STOP", prompt.UserMessage);
     }
 

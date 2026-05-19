@@ -143,4 +143,5 @@ public sealed class PipelineRun
 
     /// <summary>Gets or sets tool failure records for this run.</summary>
     public ICollection<PipelineToolFailure> ToolFailures { get; set; } = [];
+
 }

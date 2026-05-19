@@ -17,10 +17,12 @@ namespace Cyberpilot.Pipeline;
 /// <param name="Evidence">The evidence gathered or referenced by the stage.</param>
 /// <param name="PolicyRationale">The policy rationale supplied by the stage.</param>
 /// <param name="RequiredActions">The corrective actions required before the pipeline can continue.</param>
+/// <param name="RecommendedModelTier">The model tier this stage recommends for later stages, when supplied.</param>
 /// <param name="ConfiguredModel">The model configured for this stage before fallback.</param>
 /// <param name="SelectedModel">The model selected for this stage after availability checks.</param>
 /// <param name="FallbackModel">The fallback model used for this stage, when any.</param>
 /// <param name="FallbackReason">The reason a fallback model was selected, when any.</param>
+/// <param name="SdkSessionId">The stable Copilot SDK session identifier used for this stage attempt.</param>
 public sealed record StageResult(
     string Status,
     string Decision,
@@ -34,10 +36,12 @@ public sealed record StageResult(
     IReadOnlyList<StageEvidence>? Evidence = null,
     string? PolicyRationale = null,
     IReadOnlyList<string>? RequiredActions = null,
+    string? RecommendedModelTier = null,
     string? ConfiguredModel = null,
     string? SelectedModel = null,
     string? FallbackModel = null,
-    string? FallbackReason = null)
+    string? FallbackReason = null,
+    string? SdkSessionId = null)
 {
     /// <summary>
     /// Gets an empty successful stage result.
@@ -91,7 +95,9 @@ public sealed record StageResult(
                 PolicyRationale: ReadString(document.RootElement, "policyRationale")
                     ?? ReadString(document.RootElement, "policy_rationale"),
                 RequiredActions: ReadStringArray(document.RootElement, "requiredActions")
-                    ?? ReadStringArray(document.RootElement, "required_actions"));
+                    ?? ReadStringArray(document.RootElement, "required_actions"),
+                RecommendedModelTier: NormalizeModelTier(ReadString(document.RootElement, "recommendedModelTier")
+                    ?? ReadString(document.RootElement, "recommended_model_tier")));
         }
         catch (JsonException ex)
         {
@@ -177,6 +183,17 @@ public sealed record StageResult(
             .ToArray();
 
         return values.Length == 0 ? null : values;
+    }
+
+    private static string? NormalizeModelTier(string? tier)
+    {
+        if (string.IsNullOrWhiteSpace(tier))
+        {
+            return null;
+        }
+
+        var normalized = tier.Trim().ToLowerInvariant();
+        return normalized is "small" or "medium" or "large" ? normalized : null;
     }
 
     private static IReadOnlyList<StageArtifact>? ReadArtifacts(JsonElement element)

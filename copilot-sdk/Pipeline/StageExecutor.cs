@@ -24,7 +24,7 @@ internal sealed class StageExecutor(
         console.WriteDetail("Timeout", PipelineConsoleWriter.FormatDuration(timeout));
 
         progressSink.OnStageStarted(stage, issueNumber);
-        var modelSelection = await modelResolver.ResolveAsync(stage, cancellationToken);
+        var modelSelection = await modelResolver.ResolveAsync(stage, context, cancellationToken);
         if (!modelSelection.IsAvailable)
         {
             var unavailableResult = ApplyModelSelection(new StageResult(

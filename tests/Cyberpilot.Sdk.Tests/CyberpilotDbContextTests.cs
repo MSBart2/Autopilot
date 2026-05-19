@@ -128,6 +128,11 @@ public sealed class CyberpilotDbContextTests : IDisposable
         Assert.Null(log.StageResultJson);
         Assert.Null(log.StageResultContractVersion);
         Assert.Null(log.RetryReason);
+        Assert.Null(log.SdkSessionId);
+        Assert.Null(log.SessionState);
+        Assert.Null(log.ResumeEligibility);
+        Assert.Null(log.ResumeBlockedReason);
+        Assert.Null(log.SessionCleanupAfter);
     }
 
     [Fact]

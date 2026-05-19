@@ -5,17 +5,26 @@ namespace Cyberpilot.Pipeline;
 
 internal sealed class StageModelResolver(CyberpilotOptions options, IModelAvailabilityChecker modelChecker)
 {
-    private static readonly HashSet<string> CheapStages = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly IReadOnlyDictionary<string, ModelTier> DefaultStageTiers = new Dictionary<string, ModelTier>(StringComparer.OrdinalIgnoreCase)
     {
-        "triage",
-        "plan",
-        "docs",
-        "deliver",
+        ["triage"] = ModelTier.Small,
+        ["plan"] = ModelTier.Medium,
+        ["implement"] = ModelTier.Medium,
+        ["review"] = ModelTier.Medium,
+        ["docs"] = ModelTier.Small,
+        ["deliver"] = ModelTier.Small,
     };
 
-    public async Task<StageModelSelection> ResolveAsync(StageDefinition stage, CancellationToken cancellationToken)
+    private static readonly HashSet<string> EscalatableStages = new(StringComparer.OrdinalIgnoreCase)
     {
-        var configuredModel = ResolveConfiguredModel(stage.Name, out var autoTiered);
+        "plan",
+        "implement",
+        "review",
+    };
+
+    public async Task<StageModelSelection> ResolveAsync(StageDefinition stage, PipelineExecutionContext? context, CancellationToken cancellationToken)
+    {
+        var configuredModel = ResolveConfiguredModel(stage.Name, context, out var autoTiered);
         var configuredAvailability = await modelChecker.CheckAsync(configuredModel, options.RepoRoot, cancellationToken);
         if (configuredAvailability.IsAvailable)
         {
@@ -36,7 +45,7 @@ internal sealed class StageModelResolver(CyberpilotOptions options, IModelAvaila
         return StageModelSelection.Unavailable(configuredModel, configuredAvailability.Error ?? "Configured model is unavailable.");
     }
 
-    private string ResolveConfiguredModel(string stageName, out bool autoTiered)
+    private string ResolveConfiguredModel(string stageName, PipelineExecutionContext? context, out bool autoTiered)
     {
         autoTiered = false;
         if (TryGetStageModel(options.StageModelOverrides, stageName, out var model))
@@ -44,10 +53,10 @@ internal sealed class StageModelResolver(CyberpilotOptions options, IModelAvaila
             return model;
         }
 
-        if (TryGetFamilyCheapModel(options.Model, stageName, out var cheapModel))
+        if (TryResolveTieredModel(options.Model, ResolveStageTier(stageName, options.Model, context), out var tieredModel))
         {
             autoTiered = true;
-            return cheapModel;
+            return tieredModel;
         }
 
         return options.Model;
@@ -93,22 +102,119 @@ internal sealed class StageModelResolver(CyberpilotOptions options, IModelAvaila
         return false;
     }
 
-    private static bool TryGetFamilyCheapModel(string baseModel, string stageName, out string model)
+    private static ModelTier? ResolveStageTier(string stageName, string baseModel, PipelineExecutionContext? context)
+    {
+        if (!DefaultStageTiers.TryGetValue(stageName, out var defaultTier))
+        {
+            return null;
+        }
+
+        if (defaultTier >= ModelTier.Medium
+            && TryGetModelTier(baseModel, out var baseTier)
+            && baseTier > defaultTier)
+        {
+            defaultTier = baseTier;
+        }
+
+        if (EscalatableStages.Contains(stageName)
+            && TryGetRecommendedTier(context, out var recommendedTier)
+            && recommendedTier > defaultTier)
+        {
+            return recommendedTier;
+        }
+
+        return defaultTier;
+    }
+
+    private static bool TryGetRecommendedTier(PipelineExecutionContext? context, out ModelTier tier)
+    {
+        tier = ModelTier.Small;
+        if (context is null)
+        {
+            return false;
+        }
+
+        var found = false;
+        foreach (var summary in context.StageHistory)
+        {
+            if (!TryParseTier(summary.RecommendedModelTier, out var recommended))
+            {
+                continue;
+            }
+
+            if (!found || recommended > tier)
+            {
+                tier = recommended;
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
+    private static bool TryResolveTieredModel(string baseModel, ModelTier? tier, out string model)
     {
         model = string.Empty;
-        if (!CheapStages.Contains(stageName))
+        if (tier is null)
         {
             return false;
         }
 
         model = GetModelFamily(baseModel) switch
         {
-            ModelFamily.Claude when !baseModel.Equals("claude-haiku-4.5", StringComparison.OrdinalIgnoreCase) => "claude-haiku-4.5",
-            ModelFamily.Gpt when !baseModel.Equals("gpt-5-mini", StringComparison.OrdinalIgnoreCase) => "gpt-5-mini",
+            ModelFamily.Claude => tier.Value switch
+            {
+                ModelTier.Small => "claude-haiku-4.5",
+                ModelTier.Medium => "claude-sonnet-4.6",
+                ModelTier.Large => "claude-opus-4.6",
+                _ => string.Empty,
+            },
+            ModelFamily.Gpt => tier.Value switch
+            {
+                ModelTier.Small => "gpt-5-mini",
+                ModelTier.Medium => "gpt-5.4",
+                ModelTier.Large => "gpt-5.5",
+                _ => string.Empty,
+            },
             _ => string.Empty,
         };
 
         return !string.IsNullOrWhiteSpace(model);
+    }
+
+    private static bool TryParseTier(string? value, out ModelTier tier)
+    {
+        tier = ModelTier.Small;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "small" => SetTier(ModelTier.Small, out tier),
+            "medium" => SetTier(ModelTier.Medium, out tier),
+            "large" => SetTier(ModelTier.Large, out tier),
+            _ => false,
+        };
+    }
+
+    private static bool SetTier(ModelTier value, out ModelTier tier)
+    {
+        tier = value;
+        return true;
+    }
+
+    private static bool TryGetModelTier(string model, out ModelTier tier)
+    {
+        tier = ModelTier.Medium;
+        return model.ToLowerInvariant() switch
+        {
+            "claude-haiku-4.5" or "gpt-5-mini" => SetTier(ModelTier.Small, out tier),
+            "claude-sonnet-4.6" or "gpt-5.4" => SetTier(ModelTier.Medium, out tier),
+            "claude-opus-4.6" or "gpt-5.5" => SetTier(ModelTier.Large, out tier),
+            _ => false,
+        };
     }
 
     private static ModelFamily GetModelFamily(string model)
@@ -131,6 +237,13 @@ internal sealed class StageModelResolver(CyberpilotOptions options, IModelAvaila
         Unknown,
         Claude,
         Gpt,
+    }
+
+    private enum ModelTier
+    {
+        Small = 0,
+        Medium = 1,
+        Large = 2,
     }
 }
 

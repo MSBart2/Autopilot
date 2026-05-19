@@ -49,6 +49,7 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
             currentLog.InputTokens = result.InputTokens;
             currentLog.OutputTokens = result.OutputTokens;
             ApplyMetrics(currentLog, result, model);
+            ApplySessionMetadata(currentLog, result, currentLog.CompletedAt.Value);
             currentLog.EstimatedCostUsd = ModelPricingService.Estimate(ResolveCostModel(result, currentLog, model), result.InputTokens, result.OutputTokens);
             currentLog.StageResultJson = JsonSerializer.Serialize(result);
             currentLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
@@ -83,6 +84,16 @@ public sealed class CyberpilotRunHistoryProgressSink(string runId, string model,
         log.WasAborted = metrics?.WasAborted;
         log.ProviderCallIds = JoinIds(metrics?.ProviderCallIds);
         log.ApiCallIds = JoinIds(metrics?.ApiCallIds);
+    }
+
+    private static void ApplySessionMetadata(PipelineStageLog log, StageResult result, DateTime completedAtUtc)
+    {
+        log.SdkSessionId = result.SdkSessionId;
+        var resume = StageSessionResumePolicy.Evaluate(result, completedAtUtc);
+        log.SessionState = resume.SessionState;
+        log.ResumeEligibility = resume.ResumeEligibility;
+        log.ResumeBlockedReason = resume.ResumeBlockedReason;
+        log.SessionCleanupAfter = resume.SessionCleanupAfter;
     }
 
     private static string? JoinIds(IReadOnlyList<string>? values)

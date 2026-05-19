@@ -106,6 +106,7 @@ internal sealed record StageContextStageSummary(
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("decision")] string Decision,
     [property: JsonPropertyName("error")] string? Error,
+    [property: JsonPropertyName("recommended_model_tier")] string? RecommendedModelTier,
     [property: JsonPropertyName("artifacts")] IReadOnlyList<string> Artifacts,
     [property: JsonPropertyName("evidence")] IReadOnlyList<string> Evidence)
 {
@@ -116,6 +117,7 @@ internal sealed record StageContextStageSummary(
             summary.Status,
             summary.Decision,
             summary.Error,
+            summary.RecommendedModelTier,
             summary.Artifacts,
             summary.Evidence);
     }

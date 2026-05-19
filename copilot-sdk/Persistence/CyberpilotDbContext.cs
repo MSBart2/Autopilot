@@ -139,5 +139,6 @@ public sealed class CyberpilotDbContext : DbContext
             entity.HasIndex(e => e.StageName);
             entity.HasIndex(e => e.ToolName);
         });
+
     }
 }

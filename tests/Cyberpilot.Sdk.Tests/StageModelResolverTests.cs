@@ -12,7 +12,7 @@ public sealed class StageModelResolverTests
         var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "gpt-4.1" });
         var resolver = new StageModelResolver(CreateOptions(stageModels: new Dictionary<string, string> { ["review"] = "gpt-4.1" }), checker);
 
-        var selection = await resolver.ResolveAsync(Stage("review"), CancellationToken.None);
+        var selection = await resolver.ResolveAsync(Stage("review"), null, CancellationToken.None);
 
         Assert.True(selection.IsAvailable);
         Assert.Equal("gpt-4.1", selection.ConfiguredModel);
@@ -28,7 +28,7 @@ public sealed class StageModelResolverTests
             stageModels: new Dictionary<string, string> { ["review"] = "gpt-4.1" },
             fallbackModels: new Dictionary<string, string> { ["review"] = "claude-haiku-4.5" }), checker);
 
-        var selection = await resolver.ResolveAsync(Stage("review"), CancellationToken.None);
+        var selection = await resolver.ResolveAsync(Stage("review"), null, CancellationToken.None);
 
         Assert.True(selection.IsAvailable);
         Assert.Equal("gpt-4.1", selection.ConfiguredModel);
@@ -44,7 +44,7 @@ public sealed class StageModelResolverTests
             stageModels: new Dictionary<string, string> { ["review"] = "gpt-4.1" },
             fallbackModels: new Dictionary<string, string> { ["review"] = "claude-haiku-4.5" }), new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
 
-        var selection = await resolver.ResolveAsync(Stage("review"), CancellationToken.None);
+        var selection = await resolver.ResolveAsync(Stage("review"), null, CancellationToken.None);
 
         Assert.False(selection.IsAvailable);
         Assert.Equal("gpt-4.1", selection.ConfiguredModel);
@@ -54,15 +54,14 @@ public sealed class StageModelResolverTests
 
     [Theory]
     [InlineData("triage")]
-    [InlineData("plan")]
     [InlineData("docs")]
     [InlineData("deliver")]
-    public async Task ResolveAsync_ForCheapClaudeStage_SelectsHaikuWithinFamily(string stageName)
+    public async Task ResolveAsync_ForSmallClaudeStage_SelectsHaikuWithinFamily(string stageName)
     {
         var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-haiku-4.5" });
         var resolver = new StageModelResolver(CreateOptions(), checker);
 
-        var selection = await resolver.ResolveAsync(Stage(stageName), CancellationToken.None);
+        var selection = await resolver.ResolveAsync(Stage(stageName), null, CancellationToken.None);
 
         Assert.True(selection.IsAvailable);
         Assert.Equal("claude-haiku-4.5", selection.ConfiguredModel);
@@ -71,14 +70,15 @@ public sealed class StageModelResolverTests
     }
 
     [Theory]
+    [InlineData("plan")]
     [InlineData("implement")]
     [InlineData("review")]
-    public async Task ResolveAsync_ForHighJudgmentClaudeStage_KeepsBaseModel(string stageName)
+    public async Task ResolveAsync_ForMediumClaudeStage_SelectsSonnetWithinFamily(string stageName)
     {
         var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-sonnet-4.6" });
         var resolver = new StageModelResolver(CreateOptions(), checker);
 
-        var selection = await resolver.ResolveAsync(Stage(stageName), CancellationToken.None);
+        var selection = await resolver.ResolveAsync(Stage(stageName), null, CancellationToken.None);
 
         Assert.True(selection.IsAvailable);
         Assert.Equal("claude-sonnet-4.6", selection.ConfiguredModel);
@@ -91,7 +91,7 @@ public sealed class StageModelResolverTests
         var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-sonnet-4.6" });
         var resolver = new StageModelResolver(CreateOptions(), checker);
 
-        var selection = await resolver.ResolveAsync(Stage("triage"), CancellationToken.None);
+        var selection = await resolver.ResolveAsync(Stage("triage"), null, CancellationToken.None);
 
         Assert.True(selection.IsAvailable);
         Assert.Equal("claude-haiku-4.5", selection.ConfiguredModel);
@@ -106,11 +106,69 @@ public sealed class StageModelResolverTests
         var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "gpt-5-mini" });
         var resolver = new StageModelResolver(CreateOptions(model: "gpt-5.4"), checker);
 
-        var selection = await resolver.ResolveAsync(Stage("docs"), CancellationToken.None);
+        var selection = await resolver.ResolveAsync(Stage("docs"), null, CancellationToken.None);
 
         Assert.True(selection.IsAvailable);
         Assert.Equal("gpt-5-mini", selection.ConfiguredModel);
         Assert.Equal("gpt-5-mini", selection.SelectedModel);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithPriorLargeRecommendation_EscalatesImplementWithinFamily()
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-opus-4.6" });
+        var resolver = new StageModelResolver(CreateOptions(), checker);
+        var context = CreateContext();
+        context.RecordStageResult("plan", new StageResult("GO", "approved", true, null, RecommendedModelTier: "large"));
+
+        var selection = await resolver.ResolveAsync(Stage("implement"), context, CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("claude-opus-4.6", selection.ConfiguredModel);
+        Assert.Equal("claude-opus-4.6", selection.SelectedModel);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithPriorSmallRecommendation_DoesNotDowngradeImplement()
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-sonnet-4.6" });
+        var resolver = new StageModelResolver(CreateOptions(), checker);
+        var context = CreateContext();
+        context.RecordStageResult("plan", new StageResult("GO", "approved", true, null, RecommendedModelTier: "small"));
+
+        var selection = await resolver.ResolveAsync(Stage("implement"), context, CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("claude-sonnet-4.6", selection.ConfiguredModel);
+        Assert.Equal("claude-sonnet-4.6", selection.SelectedModel);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithStageOverride_IgnoresPriorRecommendation()
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "gpt-4.1" });
+        var resolver = new StageModelResolver(CreateOptions(stageModels: new Dictionary<string, string> { ["implement"] = "gpt-4.1" }), checker);
+        var context = CreateContext();
+        context.RecordStageResult("plan", new StageResult("GO", "approved", true, null, RecommendedModelTier: "large"));
+
+        var selection = await resolver.ResolveAsync(Stage("implement"), context, CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("gpt-4.1", selection.ConfiguredModel);
+        Assert.Equal("gpt-4.1", selection.SelectedModel);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithLargeBaseModel_DoesNotDowngradeImplement()
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-opus-4.6" });
+        var resolver = new StageModelResolver(CreateOptions(model: "claude-opus-4.6"), checker);
+
+        var selection = await resolver.ResolveAsync(Stage("implement"), null, CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("claude-opus-4.6", selection.ConfiguredModel);
+        Assert.Equal("claude-opus-4.6", selection.SelectedModel);
     }
 
     private static CyberpilotOptions CreateOptions(
@@ -139,6 +197,18 @@ public sealed class StageModelResolverTests
 
     private static StageDefinition Stage(string name)
         => new(name.ToUpperInvariant(), name, $"{name}.agent.md", $"sdk/{name}");
+
+    private static PipelineExecutionContext CreateContext()
+    {
+        var stage = Stage("implement");
+        var definition = new PipelineDefinition(
+            "test",
+            new PipelineDefinitionVersion("1.0"),
+            new PolicyProfile("standard", PolicyStrictness.Standard),
+            [new PipelineStageDefinition(stage, new StageContract("1.0", []), [])],
+            []);
+        return new PipelineExecutionContext(CreateOptions(), definition);
+    }
 
     private sealed class FakeModelAvailabilityChecker(IReadOnlySet<string> availableModels) : IModelAvailabilityChecker
     {

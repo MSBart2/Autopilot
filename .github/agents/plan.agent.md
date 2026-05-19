@@ -1,6 +1,5 @@
 ---
 description: "Pipeline planner — researches the codebase and creates detailed implementation plans"
-model: claude-opus-4.6
 tools: ['read', 'search', 'github', 'agent']
 agents: ['backend', 'frontend', 'security-implementer']
 argument-hint: "Provide an issue number to plan (e.g., 'plan issue 135')"
@@ -124,6 +123,10 @@ The final fenced `json` block is parsed by the SDK harness. Keep it boring and v
 - Do not paste raw multi-line markdown directly into the JSON object.
 - Do not include nested triple-backtick fences inside artifact values. If the handoff needs code or command examples, use indented code blocks or inline snippets instead.
 - Do not add any commentary after the final JSON fence.
+- Include `recommended_model_tier` for implementation/review based on the plan's complexity and risk:
+  - `small` only for trivial mechanical changes with low blast radius.
+  - `medium` for normal bounded implementation work.
+  - `large` for security-sensitive, cross-cutting, architectural, data-loss, migration, concurrency, or ambiguous/high-risk work.
 
 When complete, return:
 - `branch`: the feature branch name
@@ -131,3 +134,4 @@ When complete, return:
 - `agents`: list of agents needed for implementation
 - `issue_number`: the issue number planned
 - `artifacts.plan-comment`: the complete plan handoff text
+- `recommended_model_tier`: "small", "medium", or "large"

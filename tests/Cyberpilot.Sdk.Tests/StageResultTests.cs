@@ -100,6 +100,32 @@ public sealed class StageResultTests
     }
 
     [Fact]
+    public void Parse_RecommendedModelTier_ReturnsNormalizedTier()
+    {
+        var result = StageResult.Parse("""
+            ```json
+            {"status":"GO","recommended_model_tier":"Large"}
+            ```
+            """);
+
+        Assert.True(result.IsValid);
+        Assert.Equal("large", result.RecommendedModelTier);
+    }
+
+    [Fact]
+    public void Parse_UnknownRecommendedModelTier_IgnoresTier()
+    {
+        var result = StageResult.Parse("""
+            ```json
+            {"status":"GO","recommended_model_tier":"enormous"}
+            ```
+            """);
+
+        Assert.True(result.IsValid);
+        Assert.Null(result.RecommendedModelTier);
+    }
+
+    [Fact]
     public void Parse_ChangesRequestedDecision()
     {
         var result = StageResult.Parse("""

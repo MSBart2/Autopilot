@@ -73,6 +73,7 @@ internal sealed class PromptBuilder(
 			  ],
 			  "policy_rationale": "why this result satisfies the {{policyProfile.Name}} policy profile",
 			  "required_actions": [],
+			  "recommended_model_tier": "small|medium|large",
 			  "issue_number": {{issueNumber}}
 			}
 			```
@@ -80,6 +81,7 @@ internal sealed class PromptBuilder(
 			Use these status values when applicable: GO, STOP, DUPLICATE.
 			Use these review decision values when applicable: approved, changes_requested, comment.
 			When status is STOP or the result needs human correction, populate `required_actions` with concrete next steps.
+			Set `recommended_model_tier` only when downstream stages should spend more or less reasoning capacity based on the complexity or risk you found. Use `small`, `medium`, or `large`.
 			{{repositoryProfileContext}}
 			{{reportingGuidance}}
 
@@ -134,6 +136,7 @@ internal sealed class PromptBuilder(
 			  ],
 			  "policy_rationale": "why this result satisfies the {{policyProfile.Name}} policy profile",
 			  "required_actions": [],
+			  "recommended_model_tier": "small|medium|large",
 			  "issue_number": {{issueNumber}}
 			}
 			```
@@ -141,6 +144,7 @@ internal sealed class PromptBuilder(
 			Use these status values when applicable: GO, STOP, DUPLICATE.
 			Use these review decision values when applicable: approved, changes_requested, comment.
 			When status is STOP or the result needs human correction, populate `required_actions` with concrete next steps.
+			Set `recommended_model_tier` only when downstream stages should spend more or less reasoning capacity based on the complexity or risk you found. Use `small`, `medium`, or `large`.
 			The final fenced `json` block must contain exactly one valid JSON object. Do not put prose, markdown, or another fenced block inside the final JSON fence.
 			If an artifact contains markdown, store it as a normal JSON string: escape line breaks as `\n`, escape double quotes, and never paste raw multi-line markdown directly into the JSON block.
 			Do not include nested triple-backtick fences inside artifact strings. If you must quote code in an artifact, use indented code blocks or short inline snippets instead.
@@ -202,7 +206,7 @@ internal sealed class PromptBuilder(
 
 			Run the stage yourself. Do not delegate to background agents, manage `sdk` labels, or close the issue. Treat harness context and structured artifacts as canonical workflow state; comments are only human-readable reports.
 
-			End with exactly one fenced `json` block containing a valid stage result object. Include `contract_version`, required artifacts when available, evidence, policy rationale, required actions, and `issue_number`. Do not write anything after the final JSON fence.
+			End with exactly one fenced `json` block containing a valid stage result object. Include `contract_version`, required artifacts when available, evidence, policy rationale, required actions, optional `recommended_model_tier` (`small`, `medium`, or `large`) when downstream stages should adjust reasoning capacity, and `issue_number`. Do not write anything after the final JSON fence.
 			{{commandGuidance}}
 			""";
 	}

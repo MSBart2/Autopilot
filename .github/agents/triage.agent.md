@@ -208,6 +208,10 @@ When running under the SDK controller, the prompt wrapper supplies the exact sta
 - Include concrete evidence summaries for duplicate searches, related issues/PRs, quality-gate findings, and labels applied.
 - Include `policy_rationale` explaining why the issue is ready to plan, why it must stop, or why it is a confirmed duplicate.
 - Include `required_actions` whenever `status` is `STOP`, using actionable items the issue author or operator can complete.
+- Include `recommended_model_tier` for downstream stages based on issue complexity and risk:
+  - `small` for straightforward docs, copy, UI polish, or tightly scoped mechanical changes.
+  - `medium` for normal feature/bug work with bounded code changes.
+  - `large` for security-sensitive, cross-cutting, architectural, data-loss, migration, or unclear/high-risk work.
 
 ## Final JSON Safety
 
@@ -231,3 +235,4 @@ When complete, return a summary object with:
 - `duplicate_of`: array of canonical issue/PR references (only if DUPLICATE)
 - `related_issues`: array of related issue references (GO or DUPLICATE when applicable)
 - `related_prs`: array of related PR references (GO or DUPLICATE when applicable)
+- `recommended_model_tier`: "small", "medium", or "large" (GO only)
