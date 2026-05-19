@@ -10,8 +10,8 @@ namespace Cyberpilot.Copilot;
 internal sealed class PipelineContextToolProvider(PipelineExecutionContext context, StageDefinition stage, IGitHubCli gitHubCli)
 {
     private const int MaxRenderedCommentSummaryLength = 2800;
-    private const int MaxFileContentLength = 12000;
-    private const int MaxValidationOutputLength = 4000;
+    private const int MaxFileContentLength = 4000;
+    private const int MaxValidationOutputLength = 2000;
 
     public ICollection<AIFunction> CreateTools()
     {
