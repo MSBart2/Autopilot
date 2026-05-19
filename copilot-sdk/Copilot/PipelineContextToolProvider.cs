@@ -1,5 +1,6 @@
-using System.Text.Json;
+using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Cyberpilot.GitHub;
 using Cyberpilot.Pipeline;
 using Microsoft.Extensions.AI;
@@ -9,6 +10,8 @@ namespace Cyberpilot.Copilot;
 internal sealed class PipelineContextToolProvider(PipelineExecutionContext context, StageDefinition stage, IGitHubCli gitHubCli)
 {
     private const int MaxRenderedCommentSummaryLength = 2800;
+    private const int MaxFileContentLength = 12000;
+    private const int MaxValidationOutputLength = 4000;
 
     public ICollection<AIFunction> CreateTools()
     {
@@ -30,6 +33,14 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
                 (string commentKind, string summary, CancellationToken cancellationToken) => RenderStageCommentAsync(commentKind, summary, cancellationToken),
                 "render_stage_comment",
                 "Renders a deterministic Markdown stage comment body without posting to GitHub."),
+            AIFunctionFactory.Create(
+                (string path, int maxChars, CancellationToken cancellationToken) => GetChangedFileContentAsync(path, maxChars, cancellationToken),
+                "get_changed_file_content",
+                "Reads a repository-relative changed file with line numbers, avoiding absolute path read failures."),
+            AIFunctionFactory.Create(
+                (string validationKind, string targetPath, int timeoutSeconds, CancellationToken cancellationToken) => CollectValidationEvidenceAsync(validationKind, targetPath, timeoutSeconds, cancellationToken),
+                "collect_validation_evidence",
+                "Runs deterministic validation commands such as dotnet build/test and returns compact typed evidence."),
         ];
     }
 
@@ -155,6 +166,146 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
             "Return this body in the stage result artifact; do not post it from read-only stages.");
 
         return Task.FromResult(PipelineToolResponse<StageCommentToolResult>.Ok(result));
+    }
+
+    public async Task<PipelineToolResponse<ChangedFileContentToolResult>> GetChangedFileContentAsync(string path, int maxChars = MaxFileContentLength, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var normalizedPath = NormalizeRepoRelativePath(path);
+        if (normalizedPath is null)
+        {
+            return PipelineToolResponse<ChangedFileContentToolResult>.Fail("invalid_path", "Path must be repository-relative and may not contain rooted paths, drive letters, or '..' segments.");
+        }
+
+        var fullPath = Path.GetFullPath(Path.Combine(context.RepoRoot, normalizedPath));
+        var repoRoot = Path.GetFullPath(context.RepoRoot);
+        if (!fullPath.StartsWith(repoRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return PipelineToolResponse<ChangedFileContentToolResult>.Fail("path_outside_repo", "Path resolves outside the repository root.");
+        }
+
+        if (!File.Exists(fullPath))
+        {
+            return PipelineToolResponse<ChangedFileContentToolResult>.Fail("file_not_found", $"File '{normalizedPath}' was not found under the repository root.");
+        }
+
+        var content = await File.ReadAllTextAsync(fullPath, cancellationToken);
+        var limit = Math.Clamp(maxChars <= 0 ? MaxFileContentLength : maxChars, 500, MaxFileContentLength);
+        var truncated = content.Length > limit;
+        var visibleContent = truncated ? Truncate(content, limit) : content;
+        var result = new ChangedFileContentToolResult(
+            normalizedPath.Replace('\\', '/'),
+            content.Length,
+            CountLines(content),
+            truncated,
+            AddLineNumbers(visibleContent));
+
+        return PipelineToolResponse<ChangedFileContentToolResult>.Ok(result);
+    }
+
+    public async Task<PipelineToolResponse<ValidationEvidenceToolResult>> CollectValidationEvidenceAsync(
+        string validationKind,
+        string targetPath,
+        int timeoutSeconds = 120,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var normalizedKind = NormalizeValidationKind(validationKind);
+        if (normalizedKind is null)
+        {
+            return PipelineToolResponse<ValidationEvidenceToolResult>.Fail("unsupported_validation", "Validation kind must be dotnet_build or dotnet_test.");
+        }
+
+        var normalizedTarget = NormalizeRepoRelativePath(targetPath);
+        if (normalizedTarget is null)
+        {
+            return PipelineToolResponse<ValidationEvidenceToolResult>.Fail("invalid_target_path", "Target path must be repository-relative and may not contain rooted paths, drive letters, or '..' segments.");
+        }
+
+        var fullTargetPath = Path.GetFullPath(Path.Combine(context.RepoRoot, normalizedTarget));
+        var repoRoot = Path.GetFullPath(context.RepoRoot);
+        if (!fullTargetPath.StartsWith(repoRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return PipelineToolResponse<ValidationEvidenceToolResult>.Fail("target_outside_repo", "Target path resolves outside the repository root.");
+        }
+
+        if (!File.Exists(fullTargetPath))
+        {
+            return PipelineToolResponse<ValidationEvidenceToolResult>.Fail("target_not_found", $"Validation target '{normalizedTarget}' was not found under the repository root.");
+        }
+
+        var timeout = TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds <= 0 ? 120 : timeoutSeconds, 10, 600));
+        var args = normalizedKind == "dotnet_test"
+            ? new[] { "test", normalizedTarget, "--no-restore", "--verbosity", "normal" }
+            : ["build", normalizedTarget, "--no-restore", "--verbosity", "minimal"];
+
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = context.RepoRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        foreach (var arg in args)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start dotnet process.");
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(timeout);
+
+        string output;
+        string error;
+        try
+        {
+            output = await process.StandardOutput.ReadToEndAsync(timeoutSource.Token);
+            error = await process.StandardError.ReadToEndAsync(timeoutSource.Token);
+            await process.WaitForExitAsync(timeoutSource.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // Process exited between timeout cancellation and cleanup.
+            }
+
+            stopwatch.Stop();
+            var timedOut = new ValidationEvidenceToolResult(
+                normalizedKind,
+                $"dotnet {string.Join(' ', args)}",
+                normalizedTarget.Replace('\\', '/'),
+                false,
+                null,
+                true,
+                stopwatch.ElapsedMilliseconds,
+                $"Validation timed out after {(int)timeout.TotalSeconds} seconds.",
+                null);
+            return PipelineToolResponse<ValidationEvidenceToolResult>.Ok(timedOut);
+        }
+
+        stopwatch.Stop();
+        var combined = string.IsNullOrWhiteSpace(error) ? output : $"{output}{Environment.NewLine}{error}";
+        var result = new ValidationEvidenceToolResult(
+            normalizedKind,
+            $"dotnet {string.Join(' ', args)}",
+            normalizedTarget.Replace('\\', '/'),
+            process.ExitCode == 0,
+            process.ExitCode,
+            false,
+            stopwatch.ElapsedMilliseconds,
+            Tail(Truncate(combined.Trim(), MaxValidationOutputLength), 80),
+            process.ExitCode == 0 ? null : "Validation command exited non-zero.");
+
+        return PipelineToolResponse<ValidationEvidenceToolResult>.Ok(result);
     }
 
     private ToolOutputReference? PersistToolOutput(string toolName, string rawOutput, string mediaType)
@@ -357,6 +508,55 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
         };
     }
 
+    private static string? NormalizeRepoRelativePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var trimmed = path.Trim().Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(trimmed) || trimmed.Contains(':', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var segments = trimmed.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Any(segment => segment == ".."))
+        {
+            return null;
+        }
+
+        return string.Join(Path.DirectorySeparatorChar, segments);
+    }
+
+    private static string AddLineNumbers(string content)
+    {
+        var lines = content.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        return string.Join(Environment.NewLine, lines.Select((line, index) => $"{index + 1}. {line}"));
+    }
+
+    private static int CountLines(string content)
+    {
+        return content.Length == 0 ? 0 : content.Count(character => character == '\n') + 1;
+    }
+
+    private static string Tail(string value, int maxLines)
+    {
+        var lines = value.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        return string.Join(Environment.NewLine, lines.Skip(Math.Max(0, lines.Length - maxLines)));
+    }
+
+    private static string? NormalizeValidationKind(string? validationKind)
+    {
+        return validationKind?.Trim().ToLowerInvariant().Replace("-", "_") switch
+        {
+            "build" or "dotnet_build" => "dotnet_build",
+            "test" or "dotnet_test" => "dotnet_test",
+            _ => null,
+        };
+    }
+
     private static void AddSignal(List<string> signals, bool condition, string signal)
     {
         if (condition)
@@ -445,6 +645,24 @@ internal sealed record StageCommentToolResult(
     string Heading,
     string Body,
     string Usage);
+
+internal sealed record ChangedFileContentToolResult(
+    string Path,
+    int CharacterCount,
+    int LineCount,
+    bool Truncated,
+    string NumberedContent);
+
+internal sealed record ValidationEvidenceToolResult(
+    string ValidationKind,
+    string Command,
+    string TargetPath,
+    bool Passed,
+    int? ExitCode,
+    bool TimedOut,
+    long DurationMs,
+    string OutputTail,
+    string? Error);
 
 internal sealed record PullRequestFileSummary(string Path, int? Additions, int? Deletions, string? Status)
 {

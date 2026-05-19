@@ -244,7 +244,9 @@ internal sealed class PromptBuilder(
 			2. `get_pr_details`
 			3. `get_pr_diff_summary`
 
-			Treat `get_pr_diff_summary` as the authoritative changed-file map for this stage. Use its file list, top-directory groups, extension groups, and review signals to decide which files need deeper inspection. When inspecting files directly, use paths relative to the repository root instead of absolute local paths.
+			Treat `get_pr_diff_summary` as the authoritative changed-file map for this stage. Use its file list, top-directory groups, extension groups, and review signals to decide which files need deeper inspection. When inspecting files directly, call `get_changed_file_content` with repository-relative paths from the diff summary instead of using absolute local paths.
+
+			When validating .NET changes, call `collect_validation_evidence` for `dotnet_build` or `dotnet_test` with a repository-relative solution/project path instead of inventing shell commands.
 
 			If the imported stage prompt asks you to post a started/progress/verdict/verification/landing comment, call `render_stage_comment` and return the rendered body in the required stage artifact instead of using shell or GitHub commands to post from the SDK session.
 			""";

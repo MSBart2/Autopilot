@@ -211,12 +211,63 @@ public sealed class PipelineContextToolProviderTests
         Assert.True(response.Data.Body.Length < 3_100);
     }
 
-    private static PipelineExecutionContext CreateContext(bool captureToolOutputArtifacts = false, string? prHeadBranch = null, int? prNumber = null)
+    [Fact]
+    public async Task GetChangedFileContentAsync_ReadsRepoRelativePathWithLineNumbers()
+    {
+        var repo = Directory.CreateTempSubdirectory("cyberpilot-sdk-test-");
+        try
+        {
+            var filePath = Path.Combine(repo.FullName, "src", "Weather.cs");
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+            await File.WriteAllTextAsync(filePath, "first line\nsecond line");
+            var provider = new PipelineContextToolProvider(CreateContext(repoRoot: repo.FullName), Stage("review"), new FakeGitHubCli());
+
+            var response = await provider.GetChangedFileContentAsync("src/Weather.cs");
+
+            Assert.True(response.Success);
+            Assert.NotNull(response.Data);
+            Assert.Equal("src/Weather.cs", response.Data.Path);
+            Assert.Equal(2, response.Data.LineCount);
+            Assert.False(response.Data.Truncated);
+            Assert.Contains("1. first line", response.Data.NumberedContent);
+            Assert.Contains("2. second line", response.Data.NumberedContent);
+        }
+        finally
+        {
+            repo.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task GetChangedFileContentAsync_RejectsRootedPath()
+    {
+        var provider = new PipelineContextToolProvider(CreateContext(), Stage("review"), new FakeGitHubCli());
+
+        var response = await provider.GetChangedFileContentAsync("C:\\temp\\Weather.cs");
+
+        Assert.False(response.Success);
+        Assert.NotNull(response.Error);
+        Assert.Equal("invalid_path", response.Error.Code);
+    }
+
+    [Fact]
+    public async Task CollectValidationEvidenceAsync_RejectsUnsupportedValidationKind()
+    {
+        var provider = new PipelineContextToolProvider(CreateContext(), Stage("review"), new FakeGitHubCli());
+
+        var response = await provider.CollectValidationEvidenceAsync("npm test", "App.csproj");
+
+        Assert.False(response.Success);
+        Assert.NotNull(response.Error);
+        Assert.Equal("unsupported_validation", response.Error.Code);
+    }
+
+    private static PipelineExecutionContext CreateContext(bool captureToolOutputArtifacts = false, string? prHeadBranch = null, int? prNumber = null, string? repoRoot = null)
     {
         return new PipelineExecutionContext(
             new CyberpilotOptions(
                 42,
-                Directory.GetCurrentDirectory(),
+                repoRoot ?? Directory.GetCurrentDirectory(),
                 "owner/repo",
                 CyberpilotOptions.DefaultModel,
                 false,

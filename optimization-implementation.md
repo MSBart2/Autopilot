@@ -266,10 +266,11 @@ The compact renderer removed GitHub write denials and renderer failures, but it 
 | Compute next stage route | Harness | `compute_stage_route` gate/helper | Not started |
 | Fetch PR metadata | Tool | `get_pr_details` | Not started |
 | Fetch/summarize PR diff | Tool/cache | `get_pr_diff_summary` | **Promoted first:** typed file stats, directory/extension groups, and review signals. Review/docs prompts now prefer this tool before shell/GitHub diff discovery. |
-| Run known validation commands | Script/tool | `collect_validation_evidence` | Not started |
+| Run known validation commands | Script/tool | `collect_validation_evidence` | **Promoted:** deterministic `dotnet build` / `dotnet test` runner with typed exit code, duration, timeout, and output-tail evidence; avoids shell syntax roulette. |
 | Render stage comments | Harness/tool | `render_stage_comment` | **Promoted:** typed Markdown renderer for started/progress/verdict/verification/landing comments. Read-only stages return rendered bodies as artifacts instead of attempting blocked GitHub writes. |
 | Persist stage artifacts | Harness/tool | `record_stage_artifact` | Not started |
 | Manage SDK labels | Harness/tool | `set_pipeline_label` | Not started |
+| Read changed file content | Tool | `get_changed_file_content` | **Promoted from baseline failures:** repository-relative changed-file reads with line numbers; avoids repeated absolute-path `view` failures. |
 
 ### Success criteria
 

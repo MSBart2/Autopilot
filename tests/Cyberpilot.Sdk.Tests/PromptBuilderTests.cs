@@ -208,6 +208,8 @@ public sealed class PromptBuilderTests
         Assert.Contains("## Deterministic PR Tools", prompt.UserMessage);
         Assert.Contains("get_pr_diff_summary", prompt.UserMessage);
         Assert.Contains("authoritative changed-file map", prompt.UserMessage);
+        Assert.Contains("get_changed_file_content", prompt.UserMessage);
+        Assert.Contains("collect_validation_evidence", prompt.UserMessage);
         Assert.Contains("render_stage_comment", prompt.UserMessage);
         Assert.Contains("return the rendered body in the required stage artifact", prompt.UserMessage);
     }
