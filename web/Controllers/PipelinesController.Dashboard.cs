@@ -145,6 +145,120 @@ public partial class PipelinesController
     }
 
     /// <summary>
+    /// Displays the latest captured triage report for a pipeline run as a standalone document.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <returns>The triage document view, or NotFound when the run or triage output does not exist.</returns>
+    [HttpGet("{id}/Triage")]
+    public async Task<IActionResult> Triage(string id)
+    {
+        var run = await _dbContext.PipelineRuns.AsNoTracking().FirstOrDefaultAsync(item => item.Id == id);
+        if (run is null)
+        {
+            return NotFound();
+        }
+
+        var logs = await _dbContext.PipelineStageLogs
+            .Where(log => log.RunId == id)
+            .OrderBy(log => log.StartedAt)
+            .AsNoTracking()
+            .ToArrayAsync();
+
+        var evidence = await _dbContext.PipelineEvidence
+            .Where(item => item.RunId == id)
+            .OrderBy(item => item.StageName)
+            .ThenBy(item => item.Kind)
+            .ThenBy(item => item.CreatedAt)
+            .AsNoTracking()
+            .ToArrayAsync();
+
+        var triage = PipelineTriageReviewViewModel.Create(run, logs, evidence);
+        if (triage is null)
+        {
+            return NotFound();
+        }
+
+        string? renderedHtml = null;
+        if (!string.IsNullOrWhiteSpace(triage.FullTriageText))
+        {
+            var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
+            renderedHtml = Markdown.ToHtml(triage.FullTriageText, pipeline);
+        }
+
+        return View(new PipelineTriageDocumentViewModel(run, triage, renderedHtml));
+    }
+
+    /// <summary>
+    /// Displays the latest captured implementation output for a pipeline run as a standalone document.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <returns>The implementation document view, or NotFound when the run or stage output does not exist.</returns>
+    [HttpGet("{id}/Implement")]
+    public Task<IActionResult> Implement(string id) => StageDocument(id, "implement");
+
+    /// <summary>
+    /// Displays the latest captured review output for a pipeline run as a standalone document.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <returns>The review document view, or NotFound when the run or stage output does not exist.</returns>
+    [HttpGet("{id}/Review")]
+    public Task<IActionResult> Review(string id) => StageDocument(id, "review");
+
+    /// <summary>
+    /// Displays the latest captured documentation output for a pipeline run as a standalone document.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <returns>The docs document view, or NotFound when the run or stage output does not exist.</returns>
+    [HttpGet("{id}/Docs")]
+    public Task<IActionResult> Docs(string id) => StageDocument(id, "docs");
+
+    /// <summary>
+    /// Displays the latest captured delivery output for a pipeline run as a standalone document.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <returns>The delivery document view, or NotFound when the run or stage output does not exist.</returns>
+    [HttpGet("{id}/Deliver")]
+    public Task<IActionResult> Deliver(string id) => StageDocument(id, "deliver");
+
+    private async Task<IActionResult> StageDocument(string id, string stageName)
+    {
+        var run = await _dbContext.PipelineRuns.AsNoTracking().FirstOrDefaultAsync(item => item.Id == id);
+        if (run is null)
+        {
+            return NotFound();
+        }
+
+        var logs = await _dbContext.PipelineStageLogs
+            .Where(log => log.RunId == id)
+            .OrderBy(log => log.StartedAt)
+            .AsNoTracking()
+            .ToArrayAsync();
+
+        var evidence = await _dbContext.PipelineEvidence
+            .Where(item => item.RunId == id)
+            .OrderBy(item => item.StageName)
+            .ThenBy(item => item.Kind)
+            .ThenBy(item => item.CreatedAt)
+            .AsNoTracking()
+            .ToArrayAsync();
+
+        var stage = PipelineStageOutputViewModel.Create(stageName, run, logs, evidence);
+        if (stage is null)
+        {
+            return NotFound();
+        }
+
+        string? renderedHtml = null;
+        if (!string.IsNullOrWhiteSpace(stage.FullOutputText))
+        {
+            var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
+            renderedHtml = Markdown.ToHtml(stage.FullOutputText, pipeline);
+        }
+
+        return View("Stage", new PipelineStageDocumentViewModel(run, stage, renderedHtml));
+    }
+
+    /// <summary>
     /// Returns one of the Cyberpilot pipeline guides in a themed view.
     /// </summary>
     /// <param name="mode">The pipeline mode key: local, cloud, or sdk.</param>

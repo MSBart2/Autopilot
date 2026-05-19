@@ -24,6 +24,21 @@ public sealed class StageToolPolicyHooksTests
     }
 
     [Fact]
+    public void EvaluatePreToolUse_ForPrChecksHarnessTool_AllowsCall()
+    {
+        var hooks = CreateHooks("deliver");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "get_pr_checks",
+            ToolArgs = new { },
+        });
+
+        Assert.Equal("allow", output.PermissionDecision);
+        Assert.Contains("Harness read-only", output.PermissionDecisionReason);
+    }
+
+    [Fact]
     public void EvaluatePreToolUse_ForSelfReviewApprove_DeniesCall()
     {
         var hooks = CreateHooks("review");
@@ -200,6 +215,21 @@ public sealed class StageToolPolicyHooksTests
         });
 
         Assert.Equal("allow", output.PermissionDecision);
+    }
+
+    [Fact]
+    public void EvaluatePreToolUse_ForDeliverWriteCommand_DeniesCall()
+    {
+        var hooks = CreateHooks("deliver");
+
+        var output = hooks.EvaluatePreToolUse(new PreToolUseHookInput
+        {
+            ToolName = "run_in_terminal",
+            ToolArgs = new { command = "gh pr merge 32 --squash --delete-branch" },
+        });
+
+        Assert.Equal("deny", output.PermissionDecision);
+        Assert.Contains("Delivery merges are performed", output.PermissionDecisionReason);
     }
 
     [Fact]

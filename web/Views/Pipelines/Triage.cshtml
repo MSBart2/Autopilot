@@ -1,7 +1,7 @@
-@model Cyberpilot.Web.Models.PipelinePlanDocumentViewModel
+@model Cyberpilot.Web.Models.PipelineTriageDocumentViewModel
 @{
-    ViewData["Title"] = $"Plan - Issue #{Model.Run.IssueNumber}";
-    var plan = Model.Plan;
+    ViewData["Title"] = $"Triage - Issue #{Model.Run.IssueNumber}";
+    var triage = Model.Triage;
 }
 
 <div class="pipeline-detail-shell plan-document-shell">
@@ -9,80 +9,67 @@
         <ol class="breadcrumb mb-0">
             <li class="breadcrumb-item"><a asp-action="Index">Pipelines</a></li>
             <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@Model.Run.Id">Run @Model.Run.Id</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Plan</li>
+            <li class="breadcrumb-item active" aria-current="page">Triage</li>
         </ol>
     </nav>
 
     <main class="plan-document-grid">
-        <section class="plan-document-main" aria-labelledby="plan-full-title">
+        <section class="plan-document-main" aria-labelledby="triage-full-title">
             <div class="plan-document-section-header plan-document-section-header-actions">
                 <div>
                     <p class="eyebrow">Captured output</p>
-                    <h1 id="plan-full-title">Issue #@Model.Run.IssueNumber Plan</h1>
+                    <h1 id="triage-full-title">Issue #@Model.Run.IssueNumber Triage</h1>
                 </div>
                 <div class="plan-review-badges">
                     <a class="btn btn-sm btn-outline-light" href="@Model.IssueUrl" target="_blank" rel="noopener">View issue</a>
                     <a asp-action="Details" asp-route-id="@Model.Run.Id" class="btn btn-sm btn-outline-info">Back to run</a>
-                    <span class="plan-review-status">@plan.Status</span>
-                    @if (!string.IsNullOrWhiteSpace(plan.Decision) && plan.Decision != "unknown")
+                    <span class="plan-review-status">@triage.Status</span>
+                    @if (!string.IsNullOrWhiteSpace(triage.Decision) && triage.Decision != "unknown")
                     {
-                        <span class="plan-review-decision">@plan.Decision</span>
+                        <span class="plan-review-decision">@triage.Decision</span>
                     }
                 </div>
             </div>
-            @if (plan.HasFullPlanText)
+            @if (triage.HasFullTriageText)
             {
-                @if (Model.RenderedPlanHtml is not null)
+                @if (Model.RenderedTriageHtml is not null)
                 {
                     <div class="plan-rendered-body markdown-body">
-                        @Html.Raw(Model.RenderedPlanHtml)
+                        @Html.Raw(Model.RenderedTriageHtml)
                     </div>
                 }
                 else
                 {
-                    <pre class="plan-document-pre">@plan.FullPlanText</pre>
+                    <pre class="plan-document-pre">@triage.FullTriageText</pre>
                 }
             }
             else
             {
-                <p class="muted-cell">No full plan text was captured for this run.</p>
+                <p class="muted-cell">No full triage text was captured for this run.</p>
             }
         </section>
 
-        <aside class="plan-document-aside" aria-label="Plan metadata">
+        <aside class="plan-document-aside" aria-label="Triage metadata">
             <section class="plan-document-card">
                 <p class="eyebrow">Metadata</p>
                 <dl class="plan-review-meta">
                     <div>
-                        <dt>Branch</dt>
-                        <dd>
-                            @if (plan.HasBranch)
-                            {
-                                <code>@plan.BranchName</code>
-                            }
-                            else
-                            {
-                                <span class="muted-cell fst-italic">pending</span>
-                            }
-                        </dd>
-                    </div>
-                    <div>
                         <dt>Captured</dt>
-                        <dd>@plan.CreatedAt.ToLocalTime().ToString("g")</dd>
+                        <dd>@triage.CreatedAt.ToLocalTime().ToString("g")</dd>
                     </div>
                     <div>
                         <dt>Contract</dt>
-                        <dd>@(string.IsNullOrWhiteSpace(plan.ContractVersion) ? "unknown" : plan.ContractVersion)</dd>
+                        <dd>@(string.IsNullOrWhiteSpace(triage.ContractVersion) ? "unknown" : triage.ContractVersion)</dd>
                     </div>
                 </dl>
             </section>
 
-            @if (plan.HasRequiredActions)
+            @if (triage.HasRequiredActions)
             {
                 <section class="plan-document-card">
                     <p class="eyebrow">Required before continuing</p>
                     <ul class="plan-document-list">
-                        @foreach (var action in plan.RequiredActions)
+                        @foreach (var action in triage.RequiredActions)
                         {
                             <li>@action</li>
                         }
@@ -90,18 +77,19 @@
                 </section>
             }
 
-            @if (plan.HasEvidence)
+            @if (triage.HasEvidence)
             {
                 <section class="plan-document-card">
                     <p class="eyebrow">Supporting evidence</p>
                     <div class="plan-review-evidence">
-                        @foreach (var evidence in plan.Evidence)
+                        @foreach (var evidence in triage.Evidence)
                         {
                             <p><strong>@evidence.KindLabel:</strong> @evidence.Summary</p>
                         }
                     </div>
                 </section>
             }
+
         </aside>
     </main>
 </div>

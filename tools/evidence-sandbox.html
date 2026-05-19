@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evidence Panel Sandbox — Cyberpilot</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #0a0f1a; color: #d1d5db; min-height: 100vh; }
+
+/* ── Layout ── */
+.sandbox-layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+.sidebar { background: #0d1117; border-right: 1px solid #21262d; padding: 1rem; display: flex; flex-direction: column; gap: .75rem; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.main { padding: 1.5rem; overflow-y: auto; }
+
+/* ── Sidebar controls ── */
+.sidebar h2 { font-size: .72rem; font-weight: 900; letter-spacing: .14em; color: #22d3ee; text-transform: uppercase; margin-bottom: .25rem; }
+.sidebar p { font-size: .7rem; color: #64748b; line-height: 1.5; }
+.control-group { display: flex; flex-direction: column; gap: .3rem; margin-top: .5rem; }
+.control-group label { display: flex; align-items: center; gap: .4rem; font-size: .72rem; color: #94a3b8; cursor: pointer; }
+.control-group input[type=checkbox] { accent-color: #22d3ee; }
+.control-group input[type=range] { accent-color: #22d3ee; width: 100%; }
+.control-group select { width: 100%; background: #161b22; border: 1px solid #30363d; color: #e2e8f0; padding: .25rem .4rem; border-radius: 4px; font-size: .72rem; }
+.stat-row { font-size: .68rem; color: #64748b; display: flex; justify-content: space-between; border-top: 1px solid #21262d; padding-top: .5rem; margin-top: .25rem; }
+
+/* ── Findings panel (prototype) ── */
+.findings-panel {
+    border: 1px solid rgba(34, 211, 238, .2);
+    border-radius: 10px;
+    background:
+        linear-gradient(135deg, rgba(12, 18, 33, .95), rgba(6, 10, 18, .85)),
+        linear-gradient(90deg, rgba(34, 211, 238, .06), transparent 60%, rgba(52, 211, 153, .04));
+    overflow: hidden;
+}
+.findings-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .85rem 1rem;
+    border-bottom: 1px solid rgba(34, 211, 238, .16);
+    cursor: pointer;
+    user-select: none;
+    transition: background .18s;
+}
+.findings-panel-header:hover { background: rgba(34, 211, 238, .06); }
+.findings-panel-header .eyebrow {
+    font-size: .62rem;
+    font-weight: 900;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: #22d3ee;
+    margin-bottom: .15rem;
+}
+.findings-panel-header h3 { margin: 0; font-size: 1rem; font-weight: 900; color: #f0f9ff; letter-spacing: .02em; }
+.panel-meta { display: flex; align-items: center; gap: .5rem; }
+.evidence-count {
+    font-size: .68rem; font-weight: 900; color: #22d3ee;
+    background: rgba(34,211,238,.12); border: 1px solid rgba(34,211,238,.25);
+    border-radius: 999px; padding: .1rem .45rem; letter-spacing: .04em;
+}
+.chevron { color: #64748b; font-size: .9rem; transition: transform .2s; }
+.chevron.open { transform: rotate(180deg); }
+
+.findings-body { padding: 1rem; display: flex; flex-direction: column; gap: 1.25rem; }
+.findings-stage-group { display: flex; flex-direction: column; gap: .55rem; }
+.findings-stage-label {
+    margin: 0 0 .35rem; font-size: .68rem; font-weight: 900; letter-spacing: .14em;
+    text-transform: uppercase; color: #22d3ee;
+    padding-bottom: .3rem; border-bottom: 1px solid rgba(34, 211, 238, .15);
+}
+.findings-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+    gap: .55rem;
+}
+.finding-item {
+    padding: .65rem .75rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid rgba(148, 163, 184, .14);
+    border-left: 3px solid rgba(148, 163, 184, .3);
+    display: flex; flex-direction: column; gap: .3rem;
+}
+.finding-item.kind-stage-evidence { border-left-color: #22d3ee; }
+.finding-item.kind-policy-rationale { border-left-color: #a78bfa; }
+.finding-item.kind-required-action { border-left-color: #fbbf24; }
+.finding-item.kind-repository-profile { border-left-color: #34d399; }
+.finding-item-header { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.finding-kind {
+    font-size: .6rem; font-weight: 900; letter-spacing: .1em;
+    text-transform: uppercase; color: #22d3ee; white-space: nowrap;
+}
+.finding-name { font-size: .72rem; font-weight: 700; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 20ch; }
+.finding-summary { margin: 0; font-size: .78rem; color: #cbd5e1; line-height: 1.55; }
+.finding-link { font-size: .7rem; color: #22d3ee; text-decoration: none; margin-top: .15rem; }
+.finding-link:hover { text-decoration: underline; }
+
+/* ── Raw data inspector ── */
+.data-inspector {
+    margin-top: 1.5rem;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.inspector-header {
+    background: #161b22;
+    padding: .5rem .75rem;
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: #64748b;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+}
+.inspector-body {
+    max-height: 300px; overflow-y: auto;
+    background: #020617;
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-size: .68rem; line-height: 1.6; color: #6b7280;
+    padding: .6rem .75rem;
+    white-space: pre-wrap; word-break: break-all;
+}
+</style>
+</head>
+<body>
+
+<div class="sandbox-layout">
+  <!-- Sidebar controls -->
+  <aside class="sidebar">
+    <div>
+      <h2>🔬 Evidence Sandbox</h2>
+      <p>Prototype the findings panel using real run data. Tweak the controls and watch it re-render live.</p>
+    </div>
+    <div class="control-group">
+      <strong style="font-size:.68rem;color:#64748b;letter-spacing:.1em;text-transform:uppercase;">Filter kinds</strong>
+      <label><input type="checkbox" class="kind-filter" value="stage-evidence" checked> Stage evidence</label>
+      <label><input type="checkbox" class="kind-filter" value="policy-rationale" checked> Policy rationale</label>
+      <label><input type="checkbox" class="kind-filter" value="required-action" checked> Required action</label>
+      <label><input type="checkbox" class="kind-filter" value="repository-profile" checked> Repo profile</label>
+    </div>
+    <div class="control-group">
+      <strong style="font-size:.68rem;color:#64748b;letter-spacing:.1em;text-transform:uppercase;">Display</strong>
+      <label><input type="checkbox" id="chk-expanded" checked> Expanded by default</label>
+      <label><input type="checkbox" id="chk-group-stages" checked> Group by stage</label>
+      <label><input type="checkbox" id="chk-show-kind" checked> Show kind badge</label>
+      <label><input type="checkbox" id="chk-show-name" checked> Show name</label>
+      <label><input type="checkbox" id="chk-show-summary" checked> Show summary</label>
+      <label><input type="checkbox" id="chk-grid" checked> Grid layout (vs list)</label>
+    </div>
+    <div class="control-group">
+      <strong style="font-size:.68rem;color:#64748b;letter-spacing:.1em;text-transform:uppercase;">Summary truncation</strong>
+      <input type="range" id="summary-len" min="60" max="500" value="300" step="20">
+      <span id="summary-len-val" style="font-size:.68rem;color:#94a3b8;">300 chars</span>
+    </div>
+    <div class="control-group">
+      <strong style="font-size:.68rem;color:#64748b;letter-spacing:.1em;text-transform:uppercase;">Sort findings by</strong>
+      <select id="sort-by">
+        <option value="stage">Stage order</option>
+        <option value="kind">Kind</option>
+        <option value="name">Name</option>
+        <option value="created">Created at</option>
+      </select>
+    </div>
+    <div class="stat-row" id="stat-row">
+      <span id="stat-count">— findings</span>
+      <span id="stat-stages">— stages</span>
+    </div>
+    <details style="margin-top:auto;">
+      <summary style="font-size:.68rem;color:#64748b;cursor:pointer;">Raw JSON sample</summary>
+      <pre id="raw-sample" style="font-size:.6rem;color:#475569;white-space:pre-wrap;word-break:break-all;margin-top:.5rem;max-height:200px;overflow-y:auto;"></pre>
+    </details>
+  </aside>
+
+  <!-- Main render area -->
+  <main class="main">
+    <div id="panel-container"></div>
+  </main>
+</div>
+
+<script>
+const ALL_DATA = [
+  {
+    "Id": 1116,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "deliver",
+    "Kind": "policy-rationale",
+    "Name": "policy-rationale",
+    "Summary": "Standard policy profile satisfied: pipeline review stage returned GO/approved after two cycles with all findings resolved; all CI checks green before merge; squash merge strategy used; feature branch cleaned up; issue left open for controller label management; no secrets committed; no force-push to main.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:30:58.6411444"
+  },
+  {
+    "Id": 1091,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "deliver",
+    "Kind": "stage-evidence",
+    "Name": "summary",
+    "Summary": "PR #35 squash-merged to main (commit 7782befb3a5fb44215a66ac09c7cbab216d33497). Feature branch sdk/issue-32-benchmark-add-feature-flagged-weather-card-diagn deleted. All 4 CodeQL CI checks passed (SUCCESS) before merge. Pipeline review stage returned GO/approved after cycle 2 (comment https://github.com/MSBart2/aspire1/issues/32#issuecomment-4479141173). Docs stage complete (ARCHITECTURE.md updated, commit 12bbd57). 70 tests passing. Issue #32 remains open per policy \u2014 controller manages labels.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:30:58.6411395"
+  },
+  {
+    "Id": 1092,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "deliver",
+    "Kind": "stage-evidence",
+    "Name": "approval-status",
+    "Summary": "Cyberpilot review GO/approved \u2014 cycle 2 of 2. GitHub reviewDecision field empty (reviews posted as COMMENTED not formal APPROVE clicks), but pipeline review stage artifact explicitly carries GO/approved verdict.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:30:58.641141"
+  },
+  {
+    "Id": 1093,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "deliver",
+    "Kind": "stage-evidence",
+    "Name": "ci-status",
+    "Summary": "All CodeQL checks COMPLETED/SUCCESS: Analyze (actions), Analyze (csharp), Analyze (javascript-typescript), CodeQL umbrella. No failures.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:30:58.6411411"
+  },
+  {
+    "Id": 1094,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "deliver",
+    "Kind": "stage-evidence",
+    "Name": "merge-result",
+    "Summary": "Squash merged PR #35. Commit 7782befb3a5fb44215a66ac09c7cbab216d33497 on main. 14 files changed, 813 insertions, 35 deletions.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:30:58.6411412"
+  },
+  {
+    "Id": 1095,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "deliver",
+    "Kind": "stage-evidence",
+    "Name": "branch-cleanup",
+    "Summary": "Local and remote branch sdk/issue-32-benchmark-add-feature-flagged-weather-card-diagn deleted successfully.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:30:58.6411413"
+  },
+  {
+    "Id": 1096,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "deliver",
+    "Kind": "stage-evidence",
+    "Name": "landing-report-posted",
+    "Summary": "Landing report comment posted at https://github.com/MSBart2/aspire1/issues/32#issuecomment-4479215927",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:30:58.6411414"
+  },
+  {
+    "Id": 1089,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "docs",
+    "Kind": "policy-rationale",
+    "Name": "policy-rationale",
+    "Summary": "All documentation applicable to the scope of changes has been updated. XML comments on new public APIs were already present in production files (IReactionNotifier, ReactionService, ApplicationMetrics). Architecture docs updated to reflect new component parameters, feature flags, DI registrations, and hub route. TELEMETRY.md was already current. Human verification walkthrough posted with concrete, non-developer-friendly steps. Build green. Standard policy satisfied.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:28:13.8700503"
+  },
+  {
+    "Id": 1017,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "docs",
+    "Kind": "stage-evidence",
+    "Name": "summary",
+    "Summary": "Docs stage complete. aspire1.Web/ARCHITECTURE.md updated with WeatherCard params, feature flag table (all 5 flags), Program.cs DI/hub steps, and Weather.razor multi-flag flow diagram. TELEMETRY.md already had weather.reactions from implement cycle 2 \u2014 no change needed. Doc commit 12bbd57 pushed. Human verification comment posted on issue #32. Build: 0 errors, 20 pre-existing NU1902 warnings.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:28:13.8700427"
+  },
+  {
+    "Id": 1018,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "docs",
+    "Kind": "stage-evidence",
+    "Name": "docs-changed",
+    "Summary": "aspire1.Web/ARCHITECTURE.md \u2014 93 insertions, 23 deletions across 3 sections. TELEMETRY.md \u2014 no change needed (already current).",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:28:13.8700438"
+  },
+  {
+    "Id": 1019,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "docs",
+    "Kind": "stage-evidence",
+    "Name": "docs-skipped",
+    "Summary": "README.md \u2014 no user-facing feature changes that alter setup, run, or usage instructions. Solution-level ARCHITECTURE.md \u2014 no new services, middleware pipeline topology, or deployment topology added. AppHost/WeatherService/ServiceDefaults ARCHITECTURE.md \u2014 changes are Web-project-scoped only.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:28:13.8700439"
+  },
+  {
+    "Id": 1020,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "docs",
+    "Kind": "stage-evidence",
+    "Name": "verification-posted",
+    "Summary": "Issue comment posted at https://github.com/MSBart2/aspire1/issues/32#issuecomment-4479183716 covering 3 verification scenarios with step-by-step instructions and a 9-item pass-criteria checklist.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:28:13.870044"
+  },
+  {
+    "Id": 1021,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "docs",
+    "Kind": "stage-evidence",
+    "Name": "build-result",
+    "Summary": "dotnet build aspire1.sln --configuration Release: succeeded, 0 errors, 20 pre-existing NU1902 warnings (unchanged).",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:28:13.8700441"
+  },
+  {
+    "Id": 728,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "implement",
+    "Kind": "policy-rationale",
+    "Name": "policy-rationale",
+    "Summary": "All plan tasks completed in order. Build succeeds. New tests pass. No regressions in existing 39 tests. Implementation follows documented architecture patterns. No secrets, no fake data, no hard-coded URLs. PR created with Refs #32 link. Issue comment posted.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:11:49.0258147"
+  },
+  {
+    "Id": 928,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "implement",
+    "Kind": "policy-rationale",
+    "Name": "policy-rationale",
+    "Summary": "All review findings addressed with targeted code changes. Build is clean. Full test suite passes. Changes follow documented Aspire1 architecture patterns (flag-parameter pattern consistent with ShowHumidity). Documentation updated to match implementation. PR and issue updated with fix summary.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:20:47.0951127"
+  },
+  {
+    "Id": 642,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "implement",
+    "Kind": "stage-evidence",
+    "Name": "summary",
+    "Summary": "Implemented 5-file feature-flagged diagnostics panel: flag registered in appsettings.Development.json (default false), flag wired in Weather.razor following ShowHumidity pattern, <details> panel added to WeatherCard.razor with ShowDiagnostics/HumidityEnabled params, CSS added to app.css, 5 bUnit tests in WeatherCardDiagnosticsTests.cs. Build green, 44/44 tests pass, no fake data.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:11:49.025798"
+  },
+  {
+    "Id": 643,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "implement",
+    "Kind": "stage-evidence",
+    "Name": "build-result",
+    "Summary": "dotnet build aspire1.sln --no-restore --configuration Release: succeeded with 20 pre-existing NU1902 vulnerability warnings (OpenTelemetry packages), zero new errors or warnings.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:11:49.0257995"
+  },
+  {
+    "Id": 644,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "implement",
+    "Kind": "stage-evidence",
+    "Name": "test-result",
+    "Summary": "dotnet test aspire1.Web.Tests --no-build --configuration Release: 44 total, 44 passed, 0 failed, 0 skipped. 5 new tests all passed on first run.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:11:49.0257999"
+  },
+  {
+    "Id": 645,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "implement",
+    "Kind": "stage-evidence",
+    "Name": "pattern-compliance",
+    "Summary": "Implementation follows ShowHumidity pattern exactly: flag checked once in Weather.razor OnInitializedAsync, bool passed as parameter to WeatherCard. No IFeatureManager injection in child component. No fake cache data \u2014 limitation documented honestly in panel.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:11:49.0258"
+  },
+  {
+    "Id": 775,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "implement",
+    "Kind": "stage-evidence",
+    "Name": "summary",
+    "Summary": "Two review findings addressed: (1) reaction bar in WeatherCard.razor was unconditionally rendered for all users \u2014 now gated behind a WeatherEmojiReactions feature flag parameter, disabled by default, following the identical ShowHumidity/ShowDiagnostics pattern; (2) TELEMETRY.md instruments table and summary count were stale (listed 6 metrics, omitted weather.reactions) \u2014 updated to 7 metrics with full row details and Aspire dashboard listing. Commit 7be1893 pushed to branch sdk/issue-32-benchmark-add-feature-flagged-weather-card-diagn. All 70 tests pass. Review response comment posted on PR #35.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:20:47.0950959"
+  },
+  {
+    "Id": 640,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "plan",
+    "Kind": "policy-rationale",
+    "Name": "policy-rationale",
+    "Summary": "Plan is complete, scoped tightly to the issue request, follows all documented architecture patterns (feature flag plumbing, offline-first, no fake data), includes tests, and has been posted as a readable comment on the issue. Branch exists and is ready for implementation.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:07:16.4375874"
+  },
+  {
+    "Id": 565,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "plan",
+    "Kind": "stage-evidence",
+    "Name": "summary",
+    "Summary": "Completed full codebase recon: identified WeatherCard.razor param pattern, confirmed bUnit in test project, discovered all metric names in ApplicationMetrics.cs, established that cache status is not in the DTO (documented rather than faked). Plan posted to issue #32 with 5 ordered tasks, design rationale, test plan, and acceptance criteria. Branch already exists and is checked out.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:07:16.4375772"
+  },
+  {
+    "Id": 566,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "plan",
+    "Kind": "stage-evidence",
+    "Name": "pattern-match",
+    "Summary": "Diagnostics flag follows the identical ShowHumidity pattern: Weather.razor checks IFeatureManager once, passes bool parameter to WeatherCard. No IFeatureManager injection required in the card component itself.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:07:16.4375787"
+  },
+  {
+    "Id": 567,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "plan",
+    "Kind": "stage-evidence",
+    "Name": "test-strategy",
+    "Summary": "bUnit (v2.7.2) already installed in aspire1.Web.Tests. Five component-level tests planned in new WeatherCardDiagnosticsTests.cs using same BunitContext + NSubstitute pattern as OutputCacheFeatureFlagTests.cs.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:07:16.4375789"
+  },
+  {
+    "Id": 517,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "preflight",
+    "Kind": "repository-profile",
+    "Name": "target-repository",
+    "Summary": "Repository profile detected: languages: .NET, Node.js | build: dotnet build ./aspire1.sln | test: dotnet test ./aspire1.sln; npm test | docs: README.md.",
+    "Uri": null,
+    "MediaType": "text/plain",
+    "Source": "profile",
+    "CreatedAt": "2026-05-18 15:01:00.7994652"
+  },
+  {
+    "Id": 769,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "policy-rationale",
+    "Name": "policy-rationale",
+    "Summary": "Standard policy requires changes_requested when any medium or higher severity finding exists. Two medium findings (M1 fire-and-forget, M2 silent catch) and one high finding (H1 undisclosed scope) are present. Build and tests pass. This is review cycle 1 of 2; implement agent should fix required changes before cycle 2.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8141116"
+  },
+  {
+    "Id": 1015,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "policy-rationale",
+    "Name": "policy-rationale",
+    "Summary": "Standard policy requires approval when: no critical/high findings, no medium findings, security scan passes, test coverage adequate, architecture patterns followed. All conditions met. Three low-severity findings noted but per standard policy these are non-blocking informational items for the development team.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:24:24.961501"
+  },
+  {
+    "Id": 770,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "required-action",
+    "Name": "required-action-1",
+    "Summary": "H1: Gate reaction bar behind a WeatherReactions feature flag OR remove reaction system files (ReactionService.cs, IReactionNotifier.cs, ReactionHub.cs) and open a separate PR. File: aspire1.Web/Components/WeatherCard.razor lines 34-47.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8145366"
+  },
+  {
+    "Id": 771,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "required-action",
+    "Name": "required-action-2",
+    "Summary": "M1: Change @onclick='() => _ = ReactAsync(e)' to @onclick='() => ReactAsync(e)' to properly return Task for Blazor to await. File: aspire1.Web/Components/WeatherCard.razor line 40.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8145538"
+  },
+  {
+    "Id": 772,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "required-action",
+    "Name": "required-action-3",
+    "Summary": "M2: Inject ILogger<ReactionService> and emit LogWarning in both bare catch blocks. File: aspire1.Web/Services/ReactionService.cs lines 52-55 and 97-99.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.814554"
+  },
+  {
+    "Id": 773,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "required-action",
+    "Name": "required-action-4",
+    "Summary": "L1: Remove unused 'using Microsoft.Extensions.Hosting;'. File: aspire1.Web/Services/ReactionService.cs line 1.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8145541"
+  },
+  {
+    "Id": 730,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "summary",
+    "Summary": "PR #35 reviewed. Build: PASS (0 errors, 20 pre-existing NU1902). Tests: 44/44 PASS. Diagnostics panel feature (A-side) is correct and follows ShowHumidity pattern. Major finding: entire emoji reaction system (ReactionService, IReactionNotifier, ReactionHub, SignalR wiring, unconditional reaction bar UI) shipped without plan-stage approval \u2014 7 undisclosed files. Medium findings: fire-and-forget Task in WeatherCard.razor line 40 Blazor onclick, and bare catch blocks with no logging in ReactionService.cs. Low findings: unused import, per-circuit memory store misleads in dev, concrete-type injection, test helper duplication.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8140491"
+  },
+  {
+    "Id": 731,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "architecture",
+    "Summary": "HIGH: Undisclosed scope \u2014 entire emoji reaction system added without approved plan. Reaction bar (WeatherCard.razor lines 34-47) is unconditional, no feature flag. Concrete-type @inject ReactionService in Razor component.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8140501"
+  },
+  {
+    "Id": 732,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "security",
+    "Summary": "No critical/high security findings. Emoji input validated via whitelist EmojiSet. No secrets in code. Circuit-scoped rate limiting (page refresh resets vote) is a low concern, documented.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8140503"
+  },
+  {
+    "Id": 733,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "quality",
+    "Summary": "MEDIUM M1: WeatherCard.razor line 40 - () => _ = ReactAsync(e) discards Task, Blazor won't await it, exceptions silently swallowed. MEDIUM M2: ReactionService.cs lines 52-55 and 97-99 - bare catch blocks with no logging, Redis failures invisible in production. LOW L1: unused using Microsoft.Extensions.Hosting in ReactionService.cs line 1.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8140503"
+  },
+  {
+    "Id": 734,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "tests",
+    "Summary": "44/44 passing (5 new WeatherCardDiagnosticsTests + 16 new ReactionServiceTests + 4 updated OutputCacheFeatureFlagTests + 39 pre-existing). ReactionNotifier has no unit tests. Test helper BuildFakeWeatherApiClient duplicated.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8140504"
+  },
+  {
+    "Id": 735,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "documentation",
+    "Summary": "PASS. XML docs on all new public members. Honest dev-limitation comment on _memoryStore. CSS has context comment. No README update needed.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8140506"
+  },
+  {
+    "Id": 736,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "build",
+    "Summary": "dotnet build aspire1.sln --no-restore --configuration Release: PASS, 0 errors, 20 pre-existing NU1902 vulnerability warnings (OpenTelemetry packages, not new). dotnet test aspire1.Web.Tests: PASS 44/44.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8140507"
+  },
+  {
+    "Id": 737,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "pr-review-findings",
+    "Summary": "1 high (H1: undisclosed emoji reaction system scope creep), 2 medium (M1: fire-and-forget onclick Task; M2: silent catch without logging), 4 low (L1: unused import; L2: per-circuit memory store; L3: concrete-type injection; L4: test helper duplication). Total findings: 7.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:17:04.8140507"
+  },
+  {
+    "Id": 930,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "summary",
+    "Summary": "Full review of PR #35 (issue #32, cycle 2 of 2). Cycle-1 findings resolved: reaction bar gated behind ShowReactions feature-flag param (default false), TELEMETRY.md updated to 7 metrics. Architecture follows ShowHumidity pattern exactly across all 3 new flags. IReactionNotifier singleton + ReactionService scoped \u2014 correct Blazor Server lifetimes. Thread-safe ReactionNotifier with Lock snapshot-before-notify. ReactionService offline-first (nullable IConnectionMultiplexer). 5 diagnostics tests + 14 ReactionService tests + patched OutputCacheFeatureFlagTests = 70 total, all passing.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:24:24.9614926"
+  },
+  {
+    "Id": 931,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "architecture",
+    "Summary": "Clean pattern: IFeatureManager checked once in Weather.razor, scalar bool params passed to WeatherCard. No feature manager injection in child component. IDisposable teardown on WeatherCard unsubscribes from notifier. Correct DI lifetimes.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:24:24.961494"
+  },
+  {
+    "Id": 932,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "security",
+    "Summary": "No vulnerabilities found. Emoji input validated via EmojiSet allowlist. No secrets in config. No SQL vectors. ReactionHub unauthenticated (acceptable for anonymous reactions feature, low risk).",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:24:24.9614943"
+  },
+  {
+    "Id": 933,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "quality",
+    "Summary": "XML docs on public APIs. No dead code. Silent Redis catches are semantically safe but lack ILogger (low severity). EmitTelemetry uses DateTime.Today which is timezone-sensitive (low severity).",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:24:24.9614944"
+  },
+  {
+    "Id": 934,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "test-coverage",
+    "Summary": "70/70 tests passing. 5 WeatherCardDiagnosticsTests, 14 ReactionServiceTests, OutputCacheFeatureFlagTests patched. AAA pattern throughout. Duration 538ms combined.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:24:24.9614944"
+  },
+  {
+    "Id": 935,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "documentation",
+    "Summary": "TELEMETRY.md updated to accurately list 7 instruments including weather.reactions with tags. Aspire Dashboard section updated. Summary count corrected.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:24:24.9614945"
+  },
+  {
+    "Id": 936,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "build-result",
+    "Summary": "dotnet build aspire1.sln --configuration Release: succeeded, 0 errors, 20 pre-existing NU1902 OTel vulnerability warnings (unchanged from main).",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:24:24.9614946"
+  },
+  {
+    "Id": 937,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "review",
+    "Kind": "stage-evidence",
+    "Name": "pr-review-findings",
+    "Summary": "findings_critical: 0, findings_high: 0, findings_medium: 0, findings_low: 3. All low. Non-blocking. PR approved.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:24:24.9614947"
+  },
+  {
+    "Id": 562,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "triage",
+    "Kind": "policy-rationale",
+    "Name": "policy-rationale",
+    "Summary": "Issue passes all quality gate checks: clear acceptance criteria, sufficient implementation detail, honest about data availability constraints, single coherent scope, no duplicates found. Standard policy profile requires GO for well-specified enhancement requests with no blocking concerns.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:03:18.0557069"
+  },
+  {
+    "Id": 518,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "triage",
+    "Kind": "stage-evidence",
+    "Name": "duplicate-search",
+    "Summary": "Scanned all open and closed issues and PRs for diagnostics panel, feature-flagged dev panel, weather card debug panel \u2014 only match is issue #32 itself. No existing implementation found in WeatherCard.razor or any other component.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:03:18.0555799"
+  },
+  {
+    "Id": 519,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "triage",
+    "Kind": "stage-evidence",
+    "Name": "related-work",
+    "Summary": "Issues #11 and #12 (WeatherApiClient crash and output cache/feature flag bug) are closed neighbours in the same subsystem. PRs #22 (cache fix) and #30 (CSS animations) touched the same components but delivered different features.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:03:18.0556271"
+  },
+  {
+    "Id": 520,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "triage",
+    "Kind": "stage-evidence",
+    "Name": "quality-gate",
+    "Summary": "Five explicit acceptance criteria present. Panel contents enumerated. Issue honestly acknowledges cache/source data limits and instructs avoiding fake values. Scope is a single coherent unit of UI + feature flag work.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:03:18.0556273"
+  },
+  {
+    "Id": 521,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "triage",
+    "Kind": "stage-evidence",
+    "Name": "codebase-context",
+    "Summary": "WeatherCard.razor has ShowHumidity parameter pattern. Weather.razor already uses IFeatureManager. Three flags in appsettings.Development.json (WeatherForecast, WeatherHumidity, DetailedHealth). ApplicationMetrics exposes 6 named counters/histograms the panel can surface. WeatherForecast DTO has Date, TemperatureC, Summary, Humidity fields only \u2014 no cache/source field.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:03:18.0556274"
+  },
+  {
+    "Id": 522,
+    "RunId": "84f798d700f34998906e6d85e7d38bde",
+    "StageName": "triage",
+    "Kind": "stage-evidence",
+    "Name": "labels-applied",
+    "Summary": "enhancement label already present on issue. sdk and sdk/triage labels applied by controller. No feature label exists in repo label set.",
+    "Uri": null,
+    "MediaType": null,
+    "Source": "stage-result",
+    "CreatedAt": "2026-05-18 15:03:18.0556274"
+  }
+];
+
+const STAGE_ORDER = ['triage', 'plan', 'implement', 'review', 'docs', 'deliver'];
+
+function stageIndex(name) {
+  const i = STAGE_ORDER.indexOf((name || '').toLowerCase());
+  return i === -1 ? 99 : i;
+}
+
+function humanKind(kind) {
+  return { 'stage-evidence': 'Evidence', 'policy-rationale': 'Policy', 'required-action': 'Action', 'repository-profile': 'Repo' }[kind] || kind;
+}
+
+function humanStage(name) {
+  if (!name) return 'Unknown';
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function truncate(s, max) {
+  s = String(s || '');
+  return s.length > max ? s.slice(0, max) + '…' : s;
+}
+
+function getOptions() {
+  const kinds = new Set([...document.querySelectorAll('.kind-filter:checked')].map(el => el.value));
+  return {
+    kinds,
+    expanded: document.getElementById('chk-expanded').checked,
+    groupByStage: document.getElementById('chk-group-stages').checked,
+    showKind: document.getElementById('chk-show-kind').checked,
+    showName: document.getElementById('chk-show-name').checked,
+    showSummary: document.getElementById('chk-show-summary').checked,
+    grid: document.getElementById('chk-grid').checked,
+    summaryLen: parseInt(document.getElementById('summary-len').value, 10),
+    sortBy: document.getElementById('sort-by').value,
+  };
+}
+
+function getFindings(opts) {
+  let items = ALL_DATA.filter(r => opts.kinds.has(r.Kind));
+  if (opts.sortBy === 'stage')   items = [...items].sort((a,b) => stageIndex(a.StageName) - stageIndex(b.StageName) || a.Kind.localeCompare(b.Kind));
+  if (opts.sortBy === 'kind')    items = [...items].sort((a,b) => a.Kind.localeCompare(b.Kind));
+  if (opts.sortBy === 'name')    items = [...items].sort((a,b) => a.Name.localeCompare(b.Name));
+  if (opts.sortBy === 'created') items = [...items].sort((a,b) => a.CreatedAt.localeCompare(b.CreatedAt));
+  return items;
+}
+
+function renderFindingCard(item, opts) {
+  const kindCls = 'kind-' + item.Kind;
+  const kindBadge = opts.showKind ? `<span class="finding-kind">${humanKind(item.Kind)}</span>` : '';
+  const nameBadge = opts.showName ? `<span class="finding-name" title="${esc(item.Name)}">${esc(item.Name)}</span>` : '';
+  const header = (kindBadge || nameBadge) ? `<div class="finding-item-header">${kindBadge}${nameBadge}</div>` : '';
+  const summary = opts.showSummary && item.Summary
+    ? `<p class="finding-summary">${esc(truncate(item.Summary, opts.summaryLen))}</p>` : '';
+  const link = item.Uri ? `<a class="finding-link" href="${esc(item.Uri)}" target="_blank">View ↗</a>` : '';
+  return `<article class="finding-item ${kindCls}">${header}${summary}${link}</article>`;
+}
+
+function render() {
+  const opts = getOptions();
+  const items = getFindings(opts);
+  const container = document.getElementById('panel-container');
+
+  document.getElementById('stat-count').textContent = items.length + ' findings';
+  document.getElementById('stat-stages').textContent = new Set(items.map(i=>i.StageName)).size + ' stages';
+  document.getElementById('summary-len-val').textContent = opts.summaryLen + ' chars';
+
+  if (items.length === 0) {
+    container.innerHTML = '<p style="color:#64748b;font-size:.8rem;padding:1rem;">No findings match current filters.</p>';
+    return;
+  }
+
+  const bodyId = 'findings-body';
+  const showBody = opts.expanded;
+  let bodyHtml = '';
+
+  if (opts.groupByStage) {
+    const groups = {};
+    const groupOrder = [];
+    for (const item of items) {
+      if (!groups[item.StageName]) { groups[item.StageName] = []; groupOrder.push(item.StageName); }
+      groups[item.StageName].push(item);
+    }
+    const sortedGroups = groupOrder
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .sort((a,b) => stageIndex(a) - stageIndex(b));
+
+    bodyHtml = sortedGroups.map(stage => {
+      const stageItems = groups[stage];
+      const cards = stageItems.map(it => renderFindingCard(it, opts)).join('');
+      const listStyle = opts.grid ? 'findings-list' : 'findings-list' + ' style="grid-template-columns:1fr"';
+      return `
+        <div class="findings-stage-group">
+          <h4 class="findings-stage-label">${humanStage(stage)}</h4>
+          <div class="${opts.grid ? 'findings-list' : 'findings-list'}" style="${opts.grid ? '' : 'grid-template-columns:1fr'}">${cards}</div>
+        </div>`;
+    }).join('');
+  } else {
+    const cards = items.map(it => renderFindingCard(it, opts)).join('');
+    bodyHtml = `<div class="findings-list" style="${opts.grid ? '' : 'grid-template-columns:1fr'}">${cards}</div>`;
+  }
+
+  const chevronCls = showBody ? 'chevron open' : 'chevron';
+  container.innerHTML = `
+    <div class="findings-panel">
+      <div class="findings-panel-header" onclick="togglePanel()">
+        <div>
+          <p class="eyebrow">Agent intelligence</p>
+          <h3>Evidence &amp; Findings</h3>
+        </div>
+        <div class="panel-meta">
+          <span class="evidence-count">${items.length}</span>
+          <span class="${chevronCls}" id="panel-chevron">&#8964;</span>
+        </div>
+      </div>
+      <div class="findings-body" id="${bodyId}" style="${showBody ? '' : 'display:none'}">${bodyHtml}</div>
+    </div>`;
+
+  // Show a sample in the sidebar raw viewer
+  document.getElementById('raw-sample').textContent = JSON.stringify(items.slice(0, 2), null, 2);
+}
+
+function togglePanel() {
+  const body = document.getElementById('findings-body');
+  const chevron = document.getElementById('panel-chevron');
+  if (!body) return;
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  if (chevron) chevron.classList.toggle('open', hidden);
+}
+
+// Wire controls
+document.querySelectorAll('input, select').forEach(el => el.addEventListener('change', render));
+
+render();
+</script>
+</body>
+</html>

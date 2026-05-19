@@ -196,6 +196,91 @@ public class PipelinesControllerTests
     }
 
     [Fact]
+    public async Task Triage_ExistingRunWithTriageOutput_ReturnsTriageDocument()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6" };
+        db.PipelineRuns.Add(run);
+        db.PipelineStageLogs.Add(new PipelineStageLog
+        {
+            RunId = run.Id,
+            StageName = "triage",
+            Status = "GO",
+            Output = "## Case File - Triage Report\nClassified as a feature.",
+            StartedAt = DateTime.Parse("2026-05-13T08:00:00Z").ToUniversalTime(),
+        });
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<ViewResult>(await controller.Triage(run.Id));
+
+        var model = Assert.IsType<PipelineTriageDocumentViewModel>(result.Model);
+        Assert.Equal(run.Id, model.Run.Id);
+        Assert.Contains("Triage Report", model.Triage.Summary);
+        Assert.Contains("<h2", model.RenderedTriageHtml, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Triage_WithoutTriageOutput_ReturnsNotFound()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6" };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = await controller.Triage(run.Id);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Theory]
+    [InlineData("implement")]
+    [InlineData("review")]
+    [InlineData("docs")]
+    [InlineData("deliver")]
+    public async Task StageDocument_ExistingRunWithStageOutput_ReturnsStageDocument(string stageName)
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6" };
+        db.PipelineRuns.Add(run);
+        db.PipelineStageLogs.Add(new PipelineStageLog
+        {
+            RunId = run.Id,
+            StageName = stageName,
+            Status = "GO",
+            Output = $"## {stageName} report\nCaptured output.",
+            StartedAt = DateTime.Parse("2026-05-13T08:00:00Z").ToUniversalTime(),
+        });
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<ViewResult>(stageName switch
+        {
+            "implement" => await controller.Implement(run.Id),
+            "review" => await controller.Review(run.Id),
+            "docs" => await controller.Docs(run.Id),
+            _ => await controller.Deliver(run.Id),
+        });
+
+        var model = Assert.IsType<PipelineStageDocumentViewModel>(result.Model);
+        Assert.Equal("Stage", result.ViewName);
+        Assert.Equal(stageName, model.Stage.StageName);
+        Assert.Contains("Captured output", model.Stage.FullOutputText);
+        Assert.Contains("<h2", model.RenderedOutputHtml, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task StageDocument_WithoutStageOutput_ReturnsNotFound()
+    {
+        var (controller, db) = CreateControllerWithContext();
+        var run = new PipelineRun { IssueNumber = 1, Repository = "owner/repo", Model = "claude-sonnet-4.6" };
+        db.PipelineRuns.Add(run);
+        await db.SaveChangesAsync();
+
+        var result = await controller.Implement(run.Id);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
     public async Task Start_ValidRequest_CreatesRunAndRedirects()
     {
         var (controller, db) = CreateControllerWithContext();

@@ -17,7 +17,6 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
     {
         "implement",
         "docs",
-        "deliver",
     };
 
     private static readonly HashSet<string> HarnessReadTools = new(StringComparer.OrdinalIgnoreCase)
@@ -25,6 +24,7 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
         "get_pipeline_context",
         "get_pr_details",
         "get_pr_diff_summary",
+        "get_pr_checks",
         "render_stage_comment",
         "get_changed_file_content",
         "collect_validation_evidence",
@@ -73,7 +73,7 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
             return new PreToolUseHookOutput
             {
                 PermissionDecision = "deny",
-                PermissionDecisionReason = $"Stage '{stage.Name}' may run investigative tools, but durable side effects are blocked. Return the intended comment, label, branch, or file change as a stage artifact instead; implementation, docs, and deliver stages may perform scoped writes.",
+                PermissionDecisionReason = $"Stage '{stage.Name}' may run investigative tools, but durable side effects are blocked. Return the intended comment, label, branch, or file change as a stage artifact instead; implementation and docs stages may perform scoped writes. Delivery merges are performed by Cyberpilot harness code.",
                 SuppressOutput = false,
             };
         }

@@ -7,19 +7,6 @@ namespace Cyberpilot.Web.Controllers;
 /// </summary>
 internal static class GitHubIssueHelper
 {
-    private static readonly string[] AgentCommentMarkers =
-    [
-        "## 🕵️ Case File",
-        "## 🎯 The Playbook",
-        "## 🚀 Mission Control — Landing Report",
-        "SDK Cyberpilot branch ready:",
-        "Planning Started",
-        "Research Complete",
-        "Branch Ready",
-        "build-complete",
-        "human verification",
-    ];
-
     /// <summary>
     /// Resets issue labels to clean SDK state by removing all sdk/* labels and ensuring sdk label exists.
     /// </summary>
@@ -66,5 +53,5 @@ internal static class GitHubIssueHelper
     /// <param name="body">Comment body text.</param>
     /// <returns>True if the comment appears to be from a Cyberpilot agent.</returns>
     public static bool IsAgentComment(string body)
-        => AgentCommentMarkers.Any(marker => body.Contains(marker, StringComparison.OrdinalIgnoreCase));
+        => CyberpilotIssueCommentClassifier.IsAgentComment(body);
 }

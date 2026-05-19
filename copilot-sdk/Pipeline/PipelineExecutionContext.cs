@@ -72,7 +72,35 @@ internal sealed class PipelineExecutionContext(CyberpilotOptions options, Pipeli
     {
         StageResults.Add(result);
         StageHistory.Add(StageExecutionSummary.FromResult(stageName, result));
+        UpdatePullRequestFromArtifacts(result.Artifacts);
     }
+
+    private void UpdatePullRequestFromArtifacts(IReadOnlyList<StageArtifact>? artifacts)
+    {
+        if (artifacts is null || artifacts.Count == 0)
+        {
+            return;
+        }
+
+        var pullRequest = artifacts.FirstOrDefault(artifact => artifact.Name.Equals("pull-request", StringComparison.OrdinalIgnoreCase));
+        if (pullRequest is null)
+        {
+            return;
+        }
+
+        var url = FirstNonEmpty(pullRequest.Uri, pullRequest.Value);
+        if (!string.IsNullOrWhiteSpace(url) && url.Contains("/pull/", StringComparison.OrdinalIgnoreCase))
+        {
+            PrUrl = url.Trim();
+            KnownPullRequestNumber ??= TryParsePullRequestNumber(PrUrl);
+            return;
+        }
+
+        KnownPullRequestNumber ??= TryParsePullRequestNumber(url);
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     internal StageContextSnapshot CreateStageContext(string stageName)
     {

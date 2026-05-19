@@ -10,6 +10,7 @@ internal sealed class PipelineEngine(
     PipelineBranchCoordinator branchCoordinator,
     StageExecutor stageExecutor,
     PipelineGateRunner gateRunner,
+    PipelineDeliveryCoordinator deliveryCoordinator,
     ICyberpilotProgressSink progressSink,
     PipelineConsoleWriter console)
 {
@@ -99,6 +100,14 @@ internal sealed class PipelineEngine(
         if (prefetched is not null)
         {
             context.PrefetchedIssueContext = prefetched;
+            var sizeKb = (prefetched.Length / 1024.0).ToString("F1");
+            console.WriteSuccess($"Issue #{Options.IssueNumber} context pre-loaded ({sizeKb} KB) — detective skips discovery");
+            progressSink.OnDispatch(DispatchType.Preflight, $"Issue #{Options.IssueNumber} pre-fetched ({sizeKb} KB) — triage agent skips GitHub read");
+        }
+        else
+        {
+            console.WriteWarning($"Issue #{Options.IssueNumber} pre-fetch skipped — agent will read the issue directly");
+            progressSink.OnDispatch(DispatchType.Preflight, $"Issue pre-fetch unavailable — triage agent will read issue #{Options.IssueNumber} via tool call");
         }
 
         var triage = await RunStageAsync(triageStage, "Classify the issue and produce the mandatory triage handoff as a stage artifact. Do not post comments or mutate GitHub from triage.", cancellationToken);
@@ -237,14 +246,21 @@ internal sealed class PipelineEngine(
         }
 
         await labels.SetStageAsync(Options.IssueNumber, deliverStage.Label, cancellationToken);
-        var deliverResult = await RunStageAsync(deliverStage, "Merge the approved PR, delete the feature branch, and post the landing report. Do not close the issue.", cancellationToken);
+        var deliverResult = await RunStageAsync(deliverStage, "Prepare the landing report for the approved PR. Do not merge the PR, delete branches, post comments, close the issue, or run ad hoc CI/CodeQL discovery; Cyberpilot harness code will verify readiness and perform the merge deterministically after your GO result.", cancellationToken);
         if (!StageStatus.IsGo(deliverResult))
         {
             progressSink.OnDispatch(DispatchType.Routing, $"Deliver returned '{deliverResult.Status}' — merge may have failed");
             return await HaltAsync($"Deliver returned '{deliverResult.Status}'.", cancellationToken);
         }
 
-        progressSink.OnDispatch(DispatchType.Routing, "Delivery complete — PR merged, branch cleaned up, landing report posted");
+        var delivery = await deliveryCoordinator.MergeApprovedPullRequestAsync(deliverResult, cancellationToken);
+        if (!delivery.Succeeded)
+        {
+            progressSink.OnDispatch(DispatchType.Halt, $"Delivery blocked — {delivery.Summary}");
+            return await HaltAsync(delivery.Summary, cancellationToken);
+        }
+
+        progressSink.OnDispatch(DispatchType.Routing, $"Delivery complete — {delivery.Summary}");
         await labels.SetStageAsync(Options.IssueNumber, "sdk/done", cancellationToken);
 
         try

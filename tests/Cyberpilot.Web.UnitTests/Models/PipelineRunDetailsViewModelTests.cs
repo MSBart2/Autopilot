@@ -119,6 +119,20 @@ public class PipelineRunDetailsViewModelTests
         Assert.Equal(TimeSpan.FromMilliseconds(3500), vm.TotalModelDuration);
     }
 
+    [Theory]
+    [InlineData("claude-sonnet-4.6", "Claude")]
+    [InlineData("gpt-5-mini", "GPT")]
+    [InlineData("local-model", "local")]
+    [InlineData("", "Unknown")]
+    public void ModelFamilyLabel_ResolvesFamilyFromConfiguredModel(string model, string expected)
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = model };
+
+        var vm = new PipelineRunDetailsViewModel(run, []);
+
+        Assert.Equal(expected, vm.ModelFamilyLabel);
+    }
+
     [Fact]
     public void ArtifactItems_FormatsAndOrdersArtifacts()
     {
@@ -265,6 +279,131 @@ public class PipelineRunDetailsViewModelTests
         Assert.Equal("Planner produced a human-readable fallback.", planReview.Summary);
         Assert.Equal("Planner produced a human-readable fallback.", planReview.FullPlanText);
         Assert.Empty(planReview.Artifacts);
+    }
+
+    [Fact]
+    public void TriageReview_WithStructuredTriageLog_FormatsTriageArtifact()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var stageResult = new StageResult(
+            "GO",
+            "unknown",
+            true,
+            null,
+            ContractVersion: "1.0",
+            Artifacts:
+            [
+                new StageArtifact("triage-comment", "## Case File - Triage Report\\nClassified as a feature.", MediaType: "text/markdown"),
+            ],
+            RequiredActions: ["Proceed to planning."]);
+        var logs = new[]
+        {
+            new PipelineStageLog
+            {
+                RunId = run.Id,
+                StageName = "triage",
+                Status = "GO",
+                StageResultJson = JsonSerializer.Serialize(stageResult),
+                StageResultContractVersion = "1.0",
+                Output = "Full triage transcript",
+                StartedAt = DateTime.Parse("2026-05-13T08:00:00Z").ToUniversalTime(),
+                CompletedAt = DateTime.Parse("2026-05-13T08:05:00Z").ToUniversalTime(),
+            },
+        };
+        var evidence = new[]
+        {
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "triage",
+                Kind = "policy-rationale",
+                Name = "policy-rationale",
+                Summary = "Triage can proceed to planning.",
+            },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, logs, [], Evidence: evidence);
+
+        var triageReview = Assert.IsType<PipelineTriageReviewViewModel>(vm.TriageReview);
+        Assert.True(vm.HasTriageReview);
+        Assert.Equal("GO", triageReview.Status);
+        Assert.Equal($"## Case File - Triage Report{Environment.NewLine}Classified as a feature.", triageReview.Summary);
+        Assert.Equal("1.0", triageReview.ContractVersion);
+        Assert.Equal(["Proceed to planning."], triageReview.RequiredActions);
+        var artifact = Assert.Single(triageReview.Artifacts);
+        Assert.Equal("Triage Comment", artifact.Label);
+        Assert.Equal("text/markdown", artifact.MediaType);
+        Assert.Single(triageReview.Evidence);
+        Assert.Contains("planning", triageReview.Evidence.Single().Summary);
+    }
+
+    [Fact]
+    public void TriageReview_WithoutTriageLog_ReturnsNull()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var logs = new[]
+        {
+            new PipelineStageLog { RunId = run.Id, StageName = "plan", Status = "GO" },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, logs);
+
+        Assert.Null(vm.TriageReview);
+        Assert.False(vm.HasTriageReview);
+    }
+
+    [Fact]
+    public void StageOutput_WithStructuredLog_UsesPrimaryArtifactAndEvidence()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };
+        var stageResult = new StageResult(
+            "GO",
+            "approved",
+            true,
+            null,
+            ContractVersion: "1.0",
+            Artifacts:
+            [
+                new StageArtifact("landing-report", "## Mission Control\\nLanded cleanly.", MediaType: "text/markdown"),
+                new StageArtifact("pull-request", "https://github.com/owner/repo/pull/32"),
+            ],
+            RequiredActions: ["Confirm release notes."]);
+        var logs = new[]
+        {
+            new PipelineStageLog
+            {
+                RunId = run.Id,
+                StageName = "deliver",
+                Status = "GO",
+                StageResultJson = JsonSerializer.Serialize(stageResult),
+                StageResultContractVersion = "1.0",
+                Output = "Full deliver transcript",
+                StartedAt = DateTime.Parse("2026-05-13T11:00:00Z").ToUniversalTime(),
+                CompletedAt = DateTime.Parse("2026-05-13T11:05:00Z").ToUniversalTime(),
+            },
+        };
+        var evidence = new[]
+        {
+            new PipelineEvidence
+            {
+                RunId = run.Id,
+                StageName = "deliver",
+                Kind = "delivery-outcome",
+                Name = "delivery-complete",
+                Summary = "PR merged.",
+            },
+        };
+
+        var output = Assert.IsType<PipelineStageOutputViewModel>(PipelineStageOutputViewModel.Create("deliver", run, logs, evidence));
+
+        Assert.Equal("Deliver", output.StageLabel);
+        Assert.Equal("approved", output.Decision);
+        Assert.Equal($"## Mission Control{Environment.NewLine}Landed cleanly.", output.Summary);
+        Assert.Equal("Full deliver transcript", output.FullOutputText);
+        Assert.Equal(["Confirm release notes."], output.RequiredActions);
+        Assert.Equal(2, output.Artifacts.Count);
+        Assert.Single(output.Evidence);
+        Assert.Equal("1.0", output.ContractVersion);
     }
 
     [Fact]

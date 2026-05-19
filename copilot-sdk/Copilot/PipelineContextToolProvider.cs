@@ -30,6 +30,10 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
                 "get_pr_diff_summary",
                 "Returns compact pull request diff stats, touched areas, review signals, and a reference to detailed persisted output."),
             AIFunctionFactory.Create(
+                (CancellationToken cancellationToken) => GetPullRequestChecksAsync(cancellationToken),
+                "get_pr_checks",
+                "Returns structured pull request status/check results such as CodeQL, build, and test checks without shell parsing."),
+            AIFunctionFactory.Create(
                 (string commentKind, string summary, CancellationToken cancellationToken) => RenderStageCommentAsync(commentKind, summary, cancellationToken),
                 "render_stage_comment",
                 "Renders a deterministic Markdown stage comment body without posting to GitHub."),
@@ -129,6 +133,40 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return PipelineToolResponse<PullRequestDiffSummaryToolResult>.Fail("pr_diff_summary_failed", $"Unable to load PR diff summary for #{prNumber}: {ex.Message}");
+        }
+    }
+
+    public async Task<PipelineToolResponse<PullRequestChecksToolResult>> GetPullRequestChecksAsync(CancellationToken cancellationToken = default)
+    {
+        var prNumber = context.PullRequestNumber;
+        if (prNumber is null or <= 0)
+        {
+            return PipelineToolResponse<PullRequestChecksToolResult>.Fail("missing_pr", "No pull request is known for this run. Create or link a PR before requesting PR checks.");
+        }
+
+        try
+        {
+            var raw = await gitHubCli.RunAsync(
+                ["pr", "checks", prNumber.Value.ToString(), "--json", "name,state,link,bucket,description,workflow"],
+                allowFailure: false,
+                cancellationToken);
+            using var document = JsonDocument.Parse(raw);
+            var checks = document.RootElement.ValueKind == JsonValueKind.Array
+                ? document.RootElement.EnumerateArray().Select(ReadCheck).ToArray()
+                : [];
+            var result = new PullRequestChecksToolResult(
+                prNumber.Value,
+                checks,
+                checks.Any(check => check.IsFailure),
+                checks.Any(check => check.IsPending),
+                checks.Any(check => check.Name.Contains("codeql", StringComparison.OrdinalIgnoreCase)
+                    || check.Workflow.Contains("codeql", StringComparison.OrdinalIgnoreCase)));
+            var reference = PersistToolOutput("get_pr_checks", raw, "application/json");
+            return PipelineToolResponse<PullRequestChecksToolResult>.Ok(result, reference);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return PipelineToolResponse<PullRequestChecksToolResult>.Fail("pr_checks_failed", $"Unable to load PR checks for #{prNumber}: {ex.Message}");
         }
     }
 
@@ -388,6 +426,17 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
         }
     }
 
+    private static PullRequestCheckSummary ReadCheck(JsonElement item)
+    {
+        var name = ReadString(item, "name") ?? "status check";
+        var state = ReadString(item, "state") ?? string.Empty;
+        var link = ReadString(item, "link");
+        var bucket = ReadString(item, "bucket") ?? string.Empty;
+        var description = ReadString(item, "description");
+        var workflow = ReadString(item, "workflow") ?? string.Empty;
+        return new PullRequestCheckSummary(name, state, bucket, workflow, link, description);
+    }
+
     private static IReadOnlyList<PullRequestDiffGroup> GroupBy(
         IReadOnlyList<PullRequestFileSummary> files,
         Func<PullRequestFileSummary, string> keySelector)
@@ -634,6 +683,32 @@ internal sealed record PullRequestDiffSummaryToolResult(
     IReadOnlyList<PullRequestDiffGroup> TopDirectories,
     IReadOnlyList<PullRequestDiffGroup> Extensions,
     IReadOnlyList<string> Signals);
+
+internal sealed record PullRequestChecksToolResult(
+    int Number,
+    IReadOnlyList<PullRequestCheckSummary> Checks,
+    bool HasFailures,
+    bool HasPending,
+    bool HasCodeQl);
+
+internal sealed record PullRequestCheckSummary(
+    string Name,
+    string State,
+    string Bucket,
+    string Workflow,
+    string? Link,
+    string? Description)
+{
+    public bool IsPending => State.Equals("pending", StringComparison.OrdinalIgnoreCase)
+        || Bucket.Equals("pending", StringComparison.OrdinalIgnoreCase)
+        || Bucket.Equals("running", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsFailure => State.Equals("fail", StringComparison.OrdinalIgnoreCase)
+        || State.Equals("failure", StringComparison.OrdinalIgnoreCase)
+        || State.Equals("cancelled", StringComparison.OrdinalIgnoreCase)
+        || Bucket.Equals("fail", StringComparison.OrdinalIgnoreCase)
+        || Bucket.Equals("failure", StringComparison.OrdinalIgnoreCase);
+}
 
 internal sealed record PullRequestDiffGroup(string Name, int FileCount, int? Additions, int? Deletions);
 

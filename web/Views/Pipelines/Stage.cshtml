@@ -1,0 +1,137 @@
+@model Cyberpilot.Web.Models.PipelineStageDocumentViewModel
+@{
+    ViewData["Title"] = $"{Model.Stage.StageLabel} - Issue #{Model.Run.IssueNumber}";
+    var stage = Model.Stage;
+    var stageLabelLower = stage.StageLabel.ToLowerInvariant();
+}
+
+<div class="pipeline-detail-shell plan-document-shell">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a asp-action="Index">Pipelines</a></li>
+            <li class="breadcrumb-item"><a asp-action="Details" asp-route-id="@Model.Run.Id">Run @Model.Run.Id</a></li>
+            <li class="breadcrumb-item active" aria-current="page">@stage.StageLabel</li>
+        </ol>
+    </nav>
+
+    <main class="plan-document-grid">
+        <section class="plan-document-main" aria-labelledby="stage-full-title">
+            <div class="plan-document-section-header plan-document-section-header-actions">
+                <div>
+                    <p class="eyebrow">Captured output</p>
+                    <h1 id="stage-full-title">Issue #@Model.Run.IssueNumber @stage.StageLabel</h1>
+                </div>
+                <div class="plan-review-badges">
+                    <a class="btn btn-sm btn-outline-light" href="@Model.IssueUrl" target="_blank" rel="noopener">View issue</a>
+                    @if (!string.IsNullOrWhiteSpace(Model.Run.PrUrl))
+                    {
+                        <a class="btn btn-sm btn-outline-light" href="@Model.Run.PrUrl" target="_blank" rel="noopener">View PR</a>
+                    }
+                    <a asp-action="Details" asp-route-id="@Model.Run.Id" class="btn btn-sm btn-outline-info">Back to run</a>
+                    <span class="plan-review-status">@stage.Status</span>
+                    @if (!string.IsNullOrWhiteSpace(stage.Decision) && stage.Decision != "unknown")
+                    {
+                        <span class="plan-review-decision">@stage.Decision</span>
+                    }
+                </div>
+            </div>
+            @if (stage.HasFullOutputText)
+            {
+                @if (Model.RenderedOutputHtml is not null)
+                {
+                    <div class="plan-rendered-body markdown-body">
+                        @Html.Raw(Model.RenderedOutputHtml)
+                    </div>
+                }
+                else
+                {
+                    <pre class="plan-document-pre">@stage.FullOutputText</pre>
+                }
+            }
+            else
+            {
+                <p class="muted-cell">No full @stageLabelLower output was captured for this run.</p>
+            }
+        </section>
+
+        <aside class="plan-document-aside" aria-label="@stage.StageLabel metadata">
+            <section class="plan-document-card">
+                <p class="eyebrow">Metadata</p>
+                <dl class="plan-review-meta">
+                    <div>
+                        <dt>Captured</dt>
+                        <dd>@stage.CreatedAt.ToLocalTime().ToString("g")</dd>
+                    </div>
+                    <div>
+                        <dt>Contract</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(stage.ContractVersion) ? "unknown" : stage.ContractVersion)</dd>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(Model.Run.BranchName))
+                    {
+                        <div>
+                            <dt>Branch</dt>
+                            <dd><code>@Model.Run.BranchName</code></dd>
+                        </div>
+                    }
+                </dl>
+            </section>
+
+            @if (stage.HasRequiredActions)
+            {
+                <section class="plan-document-card">
+                    <p class="eyebrow">Required before continuing</p>
+                    <ul class="plan-document-list">
+                        @foreach (var action in stage.RequiredActions)
+                        {
+                            <li>@action</li>
+                        }
+                    </ul>
+                </section>
+            }
+
+            @if (stage.HasArtifacts)
+            {
+                <section class="plan-document-card">
+                    <p class="eyebrow">Artifacts</p>
+                    <div class="plan-review-evidence">
+                        @foreach (var artifact in stage.Artifacts)
+                        {
+                            <p>
+                                <strong>@artifact.Label:</strong>
+                                @if (artifact.HasUri)
+                                {
+                                    <a href="@artifact.Uri" target="_blank" rel="noopener">Open</a>
+                                }
+                                else if (artifact.HasValue)
+                                {
+                                    @artifact.Value
+                                }
+                                else
+                                {
+                                    <span class="muted-cell">captured</span>
+                                }
+                            </p>
+                        }
+                    </div>
+                </section>
+            }
+
+            @if (stage.HasEvidence)
+            {
+                <section class="plan-document-card">
+                    <p class="eyebrow">Supporting evidence</p>
+                    <div class="plan-review-evidence">
+                        @foreach (var evidence in stage.Evidence)
+                        {
+                            <p><strong>@evidence.KindLabel:</strong> @evidence.Summary</p>
+                        }
+                    </div>
+                </section>
+            }
+        </aside>
+    </main>
+</div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/pipeline-details.css" asp-append-version="true" />
+}

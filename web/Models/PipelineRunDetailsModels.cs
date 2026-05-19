@@ -25,12 +25,21 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
     /// <summary>Gets whether this run has plan output that can be shown for deliberate review.</summary>
     public bool HasPlanReview => PlanReview is not null;
 
+    /// <summary>Gets the latest triage stage output formatted as a standalone document.</summary>
+    public PipelineTriageReviewViewModel? TriageReview => PipelineTriageReviewViewModel.Create(Run, Logs, Evidence ?? []);
+
+    /// <summary>Gets whether this run has triage output that can be shown for deliberate review.</summary>
+    public bool HasTriageReview => TriageReview is not null;
+
     /// <summary>Initializes a details view model without labels.</summary>
     public PipelineRunDetailsViewModel(PipelineRun run, IReadOnlyList<PipelineStageLog> logs)
         : this(run, logs, []) { }
 
     /// <summary>Gets the ordered list of valid pipeline stage names.</summary>
     public static IReadOnlyList<string> ValidStageNames { get; } = ["triage", "plan", "implement", "review", "docs", "deliver"];
+
+    /// <summary>Gets stages that can be shown as standalone stage output documents.</summary>
+    public static IReadOnlySet<string> StageDocumentNames { get; } = new HashSet<string>(ValidStageNames, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Gets or sets the maximum number of retry attempts allowed per stage per run.</summary>
     public int MaxStageRetries { get; init; } = 3;
@@ -139,6 +148,9 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
         ? PipelineDefinitionDefaults.ContractVersion
         : Run.ContractVersion;
 
+    /// <summary>Gets the configured model family shown in run telemetry.</summary>
+    public string ModelFamilyLabel => ResolveModelFamily(Run.Model);
+
     /// <summary>Gets the retry attempt count for a specific stage (number of existing stage logs for that stage).</summary>
     public int GetStageRetryCount(string stageName)
         => Logs.Count(l => l.StageName.Equals(stageName, StringComparison.OrdinalIgnoreCase));
@@ -152,6 +164,14 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
 
     private static bool IsReviewStage(string? stageName)
         => stageName?.Equals("review", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static string ResolveModelFamily(string? model)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return "Unknown";
+        if (model.StartsWith("claude-", StringComparison.OrdinalIgnoreCase)) return "Claude";
+        if (model.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase)) return "GPT";
+        return model.Split(['-', '_', '.'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? model;
+    }
 
     private static int StageSortOrder(string stageName)
     {
@@ -184,6 +204,364 @@ public sealed record PipelinePlanDocumentViewModel(PipelineRun Run, PipelinePlan
     public string IssueUrl => string.IsNullOrWhiteSpace(Run.IssueUrl)
         ? $"https://github.com/{Run.Repository}/issues/{Run.IssueNumber}"
         : Run.IssueUrl;
+}
+
+/// <summary>
+/// Displays a captured triage report as a standalone review document.
+/// </summary>
+/// <param name="Run">The pipeline run that produced the triage report.</param>
+/// <param name="Triage">The structured triage details.</param>
+/// <param name="RenderedTriageHtml">The triage full text rendered as HTML, when available.</param>
+public sealed record PipelineTriageDocumentViewModel(PipelineRun Run, PipelineTriageReviewViewModel Triage, string? RenderedTriageHtml = null)
+{
+    /// <summary>Gets the GitHub issue URL, when available.</summary>
+    public string IssueUrl => string.IsNullOrWhiteSpace(Run.IssueUrl)
+        ? $"https://github.com/{Run.Repository}/issues/{Run.IssueNumber}"
+        : Run.IssueUrl;
+}
+
+/// <summary>
+/// Displays a captured pipeline stage output as a standalone document.
+/// </summary>
+/// <param name="Run">The pipeline run that produced the stage output.</param>
+/// <param name="Stage">The structured stage output details.</param>
+/// <param name="RenderedOutputHtml">The stage output rendered as HTML, when available.</param>
+public sealed record PipelineStageDocumentViewModel(PipelineRun Run, PipelineStageOutputViewModel Stage, string? RenderedOutputHtml = null)
+{
+    /// <summary>Gets the GitHub issue URL, when available.</summary>
+    public string IssueUrl => string.IsNullOrWhiteSpace(Run.IssueUrl)
+        ? $"https://github.com/{Run.Repository}/issues/{Run.IssueNumber}"
+        : Run.IssueUrl;
+}
+
+/// <summary>
+/// Displays one non-triage pipeline stage's captured output, artifacts, and evidence.
+/// </summary>
+/// <param name="StageName">The stage machine name.</param>
+/// <param name="StageLabel">The stage display label.</param>
+/// <param name="Status">The latest stage status.</param>
+/// <param name="Decision">The latest stage decision.</param>
+/// <param name="Summary">The most concise available stage summary.</param>
+/// <param name="FullOutputText">The full captured output or transcript for detailed review.</param>
+/// <param name="Artifacts">Structured artifacts produced by the stage.</param>
+/// <param name="Evidence">Evidence rows produced by the stage.</param>
+/// <param name="RequiredActions">Actions the operator or agent must address before continuing.</param>
+/// <param name="CreatedAt">When the displayed stage log was created.</param>
+/// <param name="CompletedAt">When the displayed stage log completed, when available.</param>
+/// <param name="ContractVersion">The stage result contract version, when available.</param>
+public sealed record PipelineStageOutputViewModel(
+    string StageName,
+    string StageLabel,
+    string Status,
+    string Decision,
+    string Summary,
+    string? FullOutputText,
+    IReadOnlyList<PipelinePlanArtifactViewModel> Artifacts,
+    IReadOnlyList<PipelineEvidenceViewModel> Evidence,
+    IReadOnlyList<string> RequiredActions,
+    DateTime CreatedAt,
+    DateTime? CompletedAt,
+    string? ContractVersion)
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    /// <summary>Gets whether the stage has detailed text to display.</summary>
+    public bool HasFullOutputText => !string.IsNullOrWhiteSpace(FullOutputText);
+
+    /// <summary>Gets whether the stage has structured artifacts to display.</summary>
+    public bool HasArtifacts => Artifacts.Count > 0;
+
+    /// <summary>Gets whether the stage has supporting evidence rows.</summary>
+    public bool HasEvidence => Evidence.Count > 0;
+
+    /// <summary>Gets whether the stage has required follow-up actions.</summary>
+    public bool HasRequiredActions => RequiredActions.Count > 0;
+
+    /// <summary>
+    /// Creates a stage output model from the latest persisted stage log.
+    /// </summary>
+    /// <param name="stageName">The stage machine name.</param>
+    /// <param name="run">The owning pipeline run.</param>
+    /// <param name="logs">The stage logs for the run.</param>
+    /// <param name="evidence">The evidence rows for the run.</param>
+    /// <returns>A stage output model, or <see langword="null" /> when no output exists.</returns>
+    public static PipelineStageOutputViewModel? Create(string stageName, PipelineRun run, IReadOnlyList<PipelineStageLog> logs, IReadOnlyList<PipelineEvidence> evidence)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(logs);
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        var stageLog = logs
+            .Where(log => log.StageName.Equals(stageName, StringComparison.OrdinalIgnoreCase)
+                && (!string.IsNullOrWhiteSpace(log.StageResultJson) || !string.IsNullOrWhiteSpace(log.Output)))
+            .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
+            .FirstOrDefault();
+        if (stageLog is null)
+        {
+            return null;
+        }
+
+        var result = TryReadStageResult(stageLog.StageResultJson);
+        var artifacts = BuildArtifacts(stageName, result, evidence);
+        var primaryArtifact = artifacts.FirstOrDefault(artifact => artifact.HasValue && IsPrimaryArtifact(stageName, artifact.Name))
+            ?? artifacts.FirstOrDefault(artifact => artifact.HasValue && IsReadableArtifact(artifact));
+        var summary = FirstNonEmpty(
+            primaryArtifact?.Value,
+            evidence.FirstOrDefault(item => item.StageName.Equals(stageName, StringComparison.OrdinalIgnoreCase)
+                && item.Kind.Equals("stage-artifact", StringComparison.OrdinalIgnoreCase))?.Summary,
+            stageLog.Output,
+            $"{DisplayStage(stageName)} output was captured, but no structured summary was provided.")!;
+
+        var stageEvidence = evidence
+            .Where(item => item.StageName.Equals(stageName, StringComparison.OrdinalIgnoreCase)
+                && !item.Kind.Equals("stage-artifact", StringComparison.OrdinalIgnoreCase)
+                && !item.Kind.Equals("usage-metrics", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.Kind)
+            .ThenBy(item => item.CreatedAt)
+            .Select(PipelineEvidenceViewModel.FromEvidence)
+            .ToArray();
+
+        return new PipelineStageOutputViewModel(
+            stageName,
+            DisplayStage(stageName),
+            stageLog.Status,
+            result?.Decision ?? "unknown",
+            NormalizeDisplayText(summary),
+            NormalizeDisplayText(FirstNonEmpty(stageLog.Output, primaryArtifact?.Value) ?? string.Empty),
+            artifacts,
+            stageEvidence,
+            result?.RequiredActions ?? [],
+            stageLog.StartedAt,
+            stageLog.CompletedAt,
+            result?.ContractVersion ?? stageLog.StageResultContractVersion);
+    }
+
+    private static IReadOnlyList<PipelinePlanArtifactViewModel> BuildArtifacts(string stageName, StageResult? result, IReadOnlyList<PipelineEvidence> evidence)
+    {
+        if (result?.Artifacts is { Count: > 0 })
+        {
+            return result.Artifacts
+                .Select(PipelinePlanArtifactViewModel.FromArtifact)
+                .ToArray();
+        }
+
+        return evidence
+            .Where(item => item.StageName.Equals(stageName, StringComparison.OrdinalIgnoreCase)
+                && item.Kind.Equals("stage-artifact", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.CreatedAt)
+            .Select(PipelinePlanArtifactViewModel.FromEvidence)
+            .ToArray();
+    }
+
+    private static bool IsPrimaryArtifact(string stageName, string artifactName)
+        => (stageName.ToLowerInvariant(), artifactName.ToLowerInvariant()) switch
+        {
+            ("implement", "pull-request") => true,
+            ("implement", "validation-summary") => true,
+            ("review", "review-verdict") => true,
+            ("docs", "verification") => true,
+            ("docs", "docs-comment") => true,
+            ("deliver", "landing-report") => true,
+            _ => artifactName.EndsWith("-comment", StringComparison.OrdinalIgnoreCase)
+                || artifactName.EndsWith("-report", StringComparison.OrdinalIgnoreCase)
+                || artifactName.EndsWith("-verdict", StringComparison.OrdinalIgnoreCase),
+        };
+
+    private static bool IsReadableArtifact(PipelinePlanArtifactViewModel artifact)
+        => string.IsNullOrWhiteSpace(artifact.MediaType)
+            || artifact.MediaType.Contains("text", StringComparison.OrdinalIgnoreCase)
+            || artifact.MediaType.Contains("markdown", StringComparison.OrdinalIgnoreCase);
+
+    private static StageResult? TryReadStageResult(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<StageResult>(json, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string NormalizeDisplayText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Trim()
+            .Replace("\\r\\n", Environment.NewLine, StringComparison.Ordinal)
+            .Replace("\\n", Environment.NewLine, StringComparison.Ordinal)
+            .Replace("\\t", "    ", StringComparison.Ordinal);
+    }
+
+    private static string DisplayStage(string stageName)
+        => string.IsNullOrWhiteSpace(stageName)
+            ? "Stage"
+            : char.ToUpperInvariant(stageName[0]) + stageName[1..];
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+}
+
+/// <summary>
+/// Displays the triage stage output as a standalone report.
+/// </summary>
+/// <param name="Status">The latest triage stage status.</param>
+/// <param name="Decision">The latest triage stage decision.</param>
+/// <param name="Summary">The most concise available triage summary.</param>
+/// <param name="FullTriageText">The full triage text or transcript available for detailed review.</param>
+/// <param name="Artifacts">Structured artifacts produced by the triage stage.</param>
+/// <param name="Evidence">Evidence rows produced by the triage stage.</param>
+/// <param name="RequiredActions">Actions the operator or agent must address before continuing.</param>
+/// <param name="CreatedAt">When the displayed triage log was created.</param>
+/// <param name="CompletedAt">When the displayed triage log completed, when available.</param>
+/// <param name="ContractVersion">The stage result contract version, when available.</param>
+public sealed record PipelineTriageReviewViewModel(
+    string Status,
+    string Decision,
+    string Summary,
+    string? FullTriageText,
+    IReadOnlyList<PipelinePlanArtifactViewModel> Artifacts,
+    IReadOnlyList<PipelineEvidenceViewModel> Evidence,
+    IReadOnlyList<string> RequiredActions,
+    DateTime CreatedAt,
+    DateTime? CompletedAt,
+    string? ContractVersion)
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    /// <summary>Gets whether the triage report has detailed text to display.</summary>
+    public bool HasFullTriageText => !string.IsNullOrWhiteSpace(FullTriageText);
+
+    /// <summary>Gets whether the triage report has structured artifacts to display.</summary>
+    public bool HasArtifacts => Artifacts.Count > 0;
+
+    /// <summary>Gets whether the triage report has supporting evidence rows.</summary>
+    public bool HasEvidence => Evidence.Count > 0;
+
+    /// <summary>Gets whether the triage report has required follow-up actions.</summary>
+    public bool HasRequiredActions => RequiredActions.Count > 0;
+
+    /// <summary>
+    /// Creates a triage review model from the latest persisted triage stage log.
+    /// </summary>
+    /// <param name="run">The owning pipeline run.</param>
+    /// <param name="logs">The stage logs for the run.</param>
+    /// <param name="evidence">The evidence rows for the run.</param>
+    /// <returns>A triage review model, or <see langword="null" /> when no triage output exists.</returns>
+    public static PipelineTriageReviewViewModel? Create(PipelineRun run, IReadOnlyList<PipelineStageLog> logs, IReadOnlyList<PipelineEvidence> evidence)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(logs);
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        var triageLog = logs
+            .Where(log => log.StageName.Equals("triage", StringComparison.OrdinalIgnoreCase)
+                && (!string.IsNullOrWhiteSpace(log.StageResultJson) || !string.IsNullOrWhiteSpace(log.Output)))
+            .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
+            .FirstOrDefault();
+        if (triageLog is null)
+        {
+            return null;
+        }
+
+        var result = TryReadStageResult(triageLog.StageResultJson);
+        var artifacts = BuildArtifacts(result, evidence);
+        var triageArtifact = artifacts.FirstOrDefault(artifact => artifact.Name.Equals("triage-comment", StringComparison.OrdinalIgnoreCase));
+        var summary = FirstNonEmpty(
+            triageArtifact?.Value,
+            evidence.FirstOrDefault(item => item.StageName.Equals("triage", StringComparison.OrdinalIgnoreCase)
+                && item.Kind.Equals("stage-artifact", StringComparison.OrdinalIgnoreCase)
+                && item.Name.Equals("triage-comment", StringComparison.OrdinalIgnoreCase))?.Summary,
+            triageLog.Output,
+            "Triage output was captured, but no structured summary was provided.")!;
+
+        var triageEvidence = evidence
+            .Where(item => item.StageName.Equals("triage", StringComparison.OrdinalIgnoreCase)
+                && !item.Kind.Equals("stage-artifact", StringComparison.OrdinalIgnoreCase)
+                && !item.Kind.Equals("usage-metrics", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.Kind)
+            .ThenBy(item => item.CreatedAt)
+            .Select(PipelineEvidenceViewModel.FromEvidence)
+            .ToArray();
+
+        return new PipelineTriageReviewViewModel(
+            triageLog.Status,
+            result?.Decision ?? "unknown",
+            NormalizeDisplayText(summary),
+            NormalizeDisplayText(FirstNonEmpty(triageArtifact?.Value, triageLog.Output) ?? string.Empty),
+            artifacts,
+            triageEvidence,
+            result?.RequiredActions ?? [],
+            triageLog.StartedAt,
+            triageLog.CompletedAt,
+            result?.ContractVersion ?? triageLog.StageResultContractVersion);
+    }
+
+    private static IReadOnlyList<PipelinePlanArtifactViewModel> BuildArtifacts(StageResult? result, IReadOnlyList<PipelineEvidence> evidence)
+    {
+        if (result?.Artifacts is { Count: > 0 })
+        {
+            return result.Artifacts
+                .Select(PipelinePlanArtifactViewModel.FromArtifact)
+                .ToArray();
+        }
+
+        return evidence
+            .Where(item => item.StageName.Equals("triage", StringComparison.OrdinalIgnoreCase)
+                && item.Kind.Equals("stage-artifact", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.CreatedAt)
+            .Select(PipelinePlanArtifactViewModel.FromEvidence)
+            .ToArray();
+    }
+
+    private static StageResult? TryReadStageResult(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<StageResult>(json, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string NormalizeDisplayText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Trim()
+            .Replace("\\r\\n", Environment.NewLine, StringComparison.Ordinal)
+            .Replace("\\n", Environment.NewLine, StringComparison.Ordinal)
+            .Replace("\\t", "    ", StringComparison.Ordinal);
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 }
 
 /// <summary>
@@ -328,7 +706,17 @@ public sealed record PipelinePlanReviewViewModel(
     }
 
     private static string NormalizeDisplayText(string value)
-        => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Trim()
+            .Replace("\\r\\n", Environment.NewLine, StringComparison.Ordinal)
+            .Replace("\\n", Environment.NewLine, StringComparison.Ordinal)
+            .Replace("\\t", "    ", StringComparison.Ordinal);
+    }
 
     private static string? FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
@@ -366,7 +754,7 @@ public sealed record PipelinePlanArtifactViewModel(string Name, string Label, st
         return new PipelinePlanArtifactViewModel(
             artifact.Name,
             BuildLabel(artifact.Name),
-            string.IsNullOrWhiteSpace(artifact.Value) ? null : artifact.Value.Trim(),
+            NormalizeValue(artifact.Value),
             string.IsNullOrWhiteSpace(artifact.Uri) ? null : artifact.Uri.Trim(),
             string.IsNullOrWhiteSpace(artifact.MediaType) ? null : artifact.MediaType.Trim());
     }
@@ -381,9 +769,22 @@ public sealed record PipelinePlanArtifactViewModel(string Name, string Label, st
         return new PipelinePlanArtifactViewModel(
             evidence.Name,
             BuildLabel(evidence.Name),
-            string.IsNullOrWhiteSpace(evidence.Summary) ? null : evidence.Summary.Trim(),
+            NormalizeValue(evidence.Summary),
             string.IsNullOrWhiteSpace(evidence.Uri) ? null : evidence.Uri.Trim(),
             string.IsNullOrWhiteSpace(evidence.MediaType) ? null : evidence.MediaType.Trim());
+    }
+
+    private static string? NormalizeValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Trim()
+            .Replace("\\r\\n", Environment.NewLine, StringComparison.Ordinal)
+            .Replace("\\n", Environment.NewLine, StringComparison.Ordinal)
+            .Replace("\\t", "    ", StringComparison.Ordinal);
     }
 
     private static string BuildLabel(string name)

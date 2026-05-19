@@ -75,6 +75,14 @@
 
     // ── Build a card DOM node ──────────────────────────────────────────
     const STAGE_ORDER = ['triage','plan','implement','review','docs','deliver'];
+    const STAGE_DOCUMENTS = {
+        triage: 'Triage',
+        plan: 'Plan',
+        implement: 'Implement',
+        review: 'Review',
+        docs: 'Docs',
+        deliver: 'Deliver'
+    };
 
     function buildCard(stage, round, retryCount, retryReason) {
         round = round || 1;
@@ -125,12 +133,12 @@
             <div class="agent-tagline">"${a.tagline}"</div>
                         ${retryReason ? `<div class="agent-retry-reason"><span class="agent-retry-reason-label">Retry reason</span><span>${escapeHtml(retryReason)}</span></div>` : ''}
             <div class="agent-state-note" aria-live="polite"></div>
-            ${stage === 'plan'
-                ? `<div class="plan-output-actions">
-                     <a href="/Pipelines/${runId}/Plan" class="btn btn-xs btn-outline-info">📋 View Plan</a>
-                   </div>
-                   <div class="agent-output" style="display:none"></div>`
-                : `<div class="agent-output"></div>`}
+                        ${STAGE_DOCUMENTS[stage]
+                            ? `<div class="plan-output-actions">
+                                 <a href="/Pipelines/${runId}/${STAGE_DOCUMENTS[stage]}" class="btn btn-xs btn-outline-info">View ${STAGE_DOCUMENTS[stage]}</a>
+                                 </div>
+                                 <div class="agent-output" style="display:none"></div>`
+                            : `<div class="agent-output"></div>`}
           </div>`;
 
         return card;
@@ -541,6 +549,7 @@
             const round = roundCounts[stage];
             const card = buildCard(stage, round, null, retryReason);
             if (!card) return null;
+            closeDispatchGroup();
             feed.appendChild(card);
             activeCardIds[stage] = card.id;
             setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
@@ -551,6 +560,7 @@
         roundCounts[stage] = 1;
         const card = buildCard(stage, 1, null, retryReason);
         if (!card) return null;
+        closeDispatchGroup();
         feed.appendChild(card);
         activeCardIds[stage] = card.id;
         setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
@@ -563,6 +573,7 @@
         const out = card?.querySelector('.agent-output');
         if (!out) return;
         if (cursorEl?.parentNode === out) out.removeChild(cursorEl);
+        card.dataset.lastOutputAt = String(Date.now());
         out.dataset.stage = stage;
         out.dataset.rawOutput = `${out.dataset.rawOutput ?? ''}${text}`;
         if (!cursorEl) {
@@ -572,6 +583,7 @@
         renderOutput(out);
         out.appendChild(cursorEl);
         out.scrollTop = out.scrollHeight;
+        updateRunningNote(stage);
     }
 
     function removeCursor() {
@@ -624,7 +636,7 @@
                 tokenBadge.className = 'agent-token-badge';
                 const lines = [];
                 if ((tokenData.inputTokens ?? 0) > 0 || (tokenData.outputTokens ?? 0) > 0) {
-                    lines.push(`🪙 ${Number(tokenData.inputTokens ?? 0).toLocaleString()} in / ${Number(tokenData.outputTokens ?? 0).toLocaleString()} out`);
+                    lines.push(`${Number(tokenData.inputTokens ?? 0).toLocaleString()} in / ${Number(tokenData.outputTokens ?? 0).toLocaleString()} out`);
                 }
                 if (tokenData.estimatedCostUsd > 0) {
                     lines.push(`~$${Number(tokenData.estimatedCostUsd).toFixed(4)} estimated`);
@@ -689,17 +701,54 @@
         return `${minutes}:${String(seconds).padStart(2, '0')}`;
     }
 
+    function formatElapsedSeconds(totalSeconds) {
+        const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
+        const minutes = Math.floor(seconds / 60);
+        const remaining = seconds % 60;
+        return minutes > 0 ? `${minutes}:${String(remaining).padStart(2, '0')}` : `${remaining}s`;
+    }
+
     // ── Per-stage live timer ───────────────────────────────────────────
     let timerHandle = null, timerStart = null, timerStage = null;
 
-    function startTimer(stage) {
+    function startTimer(stage, startedAtUtc) {
         stopTimer();
-        timerStage = stage; timerStart = Date.now();
+        const parsedStart = startedAtUtc ? Date.parse(startedAtUtc) : NaN;
+        timerStage = stage;
+        timerStart = Number.isNaN(parsedStart) ? Date.now() : parsedStart;
+        const card = getActiveCard(stage);
+        if (card) card.dataset.startedAt = String(timerStart);
         timerHandle = setInterval(() => {
             const card = getActiveCard(timerStage);
             const dur = card?.querySelector('.agent-dur');
-            if (dur) dur.textContent = `${Math.round((Date.now() - timerStart) / 1000)}s`;
+            if (dur) dur.textContent = formatElapsedSeconds((Date.now() - timerStart) / 1000);
+            updateRunningNote(timerStage);
         }, 1000);
+        updateRunningNote(stage);
+    }
+
+    function updateRunningNote(stage) {
+        const card = getActiveCard(stage);
+        if (!card?.classList.contains('state-active')) return;
+        const note = card.querySelector('.agent-state-note');
+        if (!note) return;
+        const out = card.querySelector('.agent-output');
+        const hasOutput = Boolean(out?.dataset.rawOutput?.trim());
+        const now = Date.now();
+        const startedAt = Number(card.dataset.startedAt || timerStart || now);
+        const lastOutputAt = Number(card.dataset.lastOutputAt || 0);
+        const elapsed = formatElapsedSeconds((now - startedAt) / 1000);
+
+        if (!hasOutput) {
+            const quietSeconds = Math.round((now - startedAt) / 1000);
+            note.textContent = quietSeconds >= 60
+                ? `Still running · ${elapsed} elapsed · waiting for first output`
+                : `Waiting for first output · ${elapsed} elapsed`;
+            return;
+        }
+
+        const sinceLast = lastOutputAt > 0 ? formatElapsedSeconds((now - lastOutputAt) / 1000) : 'just now';
+        note.textContent = `Output captured · last update ${sinceLast} ago · ${elapsed} elapsed`;
     }
 
     function stopTimer() {
@@ -772,31 +821,76 @@
     }
 
     // ── Cyberpilot dispatch (inline in agent feed) ─────────────────────
-    let preflightNode = null; // accumulate all Preflight rows into one card
+    let currentDispatchNode = null;
+    let currentDispatchPhase = null;
+
+    function dispatchTypeClass(type) {
+        return String(type ?? 'dispatch')
+            .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+            .replace(/[^a-z0-9]+/gi, '-')
+            .replace(/^-+|-+$/g, '')
+            .toLowerCase() || 'dispatch';
+    }
+
+    function dispatchPhase(type, message) {
+        const normalizedType = dispatchTypeClass(type);
+        const text = String(message ?? '').toLowerCase();
+
+        if (text.includes('resume') || text.includes('resuming')) return 'resume';
+        if (normalizedType === 'approval' || normalizedType === 'gate' || normalizedType === 'halt') return 'approval';
+        if (normalizedType === 'preflight' || normalizedType === 'repo-profile' || normalizedType === 'model-fallback') return 'setup';
+        if (normalizedType === 'routing' || normalizedType === 'branch' || normalizedType === 'review-loop') return 'transition';
+        if (normalizedType === 'skip' || normalizedType === 'issue-close') return 'completion';
+
+        return 'coordination';
+    }
+
+    function dispatchPhaseLabel(phase) {
+        const labels = {
+            approval: 'Approval gate',
+            completion: 'Completion',
+            coordination: 'Run coordination',
+            resume: 'Resume handoff',
+            setup: 'Run setup',
+            transition: 'Stage handoff'
+        };
+
+        return labels[phase] ?? labels.coordination;
+    }
 
     function appendSpineNode(type, message) {
-        const isPreflight = type === 'Preflight';
-
-        if (isPreflight && preflightNode) {
-            // Add a new row to the existing preflight card
-            const row = document.createElement('div');
-            row.className = 'spine-dispatch-row';
-            row.innerHTML = `<span class="spine-dot dot-${escapeHtml(type)}"></span><span class="spine-dispatch-text">${escapeHtml(message)}</span>`;
-            preflightNode.querySelector('.spine-dispatch-inner').appendChild(row);
-            return;
+        const phase = dispatchPhase(type, message);
+        if (currentDispatchPhase && currentDispatchPhase !== phase) {
+            closeDispatchGroup();
         }
-        const node = document.createElement('div');
-        node.className = 'spine-dispatch';
-        node.innerHTML = `
+
+        if (!currentDispatchNode) {
+            currentDispatchNode = document.createElement('div');
+            currentDispatchNode.className = 'spine-dispatch';
+            currentDispatchNode.innerHTML = `
             <div class="spine-dispatch-inner">
                 <div class="spine-dispatch-header">
                     <img src="/images/agents/cyberpilot.png" class="spine-dispatch-avatar" alt="AP" onerror="this.style.display='none'">
-                    <div class="spine-dispatch-row" style="padding-left:0"><span class="spine-dot dot-${escapeHtml(type)}"></span><span class="spine-dispatch-text">${escapeHtml(message)}</span></div>
+                    <div>
+                        <div class="spine-dispatch-title">Cyberpilot</div>
+                        <div class="spine-dispatch-subtitle">${escapeHtml(dispatchPhaseLabel(phase))}</div>
+                    </div>
                 </div>
+                <div class="spine-dispatch-rows"></div>
             </div>`;
-        feed.appendChild(node);
+            feed.appendChild(currentDispatchNode);
+            currentDispatchPhase = phase;
+        }
 
-        if (isPreflight) preflightNode = node;
+        const row = document.createElement('div');
+        row.className = 'spine-dispatch-row';
+        row.innerHTML = `<span class="spine-dot dot-${dispatchTypeClass(type)}"></span><span class="spine-dispatch-text">${escapeHtml(message)}</span>`;
+        currentDispatchNode.querySelector('.spine-dispatch-rows')?.appendChild(row);
+    }
+
+    function closeDispatchGroup() {
+        currentDispatchNode = null;
+        currentDispatchPhase = null;
     }
 
     // ── Pre-populate from server-rendered data (merged timeline) ──────
@@ -812,6 +906,7 @@
             continue;
         }
         const log = entry;
+        closeDispatchGroup();
         roundCounts[log.stage] = (roundCounts[log.stage] || 0) + 1;
         const round = roundCounts[log.stage];
 
@@ -832,7 +927,7 @@
 
         if (s === 'running' && runIsActive) {
             currentStage = log.stage;
-            startTimer(log.stage);
+            startTimer(log.stage, log.timestamp);
             if (out) out.scrollTop = out.scrollHeight;
         } else if (s === 'running') {
             finalizeCard(log.stage, 'failed', log.duration);
@@ -989,13 +1084,14 @@
             });
 
             currentStage = e.stage;
+            closeDispatchGroup();
             const card = ensureCard(e.stage, e.retryReason);
             if (card) {
                 // ensureCard returns a fresh card in state-active for re-entries
                 // For first-time cards, it's also already state-active from buildCard
                 card.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-            startTimer(e.stage);
+            startTimer(e.stage, e.startedAt);
             updateStation(e.stage, 'is-running', 'running');
         });
 
@@ -1026,6 +1122,7 @@
             updateStation(e.stage, STATION_STATE_MAP[statusLower] ?? 'is-complete', statusLower);
             stopTimer();
             currentStage = null;
+            closeDispatchGroup();
         });
 
         conn.on('runStarted',   ()  => applyRunStatus('Running'));

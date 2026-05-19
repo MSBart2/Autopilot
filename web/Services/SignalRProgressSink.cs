@@ -70,6 +70,7 @@ public sealed class SignalRProgressSink(
             runId,
             issueNumber,
             stage = stage.Name,
+            startedAt = currentLog.StartedAt.ToString("o"),
             retryReason = string.IsNullOrWhiteSpace(stageRetryReason) ? null : stageRetryReason,
         }).GetAwaiter().GetResult();
     }

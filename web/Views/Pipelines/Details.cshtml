@@ -34,7 +34,6 @@
     var canContinue = Model.CanContinue;
     var canReworkFromReview = Model.CanReworkFromReview;
     var maxStageRetries = Model.MaxStageRetries;
-    var planReview = Model.PlanReview;
     var bootstrapJson = JsonSerializer.Serialize(new
     {
         runId = Model.Run.Id,
@@ -234,8 +233,9 @@
                     <section class="command-surface run-surface">
                         <div class="run-telemetry-grid">
                             <div class="stat-card">
-                                <div class="stat-label">Model</div>
-                                <strong class="text-truncate d-block" title="@Model.Run.Model">@Model.Run.Model</strong>
+                                <div class="stat-label">Model family</div>
+                                <strong class="text-truncate d-block" title="@Model.Run.Model">@Model.ModelFamilyLabel</strong>
+                                <small class="muted-cell">seed: @Model.Run.Model</small>
                             </div>
                             <div class="stat-card">
                                 <div class="stat-label">Definition</div>
@@ -341,112 +341,6 @@
                                  </div>
                              }
 
-                             @if (planReview is not null)
-                             {
-                                 <section class="plan-review-panel" aria-labelledby="plan-review-title">
-                                     <div class="plan-review-header">
-                                         <div>
-                                             <p class="eyebrow">Plan artifact</p>
-                                             <h3 id="plan-review-title">Plan Review</h3>
-                                         </div>
-                                         <div class="plan-review-badges">
-                                             <span class="plan-review-status">@planReview.Status</span>
-                                             @if (!string.IsNullOrWhiteSpace(planReview.Decision) && planReview.Decision != "unknown")
-                                             {
-                                                 <span class="plan-review-decision">@planReview.Decision</span>
-                                             }
-                                         </div>
-                                     </div>
-                                     <div class="plan-review-body">
-                                         <div class="plan-review-summary">
-                                             <span class="plan-review-label">Summary</span>
-                                             <p>@planReview.Summary</p>
-                                         </div>
-                                         <dl class="plan-review-meta">
-                                             <div>
-                                                 <dt>Branch</dt>
-                                                 <dd>
-                                                     @if (planReview.HasBranch)
-                                                     {
-                                                         <code>@planReview.BranchName</code>
-                                                     }
-                                                     else
-                                                     {
-                                                         <span class="muted-cell fst-italic">pending</span>
-                                                     }
-                                                 </dd>
-                                             </div>
-                                             <div>
-                                                 <dt>Captured</dt>
-                                                 <dd>@planReview.CreatedAt.ToLocalTime().ToString("g")</dd>
-                                             </div>
-                                             <div>
-                                                 <dt>Contract</dt>
-                                                 <dd>@(string.IsNullOrWhiteSpace(planReview.ContractVersion) ? "unknown" : planReview.ContractVersion)</dd>
-                                             </div>
-                                         </dl>
-
-                                         @if (planReview.HasRequiredActions)
-                                         {
-                                             <div class="plan-review-actions">
-                                                 <span class="plan-review-label">Required before continuing</span>
-                                                 <ul>
-                                                     @foreach (var action in planReview.RequiredActions)
-                                                     {
-                                                         <li>@action</li>
-                                                     }
-                                                 </ul>
-                                             </div>
-                                         }
-
-                                         @if (planReview.HasArtifacts)
-                                         {
-                                             <div class="plan-review-artifacts" aria-label="Plan artifacts">
-                                                 @foreach (var artifact in planReview.Artifacts)
-                                                 {
-                                                     <article class="plan-review-artifact">
-                                                         <div class="plan-review-artifact-header">
-                                                             <h4>@artifact.Label</h4>
-                                                             @if (!string.IsNullOrWhiteSpace(artifact.MediaType))
-                                                             {
-                                                                 <span>@artifact.MediaType</span>
-                                                             }
-                                                         </div>
-                                                         @if (artifact.HasValue)
-                                                         {
-                                                             <p>@artifact.Value</p>
-                                                         }
-                                                         @if (artifact.HasUri)
-                                                         {
-                                                             <a href="@artifact.Uri" target="_blank" rel="noopener">Open artifact</a>
-                                                         }
-                                                     </article>
-                                                 }
-                                             </div>
-                                         }
-
-                                         @if (planReview.HasEvidence)
-                                         {
-                                             <div class="plan-review-evidence">
-                                                 <span class="plan-review-label">Supporting evidence</span>
-                                                 @foreach (var evidence in planReview.Evidence)
-                                                 {
-                                                     <p><strong>@evidence.KindLabel:</strong> @evidence.Summary</p>
-                                                 }
-                                             </div>
-                                         }
-
-                                         @if (planReview.HasFullPlanText)
-                                         {
-                                             <details class="plan-review-full">
-                                                 <summary>Open full plan text</summary>
-                                                 <pre>@planReview.FullPlanText</pre>
-                                             </details>
-                                         }
-                                     </div>
-                                 </section>
-                             }
- 
                              @if (Model.ApprovalItems.Any())
                              {
                                 <section class="approval-panel" aria-labelledby="approval-panel-title">

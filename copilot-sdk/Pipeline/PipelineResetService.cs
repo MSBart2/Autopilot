@@ -13,19 +13,6 @@ public sealed class PipelineResetService(
     IGitHubIssueClient issueClient,
     CyberpilotDbContext? dbContext)
 {
-    private static readonly string[] AgentCommentMarkers =
-    [
-        "## 🕵️ Case File",
-        "## 🎯 The Playbook",
-        "## 🚀 Mission Control — Landing Report",
-        "SDK Cyberpilot branch ready:",
-        "Planning Started",
-        "Research Complete",
-        "Branch Ready",
-        "build-complete",
-        "human verification",
-    ];
-
     /// <summary>
     /// Resets the issue to a clean SDK state, preserving the run record in the database.
     /// Removes SDK stage labels, deletes agent comments, closes any open PR, and deletes the feature branch.
@@ -177,7 +164,7 @@ public sealed class PipelineResetService(
     }
 
     private static bool IsAgentComment(string body)
-        => AgentCommentMarkers.Any(marker => body.Contains(marker, StringComparison.OrdinalIgnoreCase));
+        => CyberpilotIssueCommentClassifier.IsAgentComment(body);
 
     private static async Task<bool> DeleteIssueBranchAsync(string repoRoot, string branchName, CancellationToken cancellationToken)
     {

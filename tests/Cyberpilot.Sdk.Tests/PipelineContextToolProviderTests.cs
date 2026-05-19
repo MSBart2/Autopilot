@@ -153,6 +153,32 @@ public sealed class PipelineContextToolProviderTests
     }
 
     [Fact]
+    public async Task GetPullRequestChecksAsync_ReturnsStructuredCheckSummary()
+    {
+        var context = CreateContext(captureToolOutputArtifacts: true);
+        context.PrUrl = "https://github.com/owner/repo/pull/17";
+        var raw = """
+            [
+              { "name": "CodeQL", "state": "pass", "bucket": "pass", "workflow": "CodeQL", "link": "https://github.com/checks/1" },
+              { "name": "Unit Tests", "state": "pending", "bucket": "pending", "workflow": "CI" }
+            ]
+            """;
+        var provider = new PipelineContextToolProvider(context, Stage("review"), new FakeGitHubCli(raw));
+
+        var response = await provider.GetPullRequestChecksAsync();
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Data);
+        Assert.Equal(17, response.Data.Number);
+        Assert.False(response.Data.HasFailures);
+        Assert.True(response.Data.HasPending);
+        Assert.True(response.Data.HasCodeQl);
+        Assert.Contains(response.Data.Checks, check => check.Name == "CodeQL" && check.Workflow == "CodeQL");
+        var artifact = Assert.Single(context.GetToolArtifacts("review"));
+        Assert.Equal("tool-output-get_pr_checks", artifact.Name);
+    }
+
+    [Fact]
     public async Task GetPullRequestDetailsAsync_ByDefaultDoesNotPersistRawOutputReference()
     {
         var context = CreateContext();

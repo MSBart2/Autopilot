@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Output Sandbox — Cyberpilot</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #0d1117; color: #d1d5db; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+header { background: #161b22; border-bottom: 1px solid #30363d; padding: .6rem 1rem; display: flex; align-items: center; gap: 1rem; flex-shrink: 0; flex-wrap: wrap; }
+header h1 { font-size: .9rem; font-weight: 700; color: #f8fafc; letter-spacing: .04em; white-space: nowrap; }
+.controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-left: auto; }
+.controls label { display: flex; align-items: center; gap: .3rem; font-size: .72rem; color: #94a3b8; cursor: pointer; white-space: nowrap; }
+.controls input[type=checkbox] { accent-color: #7c3aed; }
+.btn { padding: .28rem .7rem; border-radius: 5px; border: 1px solid #30363d; background: #21262d; color: #e2e8f0; font-size: .72rem; cursor: pointer; }
+.btn:hover { background: #30363d; }
+.main { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; min-height: 0; }
+.pane { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid #21262d; }
+.pane:last-child { border-right: none; }
+.pane-header { background: #161b22; border-bottom: 1px solid #21262d; padding: .35rem .7rem; font-size: .68rem; font-weight: 700; letter-spacing: .1em; color: #64748b; text-transform: uppercase; flex-shrink: 0; }
+.pane-body { flex: 1; overflow: auto; padding: .75rem; min-height: 0; }
+#raw-input { width: 100%; height: 100%; background: transparent; border: none; color: #94a3b8; font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; font-size: .7rem; line-height: 1.6; resize: none; outline: none; }
+/* ── Rendered output styles (matching production) ── */
+.output-markdown h3 { margin: .6rem 0 .25rem; color: #f8fafc; font-size: .85rem; font-weight: 700; border-bottom: 1px solid rgba(148,163,184,.15); padding-bottom: .2rem; }
+.output-markdown p { margin: .25rem 0; color: #d1d5db; line-height: 1.6; font-size: .8rem; }
+.output-markdown ul { margin: .25rem 0 .45rem; padding-left: 1.1rem; }
+.output-markdown li { color: #d1d5db; font-size: .8rem; line-height: 1.55; }
+.output-markdown li + li { margin-top: .18rem; }
+.output-table { width: 100%; margin: .45rem 0; border-collapse: collapse; font-size: .74rem; }
+.output-table th, .output-table td { padding: .38rem .5rem; border: 1px solid rgba(148,163,184,.18); vertical-align: top; }
+.output-table th { color: #f8fafc; background: rgba(148,163,184,.18); }
+.output-table td { color: #d1d5db; background: rgba(255,255,255,.04); }
+.prose-code { padding: .1rem .3rem; border-radius: 3px; background: rgba(148,163,184,.15); color: #e2e8f0; font-family: 'Cascadia Code', Consolas, monospace; font-size: .72rem; }
+.output-narrative { border-bottom: 1px solid rgba(148,163,184,.14); margin-bottom: .55rem; padding-bottom: .45rem; }
+/* ── Summary card redesign ── */
+.output-summary { display: flex; flex-direction: column; gap: .5rem; }
+.output-verdict { display: flex; align-items: center; justify-content: space-between; gap: .7rem; padding: .6rem .7rem; border-radius: 7px; background: rgba(15,23,42,.78); border: 1px solid rgba(148,163,184,.22); }
+.output-verdict strong { color: #f8fafc; font-size: .82rem; letter-spacing: .08em; }
+.output-verdict span { color: #cbd5e1; font-size: .73rem; }
+.output-verdict.status-go { border-color: rgba(34,197,94,.45); background: rgba(20,83,45,.38); }
+.output-verdict.status-stop { border-color: rgba(245,158,11,.55); background: rgba(120,53,15,.45); }
+.output-verdict.status-duplicate { border-color: rgba(99,102,241,.45); background: rgba(30,27,75,.45); }
+.summary-chips-row { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; padding: .1rem 0; }
+.summary-section-label { font-size: .58rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; color: #64748b; margin-right: .2rem; }
+.chip { display: inline-flex; align-items: center; padding: .18rem .48rem; border-radius: 999px; font-size: .68rem; font-weight: 700; border: 1px solid; }
+.chip-neutral { color: #e2e8f0; background: rgba(148,163,184,.15); border-color: rgba(148,163,184,.25); }
+.chip-agent { color: #93c5fd; background: rgba(59,130,246,.12); border-color: rgba(59,130,246,.28); }
+.chip-scope { color: #86efac; background: rgba(34,197,94,.1); border-color: rgba(34,197,94,.22); }
+.chip-go { color: #4ade80; background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.3); }
+.chip-stop { color: #fbbf24; background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.3); }
+.chip-medium { color: #fb923c; background: rgba(249,115,22,.1); border-color: rgba(249,115,22,.25); }
+.chip-hard { color: #f87171; background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.25); }
+.chip-high { color: #fb923c; background: rgba(249,115,22,.1); border-color: rgba(249,115,22,.25); }
+.chip-critical { color: #f87171; background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.3); }
+.summary-divider { border: none; border-top: 1px solid rgba(148,163,184,.12); margin: .1rem 0; }
+.narrative-toggle { font-size: .7rem; color: #64748b; cursor: pointer; padding: .3rem 0; display: block; user-select: none; }
+.narrative-toggle:hover { color: #93c5fd; }
+.narrative-collapsed { display: none; }
+.output-details summary { cursor: pointer; color: #93c5fd; font-size: .72rem; font-weight: 700; margin-top: .4rem; display: block; }
+.output-raw { margin: .35rem 0 0; padding: .55rem .65rem; border-radius: 6px; background: #020617; color: #6b7280; font-family: 'Cascadia Code', Consolas, monospace; font-size: .68rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.diff-removed { background: rgba(239,68,68,.1); border-left: 3px solid rgba(239,68,68,.5); padding: .05rem .4rem; color: #f87171; font-size: .7rem; font-family: monospace; margin: .08rem 0; display: block; }
+.diff-kept { padding: .05rem .4rem; font-size: .7rem; font-family: monospace; margin: .08rem 0; display: block; color: #4ade80; }
+.diff-blank { color: #334155; font-size: .65rem; font-family: monospace; display: block; padding: 0 .4rem; }
+#info { padding: .4rem .75rem; font-size: .7rem; color: #64748b; background: #161b22; border-top: 1px solid #21262d; flex-shrink: 0; letter-spacing: .02em; }
+/* ── Evidence panel ── */
+.evidence-panel { margin-top: .75rem; border: 1px solid rgba(34,211,238,.18); border-radius: 8px; overflow: hidden; background: rgba(6,10,18,.7); }
+.evidence-panel-header { display: flex; align-items: center; justify-content: space-between; padding: .5rem .75rem; cursor: pointer; user-select: none; background: rgba(34,211,238,.05); border-bottom: 1px solid rgba(34,211,238,.14); }
+.evidence-panel-header:hover { background: rgba(34,211,238,.09); }
+.evidence-panel-header .ep-title { font-size: .7rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: #22d3ee; }
+.evidence-panel-header .ep-count { font-size: .62rem; font-weight: 900; color: #22d3ee; background: rgba(34,211,238,.12); border: 1px solid rgba(34,211,238,.25); border-radius: 999px; padding: .08rem .4rem; }
+.evidence-panel-header .ep-chevron { color: #64748b; transition: transform .18s; }
+.evidence-panel-header.open .ep-chevron { transform: rotate(180deg); }
+.evidence-panel-body { padding: .6rem .75rem; display: flex; flex-direction: column; gap: .45rem; }
+.evidence-card { padding: .5rem .65rem; border-radius: 6px; background: rgba(255,255,255,.04); border: 1px solid rgba(148,163,184,.12); border-left: 3px solid #22d3ee; display: flex; flex-direction: column; gap: .2rem; }
+.evidence-card.kind-policy { border-left-color: #a78bfa; }
+.evidence-card.kind-required-action { border-left-color: #fbbf24; }
+.evidence-card-name { font-size: .62rem; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; color: #22d3ee; }
+.evidence-card.kind-policy .evidence-card-name { color: #a78bfa; }
+.evidence-card-summary { font-size: .75rem; color: #cbd5e1; line-height: 1.5; margin: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔬 Output Rendering Sandbox</h1>
+  <div class="controls">
+    <label><input type="checkbox" id="chk-clean" checked> Clean noise</label>
+    <label><input type="checkbox" id="chk-narrative" checked> Narrative</label>
+    <label><input type="checkbox" id="chk-verdict" checked> Verdict card</label>
+    <label><input type="checkbox" id="chk-raw-collapse" checked> Raw collapsible</label>
+    <label><input type="checkbox" id="chk-evidence" checked> Evidence panel</label>
+    <label><input type="checkbox" id="chk-diff"> Diff view</label>
+    <button class="btn" onclick="resetInput()">↩ Reset</button>
+    <button class="btn" onclick="copyClean()">📋 Copy cleaned</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="pane">
+    <div class="pane-header">Raw Agent Output (editable)</div>
+    <div class="pane-body" style="padding:.5rem;">
+      <textarea id="raw-input" spellcheck="false"></textarea>
+    </div>
+  </div>
+  <div class="pane">
+    <div class="pane-header">Rendered Output</div>
+    <div class="pane-body" id="render-pane"></div>
+  </div>
+</div>
+
+<div id="info">Loading…</div>
+
+<script>
+const HARDCODED = "Right. No PR context yet\u2014this is a fresh issue triage. Let me fetch the issue details from GitHub.## Reading the Issue\n\nGood. Another case landed on my desk. This one's got the right paperwork already\u2014it's **labeled for benchmark work under the SDK**, and it's asking for something meaty: a feature-flagged diagnostics panel for the weather forecast UI.\n\nLet me pull the repository structure and search for any existing diagnostics work, feature flag patterns, or related weather UI code.Good lead. There's already feature flag handling in the codebase. Let me examine the existing patterns and the weather UI.Let me search for the actual Razor components:Perfect. Now let me examine the feature flag patterns and the weather card component:Good intel. Now let me check the Program.cs to see how feature flags are configured, and look at the Weather.razor page:Great context. Now let me search for any existing diagnostics, observability, or similar features:Excellent. The system already has telemetry and metrics infrastructure. Now let me search for any existing diagnostic panels or debug modes:Now let me search for any related/duplicate issues or PRs:Let me fix that for PowerShell:Perfect. I've found important evidence. Let me check if there's an existing diagnostics panel already implemented (PRs 35, 40, 52 seem related):Excellent. Critical finding. PR #35 **merged the exact feature being requested** on 2026-05-18T15:30:07Z, but then **PR #36 reverted it** on 2026-05-18T15:43:35Z to reset the benchmark for a clean re-run. This is a benchmark issue designed to be re-run multiple times.\n\nNow let me verify the current state of main doesn't have the feature:Good. No diagnostics panel in the current code. Let me verify the commit history shows the revert:Perfect. The history shows:\n- **7782bef**: Merged the diagnostics feature (PR #35)\n- **8a4cadc**: Reverted it (PR #36)\n\nNow let me check the architecture document to see what patterns are established:## Analysis Summary\n\nI've got the full case file now. Time to file this report.\n\n**CASE STATUS: NOT A DUPLICATE**\n\nThis is a **benchmark issue designed for re-run testing**. The exact feature was implemented in PR #35 and then deliberately reverted in PR #36 to reset the benchmark to a known clean state for a fresh pipeline execution. The current state of `main` does **not** contain the diagnostics panel.\n\n**KEY EVIDENCE:**\n- PR #35 (merged 2026-05-18 15:30:07Z): \"\ud83d\udd0d WeatherCard gets a dev diagnostics panel -- hidden by default, no fake data, no drama\"\n- PR #36 (merged 2026-05-18 15:43:35Z): \"Revert: diagnostics panel \u2014 resetting benchmark #32 for clean re-run\"\n- Current main (commit 8a4cadc): Diagnostics panel reverted, WeatherCard back to basic template\n\n**ISSUE QUALITY:**\n\u2705 Clear acceptance criteria  \n\u2705 Well-defined scope (UI + feature flag + metrics display)  \n\u2705 Established patterns to follow (existing feature flags, metrics infrastructure, component model)  \n\u2705 Benchmark purpose explicitly documented  \n\u2705 Ready for implementation  \n\n**IMPLEMENTATION SCOPE:**\n- Add `ShowDiagnostics` parameter to `WeatherCard.razor`\n- Create conditional diagnostics panel (forecast date, source/cache status, temp values, humidity, flag state, metrics)\n- Add feature flag `\"WeatherCardDiagnostics\"` (default false)\n- Wire feature flag in `Weather.razor` page\n- Add/update unit tests in `WeatherCardDiagnosticsTests` (pattern already established)\n- Update ARCHITECTURE.md with new flag documentation\n\n**AGENTS NEEDED:**\n- `backend` \u2014 Program.cs DI wiring for feature flag, component parameters\n- `frontend` \u2014 Razor/component work, markup, responsive design  \n- `testing` \u2014 Unit tests with Bunit, feature flag mocking patterns already proven in codebase\n- `docs` \u2014 ARCHITECTURE.md update for new feature flag\n\n**RECOMMENDED MODEL TIER:** `medium` \u2014 Normal UI/feature work with proven patterns in the codebase, focused test validation, no security or architectural risk.\n\n---\n\n## \ud83d\udd75\ufe0f Case File \u2014 Triage Report\n\n*[2026-05-19 13:42 UTC] \u2014 Another benchmark lands on my desk. I've seen this one before \u2014 same detective pulled the file out, looked at it fresh, then closed the case. Time to open it back up for a clean investigation.*\n\n### \ud83d\udccb Benchmark Profile\n\n| Dimension | Finding |\n|-----------|---------|\n| **Type** | enhancement (feature-flagged UI panel) |\n| **Difficulty** | medium |\n| **Priority** | high (benchmark work, high-value for metrics) |\n| **Scope** | Views/Components, Feature Flags, Tests |\n\n### \ud83d\udd0d The Evidence\n\n**Prior History:**\n- PR #35 (2026-05-18): Diagnostics panel successfully implemented and merged\n- PR #36 (2026-05-18): Deliberately reverted for clean benchmark re-run  \n- Current main: Feature reverted, ready for fresh implementation\n\n**This is no duplicate.** This is a benchmark reset. The case was closed by design, not by accident. We're re-opening it for a new run.\n\n### \ud83c\udfd7\ufe0f What We're Building\n\n- **Feature flag:** `\"WeatherCardDiagnostics\"` (off by default, opt-in for developers)\n- **UI component:** Compact diagnostics panel injected into `WeatherCard.razor`\n- **Display:** Forecast key, cache/source status, temp values, humidity, flag state, metric names\n- **Pattern:** Follow existing `ShowHumidity` parameter model and `WeatherForecast` feature flag behavior\n\n### \ud83e\uddea Quality Gate \u2014 PASSED \u2705\n\n| Criterion | Status | Notes |\n|-----------|--------|-------|\n| Acceptance criteria | \u2705 Clear | Hidden by default, readable/responsive, follows patterns, no fake data, honest source info |\n| Sufficient detail | \u2705 Clear | Scenario profile, expected code areas, metrics guidance provided |\n| No contradictions | \u2705 Clear | Aligns with existing architecture and observability design |\n| Feasible scope | \u2705 Clear | Single coherent feature: flag + panel + tests + docs |\n| Implementable | \u2705 Yes | Proven by PR #35; patterns established in codebase |\n\n### \ud83e\udd1d Team Call\n\nThe precinct's finest we need downtown:\n\n- **frontend** \u2014 Razor component markup, responsive design, data binding\n- **backend** \u2014 Feature flag DI wiring, component parameter threading\n- **testing** \u2014 Bunit unit tests with feature flag mocks (pattern proven in `OutputCacheFeatureFlagTests.cs`)\n- **docs** \u2014 ARCHITECTURE.md feature flag documentation\n\n### \ud83d\udce1 Related Threads\n\n| Link | Context |\n|------|---------|\n| #31 | Emoji reactions on weather cards (related feature, different PR) |\n| #30 | CSS animations (merged, unrelated) |\n| #15 | Emoji voting feature (broader initiative) |\n| #21, #22 | Output cache fixes (dependency resolved) |\n| PR #35 | Prior implementation (reverted by PR #36) |\n\n### \ud83d\udcca Telemetry Ready\n\nThe metrics infrastructure is **already in place**:\n- `ApplicationMetrics.cs` defines 6 custom counters (weather.api.calls, weather.sunny.count, cache.hits/misses, etc.)\n- TELEMETRY.md documents the full meter and query patterns\n- Aspire Dashboard + Application Insights already wired\n\nThe diagnostics panel just needs to **display what's already being tracked** \u2014 no new metrics required.\n\n---\n\n*Case classified. Feature-flagged weather diagnostics, hidden by default, honest data, proven pattern. The revert was deliberate \u2014 we're re-running this benchmark clean. Send the team downtown. They know what to build.* \ud83d\udd75\ufe0fPerfect. Now let me create the final stage result JSON with the triage comment artifact:\n\n```json\n{\n  \"status\": \"GO\",\n  \"decision\": \"approved\",\n  \"contract_version\": \"1.0\",\n  \"type\": \"enhancement\",\n  \"difficulty\": \"medium\",\n  \"priority\": \"high\",\n  \"scope\": [\"Views\", \"Components\", \"Feature Flags\", \"Tests\", \"Docs\"],\n  \"agents\": [\"frontend\", \"backend\", \"testing\", \"docs\"],\n  \"issue_number\": 32,\n  \"duplicate_of\": [],\n  \"related_issues\": [31, 30, 15, 21, 22, 35, 36],\n  \"related_prs\": [35, 36, 30, 22],\n  \"recommended_model_tier\": \"medium\",\n  \"artifacts\": {\n    \"triage-comment\": \"## \ud83d\udd75\ufe0f Case File \u2014 Triage Report\\n\\n*[2026-05-19 13:42 UTC] \u2014 Another benchmark lands on my desk. I've seen this one before \u2014 same detective pulled the file out, looked at it fresh, then closed the case. Time to open it back up for a clean investigation.*\\n\\n### \ud83d\udccb Benchmark Profile\\n\\n| Dimension | Finding |\\n|-----------|----------|\\n| **Type** | enhancement (feature-flagged UI panel) |\\n| **Difficulty** | medium |\\n| **Priority** | high (benchmark work, high-value for metrics) |\\n| **Scope** | Views/Components, Feature Flags, Tests, Docs |\\n\\n### \ud83d\udd0d The Evidence\\n\\n**Prior History:**\\n- PR #35 (2026-05-18): Diagnostics panel successfully implemented and merged\\n- PR #36 (2026-05-18): Deliberately reverted for clean benchmark re-run\\n- Current main (commit 8a4cadc): Feature reverted, ready for fresh implementation\\n\\n**This is no duplicate.** This is a benchmark reset. The case was closed by design, not by accident. We're re-opening it for a new run.\\n\\n### \ud83c\udfd7\ufe0f What We're Building\\n\\n- **Feature flag:** `\\\"WeatherCardDiagnostics\\\"` (off by default, opt-in for developers)\\n- **UI component:** Compact diagnostics panel injected into `WeatherCard.razor`\\n- **Display:** Forecast key, cache/source status, temp values, humidity, flag state, metric names\\n- **Pattern:** Follow existing `ShowHumidity` parameter model and `WeatherForecast` feature flag behavior\\n\\n### \ud83e\uddea Quality Gate \u2014 PASSED \u2705\\n\\n| Criterion | Status | Notes |\\n|-----------|--------|-------|\\n| Acceptance criteria | \u2705 Clear | Hidden by default, readable/responsive, follows patterns, no fake data, honest source info |\\n| Sufficient detail | \u2705 Clear | Scenario profile, expected code areas, metrics guidance provided |\\n| No contradictions | \u2705 Clear | Aligns with existing architecture and observability design |\\n| Feasible scope | \u2705 Clear | Single coherent feature: flag + panel + tests + docs |\\n| Implementable | \u2705 Yes | Proven by PR #35; patterns established in codebase |\\n\\n### \ud83e\udd1d Team Call\\n\\nThe precinct's finest we need downtown:\\n\\n- **frontend** \u2014 Razor component markup, responsive design, data binding\\n- **backend** \u2014 Feature flag DI wiring, component parameter threading\\n- **testing** \u2014 Bunit unit tests with feature flag mocks (pattern proven in `OutputCacheFeatureFlagTests.cs`)\\n- **docs** \u2014 ARCHITECTURE.md feature flag documentation\\n\\n### \ud83d\udce1 Related Threads\\n\\n| Link | Context |\\n|------|----------|\\n| #31 | Emoji reactions on weather cards (related feature, different PR) |\\n| #30 | CSS animations (merged, unrelated) |\\n| #15 | Emoji voting feature (broader initiative) |\\n| #21, #22 | Output cache fixes (dependency resolved) |\\n| PR #35 | Prior implementation (reverted by PR #36) |\\n| PR #36 | Clean revert for benchmark reset |\\n\\n### \ud83d\udcca Telemetry Ready\\n\\nThe metrics infrastructure is **already in place**:\\n- `ApplicationMetrics.cs` defines 6 custom counters (weather.api.calls, weather.sunny.count, cache.hits/misses, etc.)\\n- TELEMETRY.md documents the full meter and query patterns\\n- Aspire Dashboard + Application Insights already wired\\n\\nThe diagnostics panel just needs to **display what's already being tracked** \u2014 no new metrics required.\\n\\n### \ud83c\udff7\ufe0f Recommended Labels\\n\\n- `enhancement` (primary type)\\n- `benchmark` (benchmark issue for pipeline optimization)\\n\\n---\\n\\n*Case classified. Feature-flagged weather diagnostics, hidden by default, honest data, proven pattern. The revert was deliberate \u2014 we're re-running this benchmark clean. Send the team downtown. They know what to build.* \ud83d\udd75\ufe0f\"\n  },\n  \"evidence\": [\n    {\n      \"name\": \"prior_pr_35_implementation\",\n      \"summary\": \"PR #35 successfully implemented the exact feature on 2026-05-18T15:30:07Z. Merged with 11 commits covering diagnostics panel, feature flag wiring, tests, and docs.\"\n    },\n    {\n      \"name\": \"prior_pr_36_revert\",\n      \"summary\": \"PR #36 deliberately reverted PR #35 on 2026-05-18T15:43:35Z to reset benchmark to clean state. Current main (commit 8a4cadc) does not contain diagnostics panel.\"\n    },\n    {\n      \"name\": \"established_patterns\",\n      \"summary\": \"Codebase has proven patterns: feature flag management (WeatherForecast, WeatherHumidity, WeatherEmojiReactions), Bunit testing with mocks (OutputCacheFeatureFlagTests.cs), metrics infrastructure (ApplicationMetrics.cs with 6 counters), and component parameter model (ShowHumidity in WeatherCard.razor).\"\n    },\n    {\n      \"name\": \"telemetry_infrastructure\",\n      \"summary\": \"Custom metrics (weather.api.calls, cache.hits/misses, api.call.duration histogram) already implemented and documented. Application Insights and Aspire Dashboard integration complete. Diagnostics panel only needs to display existing metrics, not create new ones.\"\n    },\n    {\n      \"name\": \"quality_gate_passed\",\n      \"summary\": \"Issue passes quality gate: clear acceptance criteria, sufficient detail (scenario profile provided), no contradictions, feasible scope (single feature unit), implementable (proven by prior PR #35), and reproducible implementation pattern.\"\n    }\n  ],\n  \"policy_rationale\": \"This benchmark issue is clearly implementable and well-scoped. The feature was successfully implemented once (PR #35) and deliberately reset (PR #36) for a clean re-run. The codebase has established patterns for feature flags, component parameters, Bunit testing, and metrics display. The quality gate passes on all criteria: clear acceptance criteria, sufficient detail, no contradictions, feasible scope, and proven implementability. The issue is an enhancement with medium difficulty, high priority (benchmark optimization work), and bounded scope (Views/Components/Feature Flags/Tests/Docs). Standard policy profile approves this for planning.\",\n  \"required_actions\": []\n}\n```\n\n---\n\n## \ud83d\udd75\ufe0f Case File Filed\n\n**Status: GO** \u2014 This case proceeds to planning.\n\nThe benchmark feature is clearly implementable. The revert was intentional (PR #36), not accidental. Prior evidence (PR #35) proves the implementation is achievable. Codebase patterns are established and proven. All quality gates passed.\n\n```json\n{\n  \"status\": \"GO\",\n  \"decision\": \"approved\",\n  \"contract_version\": \"1.0\",\n  \"type\": \"enhancement\",\n  \"difficulty\": \"medium\",\n  \"priority\": \"high\",\n  \"scope\": [\"Views\", \"Components\", \"Feature Flags\", \"Tests\", \"Docs\"],\n  \"agents\": [\"frontend\", \"backend\", \"testing\", \"docs\"],\n  \"issue_number\": 32,\n  \"duplicate_of\": [],\n  \"related_issues\": [31, 30, 15, 21, 22, 35, 36],\n  \"related_prs\": [35, 36, 30, 22],\n  \"recommended_model_tier\": \"medium\",\n  \"artifacts\": {\n    \"triage-comment\": \"## \ud83d\udd75\ufe0f Case File \u2014 Triage Report\\n\\n*[2026-05-19 13:42 UTC] \u2014 Another benchmark lands on my desk. I've seen this one before \u2014 same detective pulled the file out, looked at it fresh, then closed the case. Time to open it back up for a clean investigation.*\\n\\n### \ud83d\udccb Benchmark Profile\\n\\n| Dimension | Finding |\\n|-----------|----------|\\n| **Type** | enhancement (feature-flagged UI panel) |\\n| **Difficulty** | medium |\\n| **Priority** | high (benchmark work, high-value for metrics) |\\n| **Scope** | Views/Components, Feature Flags, Tests, Docs |\\n\\n### \ud83d\udd0d The Evidence\\n\\n**Prior History:**\\n- PR #35 (2026-05-18): Diagnostics panel successfully implemented and merged\\n- PR #36 (2026-05-18): Deliberately reverted for clean benchmark re-run\\n- Current main (commit 8a4cadc): Feature reverted, ready for fresh implementation\\n\\n**This is no duplicate.** This is a benchmark reset. The case was closed by design, not by accident. We're re-opening it for a new run.\\n\\n### \ud83c\udfd7\ufe0f What We're Building\\n\\n- **Feature flag:** `\\\"WeatherCardDiagnostics\\\"` (off by default, opt-in for developers)\\n- **UI component:** Compact diagnostics panel injected into `WeatherCard.razor`\\n- **Display:** Forecast key, cache/source status, temp values, humidity, flag state, metric names\\n- **Pattern:** Follow existing `ShowHumidity` parameter model and `WeatherForecast` feature flag behavior\\n\\n### \ud83e\uddea Quality Gate \u2014 PASSED \u2705\\n\\n| Criterion | Status | Notes |\\n|-----------|--------|-------|\\n| Acceptance criteria | \u2705 Clear | Hidden by default, readable/responsive, follows patterns, no fake data, honest source info |\\n| Sufficient detail | \u2705 Clear | Scenario profile, expected code areas, metrics guidance provided |\\n| No contradictions | \u2705 Clear | Aligns with existing architecture and observability design |\\n| Feasible scope | \u2705 Clear | Single coherent feature: flag + panel + tests + docs |\\n| Implementable | \u2705 Yes | Proven by PR #35; patterns established in codebase |\\n\\n### \ud83e\udd1d Team Call\\n\\nThe precinct's finest we need downtown:\\n\\n- **frontend** \u2014 Razor component markup, responsive design, data binding\\n- **backend** \u2014 Feature flag DI wiring, component parameter threading\\n- **testing** \u2014 Bunit unit tests with feature flag mocks (pattern proven in `OutputCacheFeatureFlagTests.cs`)\\n- **docs** \u2014 ARCHITECTURE.md feature flag documentation\\n\\n### \ud83d\udce1 Related Threads\\n\\n| Link | Context |\\n|------|----------|\\n| #31 | Emoji reactions on weather cards (related feature, different PR) |\\n| #30 | CSS animations (merged, unrelated) |\\n| #15 | Emoji voting feature (broader initiative) |\\n| #21, #22 | Output cache fixes (dependency resolved) |\\n| PR #35 | Prior implementation (reverted by PR #36) |\\n| PR #36 | Clean revert for benchmark reset |\\n\\n### \ud83d\udcca Telemetry Ready\\n\\nThe metrics infrastructure is **already in place**:\\n- `ApplicationMetrics.cs` defines 6 custom counters (weather.api.calls, weather.sunny.count, cache.hits/misses, etc.)\\n- TELEMETRY.md documents the full meter and query patterns\\n- Aspire Dashboard + Application Insights already wired\\n\\nThe diagnostics panel just needs to **display what's already being tracked** \u2014 no new metrics required.\\n\\n### \ud83c\udff7\ufe0f Recommended Labels\\n\\n- `enhancement` (primary type)\\n- `benchmark` (benchmark issue for pipeline optimization)\\n\\n---\\n\\n*Case classified. Feature-flagged weather diagnostics, hidden by default, honest data, proven pattern. The revert was deliberate \u2014 we're re-running this benchmark clean. Send the team downtown. They know what to build.* \ud83d\udd75\ufe0f\"\n  },\n  \"evidence\": [\n    {\n      \"name\": \"prior_pr_35_implementation\",\n      \"summary\": \"PR #35 successfully implemented the exact feature on 2026-05-18T15:30:07Z. Merged with 11 commits covering diagnostics panel, feature flag wiring, tests, and docs.\"\n    },\n    {\n      \"name\": \"prior_pr_36_revert\",\n      \"summary\": \"PR #36 deliberately reverted PR #35 on 2026-05-18T15:43:35Z to reset benchmark to clean state. Current main (commit 8a4cadc) does not contain diagnostics panel.\"\n    },\n    {\n      \"name\": \"established_patterns\",\n      \"summary\": \"Codebase has proven patterns: feature flag management (WeatherForecast, WeatherHumidity, WeatherEmojiReactions), Bunit testing with mocks (OutputCacheFeatureFlagTests.cs), metrics infrastructure (ApplicationMetrics.cs with 6 counters), and component parameter model (ShowHumidity in WeatherCard.razor).\"\n    },\n    {\n      \"name\": \"telemetry_infrastructure\",\n      \"summary\": \"Custom metrics (weather.api.calls, cache.hits/misses, api.call.duration histogram) already implemented and documented. Application Insights and Aspire Dashboard integration complete. Diagnostics panel only needs to display existing metrics, not create new ones.\"\n    },\n    {\n      \"name\": \"quality_gate_passed\",\n      \"summary\": \"Issue passes quality gate: clear acceptance criteria, sufficient detail (scenario profile provided), no contradictions, feasible scope (single feature unit), implementable (proven by prior PR #35), and reproducible implementation pattern.\"\n    }\n  ],\n  \"policy_rationale\": \"This benchmark issue is clearly implementable and well-scoped. The feature was successfully implemented once (PR #35) and deliberately reset (PR #36) for a clean re-run. The codebase has established patterns for feature flags, component parameters, Bunit testing, and metrics display. The quality gate passes on all criteria: clear acceptance criteria, sufficient detail, no contradictions, feasible scope, and proven implementability. The issue is an enhancement with medium difficulty, high priority (benchmark optimization work), and bounded scope (Views/Components/Feature Flags/Tests/Docs). Standard policy profile approves this for planning.\",\n  \"required_actions\": []\n}\n```[step] \r\n";
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function inlineMarkdown(text) {
+  let s = escapeHtml(text);
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/`([^`]+)`/g, '<code class="prose-code">$1</code>');
+  return s;
+}
+
+function cleanAgentOutput(text) {
+  // Remove fenced json code blocks
+  let out = text.replace(/```(?:json)?\s*\n[\s\S]*?\n```/gi, '');
+
+  // Ensure ## headers start on their own line
+  out = out.replace(/([^\n])(#{2,4} )/g, '$1\n\n$2');
+
+  // Split common tool-call interjections onto their own lines when concatenated
+  out = out.replace(/(?<=[^\n])(Good\.|Great\.|Perfect\.|Right\.|Excellent\.|Noted\.|Let me |Now let me )/g, '\n$1');
+
+  // Drop everything before first ## header
+  const firstHeader = out.search(/^#{2,4} /m);
+  if (firstHeader > 0) out = out.slice(firstHeader);
+
+  // Filter short tool-call interjection lines
+  out = out.split('\n').filter(line => {
+    const t = line.trim();
+    if (!t) return true;
+    if (t.startsWith('#')) return true;
+    if (t.startsWith('|')) return true;
+    if (/^[-*]\s/.test(t)) return true;
+    if (t.startsWith('`')) return true;
+    if (t.length < 120 && /^(Good\.?|Great\.?|Perfect\.?|Right\.?|Excellent\.?|Noted\.?|Let me|Now let me|Moving on|I'll now|I can see|I need to|Looking at|Starting with|Checking|Next,|First,?\s+I)/i.test(t)) return false;
+    return true;
+  }).join('\n');
+
+  return out.trim();
+}
+
+function renderMarkdownLite(text) {
+  const lines = text.split(/\r?\n/);
+  let inList = false;
+  const html = [];
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (!t) { if (inList) { html.push('</ul>'); inList = false; } continue; }
+    const heading = /^(#{2,4})\s+(.+)$/.exec(t);
+    if (heading) {
+      if (inList) { html.push('</ul>'); inList = false; }
+      html.push(`<h3>${inlineMarkdown(heading[2])}</h3>`);
+      continue;
+    }
+    if (t.startsWith('|') && t.endsWith('|')) {
+      const tls = [];
+      while (i < lines.length) {
+        const tl = lines[i].trim();
+        if (!tl.startsWith('|') || !tl.endsWith('|')) break;
+        tls.push(tl); i++;
+      }
+      i--;
+      if (inList) { html.push('</ul>'); inList = false; }
+      const rows = tls
+        .filter(tl => !/^\|\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(tl))
+        .map(tl => tl.slice(1,-1).split('|').map(c => c.trim()));
+      if (rows.length > 0) {
+        const [header, ...body] = rows;
+        html.push('<table class="output-table"><thead><tr>');
+        html.push(header.map(c => `<th>${inlineMarkdown(c)}</th>`).join(''));
+        html.push('</tr></thead><tbody>');
+        html.push(body.map(r => `<tr>${r.map(c => `<td>${inlineMarkdown(c)}</td>`).join('')}</tr>`).join(''));
+        html.push('</tbody></table>');
+      }
+      continue;
+    }
+    const bullet = /^[-*]\s+(.+)$/.exec(t);
+    if (bullet) {
+      if (!inList) { html.push('<ul>'); inList = true; }
+      html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      continue;
+    }
+    if (inList) { html.push('</ul>'); inList = false; }
+    html.push(`<p>${inlineMarkdown(t)}</p>`);
+  }
+  if (inList) html.push('</ul>');
+  return `<div class="output-markdown">${html.join('')}</div>`;
+}
+
+function tryReadSummaryObject(text) {
+  const fenced = /```(?:json)?\s*\n(\{[\s\S]*?\})\s*\n```/i.exec(text);
+  if (fenced) { try { const o = JSON.parse(fenced[1]); if (o?.status) return o; } catch {} }
+  const blocks = text.split(/\n\s*\n/);
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const b = blocks[i].trim();
+    if (b.startsWith('{') && b.endsWith('}')) { try { const o = JSON.parse(b); if (o?.status) return o; } catch {} }
+  }
+  const s = text.indexOf('{'), e = text.lastIndexOf('}');
+  if (s >= 0 && e > s) { try { const o = JSON.parse(text.slice(s, e+1)); if (o?.status) return o; } catch {} }
+  return null;
+}
+
+// Real triage evidence rows from DB(stage-evidence + policy-rationale for this run)
+const DB_EVIDENCE = [
+  { kind: 'stage-evidence', name: 'duplicate-search', summary: 'Scanned all open and closed issues and PRs for diagnostics panel, feature-flagged dev panel, weather diagnostics. PR #35 (merged) implemented the exact feature; PR #36 deliberately reverted it to reset the benchmark. No live duplicates found.' },
+  { kind: 'stage-evidence', name: 'related-work', summary: 'Issues #11 and #12 (WeatherApiClient crash and output cache/feature flag bug) are closed neighbours — resolved dependencies. PR #35 prior implementation, PR #36 clean revert. Issue #31 (emoji reactions) is a sibling feature on the same component.' },
+  { kind: 'stage-evidence', name: 'quality-gate', summary: 'Five explicit acceptance criteria present. Panel contents enumerated. Issue honestly acknowledges caveats (data availability). Scope is bounded. No contradictions with existing architecture.' },
+  { kind: 'stage-evidence', name: 'codebase-context', summary: 'WeatherCard.razor has ShowHumidity parameter pattern. Weather.razor already uses IFeatureManager. The WeatherForecast and WeatherEmojiReactions feature flags provide proven implementation templates. ApplicationMetrics.cs has 6 counters already tracked.' },
+  { kind: 'stage-evidence', name: 'labels-applied', summary: 'Enhancement label already present on issue. sdk and sdk/triage labels applied by controller. No feature-flag label exists in the repo label set.' },
+  { kind: 'policy-rationale', name: 'policy-rationale', summary: 'Issue passes all quality gate checks: clear acceptance criteria, sufficient implementation detail, honest about data availability, feasible scope, and implementable (proven by PR #35). Standard policy profile approves for planning.' },
+];
+
+function renderEvidencePanel(summaryEvidence, showPanel) {
+  if (!showPanel) return '';
+  // Merge DB evidence + summary's evidence[] array (if any), deduping by name
+  const seen = new Set();
+  const items = [];
+  for (const e of DB_EVIDENCE) {
+    if (!seen.has(e.name)) { seen.add(e.name); items.push(e); }
+  }
+  if (Array.isArray(summaryEvidence)) {
+    for (const e of summaryEvidence) {
+      const name = e.name ?? e.Name ?? '';
+      if (!seen.has(name)) {
+        seen.add(name);
+        items.push({ kind: 'stage-evidence', name, summary: e.summary ?? e.Summary ?? '' });
+      }
+    }
+  }
+  if (!items.length) return '';
+  const cards = items.map(e => {
+    const kindCls = e.kind === 'policy-rationale' ? 'kind-policy' : '';
+    return `<article class="evidence-card ${kindCls}">
+      <span class="evidence-card-name">${escapeHtml(e.name)}</span>
+      <p class="evidence-card-summary">${escapeHtml(e.summary)}</p>
+    </article>`;
+  }).join('');
+  return `<div class="evidence-panel">
+    <div class="evidence-panel-header open" onclick="this.classList.toggle('open');this.nextElementSibling.style.display=this.classList.contains('open')?'':'none'">
+      <span class="ep-title">Evidence &amp; Findings</span>
+      <span style="display:flex;align-items:center;gap:.4rem">
+        <span class="ep-count">${items.length}</span>
+        <span class="ep-chevron">&#8964;</span>
+      </span>
+    </div>
+    <div class="evidence-panel-body">${cards}</div>
+  </div>`;
+}
+
+function chip(text, cls){ return `<span class="chip ${cls}">${escapeHtml(text)}</span>`; }
+
+function difficultyChip(v) {
+  const cls = v === 'hard' ? 'chip-hard' : v === 'medium' ? 'chip-medium' : 'chip-neutral';
+  return chip(v, cls);
+}
+function priorityChip(v) {
+  const cls = v === 'critical' ? 'chip-critical' : v === 'high' ? 'chip-high' : 'chip-neutral';
+  return chip(v, cls);
+}
+
+function renderSummary(summary) {
+  const status = String(summary.status ?? 'unknown').toLowerCase();
+  const titles = { stop: '🚫 Investigation Halted', duplicate: '🔁 Duplicate Located', go: '✅ Case Cleared' };
+  const statusTitle = titles[status] ?? 'Agent Result';
+  const statusChipCls = status === 'go' ? 'chip-go' : status === 'stop' ? 'chip-stop' : 'chip-neutral';
+
+  // Row 1: verdict + status
+  const verdictRow = `<div class="output-verdict status-${escapeHtml(status)}">
+    <strong>${escapeHtml(statusTitle)}</strong>
+    ${chip(String(summary.status ?? 'UNKNOWN'), statusChipCls)}
+  </div>`;
+
+  // Row 2: type / difficulty / priority / model tier — all as chips
+  const meta = [];
+  if (summary.type) meta.push(chip(summary.type, 'chip-neutral'));
+  if (summary.difficulty) meta.push(difficultyChip(summary.difficulty));
+  if (summary.priority) meta.push(priorityChip(summary.priority));
+  if (summary.recommended_model_tier) meta.push(chip('model: ' + summary.recommended_model_tier, 'chip-neutral'));
+  const metaRow = meta.length ? `<div class="summary-chips-row"><span class="summary-section-label">classification</span>${meta.join('')}</div>` : '';
+
+  // Row 3: agents
+  const agents = Array.isArray(summary.agents) ? summary.agents : [];
+  const agentsRow = agents.length ? `<div class="summary-chips-row"><span class="summary-section-label">agents</span>${agents.map(a => chip(a, 'chip-agent')).join('')}</div>` : '';
+
+  // Row 4: scope
+  const scope = Array.isArray(summary.scope) ? summary.scope : [];
+  const scopeRow = scope.length ? `<div class="summary-chips-row"><span class="summary-section-label">scope</span>${scope.map(s => chip(s, 'chip-scope')).join('')}</div>` : '';
+
+  // Row 5: related numbers as neutral chips
+  const related = [...(summary.related_issues ?? []), ...(summary.related_prs ?? [])];
+  const relatedRow = related.length ? `<div class="summary-chips-row"><span class="summary-section-label">related</span>${related.map(r => chip('#' + r, 'chip-neutral')).join('')}</div>` : '';
+
+  return `<div class="output-summary">${verdictRow}${metaRow}${agentsRow}${scopeRow}${relatedRow}</div>`;
+}
+
+function buildDiff(original, cleaned) {
+  const cleanedSet = new Set(cleaned.split('\n'));
+  return original.split('\n').map(l => {
+    if (!l.trim()) return `<span class="diff-blank">  ·</span>`;
+    if (cleanedSet.has(l)) return `<span class="diff-kept">+ ${escapeHtml(l.slice(0,150))}</span>`;
+    return `<span class="diff-removed">− ${escapeHtml(l.slice(0,150))}</span>`;
+  }).join('');
+}
+
+function render() {
+  const raw = document.getElementById('raw-input').value;
+  const doClean   = document.getElementById('chk-clean').checked;
+  const showNarr  = document.getElementById('chk-narrative').checked;
+  const showVerdict = document.getElementById('chk-verdict').checked;
+  const showRaw   = document.getElementById('chk-raw-collapse').checked;
+  const showEvidence = document.getElementById('chk-evidence').checked;
+  const showDiff  = document.getElementById('chk-diff').checked;
+
+  const pane = document.getElementById('render-pane');
+  const info = document.getElementById('info');
+
+  const summary = tryReadSummaryObject(raw);
+  const cleaned = doClean ? cleanAgentOutput(raw) : raw;
+  const hasNarrative = /^#{2,4} /m.test(cleaned);
+
+  let html = '';
+
+  if (showDiff && doClean) {
+    html += `<div style="margin-bottom:.6rem;font-size:.7rem;color:#94a3b8;border-bottom:1px solid #21262d;padding-bottom:.35rem"><span style="color:#4ade80">+ kept</span> &nbsp; <span style="color:#f87171">− removed</span></div>`;
+    html += `<div style="line-height:1.7">${buildDiff(raw, cleaned)}</div>`;
+  } else {
+    if (showNarr && hasNarrative) {
+      const narrativeId = 'narrative-body';
+      const narrativeHtml = summary ? `<div class="output-narrative">${renderMarkdownLite(cleaned)}</div>` : renderMarkdownLite(cleaned);
+      if (summary) {
+        // Collapsed by default when we have a verdict card
+        html += `<span class="narrative-toggle" onclick="const b=document.getElementById('${narrativeId}');const open=b.style.display==='block';b.style.display=open?'none':'block';this.textContent=open?'▸ Show full case narrative':'▾ Hide case narrative'">▸ Show full case narrative</span>`;
+        html += `<div id="${narrativeId}" class="narrative-collapsed">${narrativeHtml}</div>`;
+      } else {
+        html += narrativeHtml;
+      }
+    }
+    if (summary && showVerdict) {
+      html += renderSummary(summary);
+      html += renderEvidencePanel(summary.evidence, showEvidence);
+    }
+    if (showRaw) {
+      html += `<details class="output-details"><summary>Raw transcript (${raw.length.toLocaleString()} chars)</summary><pre class="output-raw">${escapeHtml(raw)}</pre></details>`;
+    }
+    if (!html.trim()) {
+      html = `<pre class="output-raw">${escapeHtml(cleaned || raw)}</pre>`;
+    }
+  }
+
+  pane.innerHTML = html;
+
+  const rawLines = raw.split('\n').length;
+  const cleanLines = cleaned.split('\n').length;
+  info.textContent = `Raw: ${raw.length.toLocaleString()} chars (${rawLines} lines) → Cleaned: ${cleaned.length.toLocaleString()} chars (${cleanLines} lines) — ${rawLines - cleanLines} lines removed — Summary: ${summary ? summary.status.toUpperCase() : 'not detected'}`;
+}
+
+function resetInput() {
+  document.getElementById('raw-input').value = HARDCODED;
+  render();
+}
+
+function copyClean() {
+  const raw = document.getElementById('raw-input').value;
+  navigator.clipboard.writeText(cleanAgentOutput(raw));
+}
+
+document.getElementById('raw-input').addEventListener('input', render);
+['chk-clean','chk-narrative','chk-verdict','chk-raw-collapse','chk-evidence','chk-diff'].forEach(id =>
+  document.getElementById(id).addEventListener('change', render)
+);
+
+resetInput();
+</script>
+</body>
+</html>
