@@ -30,6 +30,7 @@ internal sealed class PromptBuilder(
 		var reportingGuidance = BuildReportingGuidance(stage.Name);
 		var repositoryProfileContext = BuildRepositoryProfileContext(targetRepositoryProfileSummary);
 		var harnessContext = BuildHarnessContext(stage.Name, context);
+		var stageToolGuidance = BuildStageToolGuidance(stage.Name);
 		var commandGuidance = BuildCommandGuidance(runtimePreferences);
 		var systemMessage = runtimePreferences?.GetSystemMessageForStage(stage.Name)
 			?? new HarnessStageSystemMessage();
@@ -38,14 +39,14 @@ internal sealed class PromptBuilder(
 		{
 			var mode = systemMessage.Mode;
 			var systemContent = BuildHarnessSystemMessage(systemMessage.Profile, commandGuidance);
-			var userContent = BuildUserMessage(stageDefinition, mission, policyProfile, stage, harnessContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, stagePrompt);
+			var userContent = BuildUserMessage(stageDefinition, mission, policyProfile, stage, harnessContext, stageToolGuidance, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, stagePrompt);
 			return new BuiltPrompt(userContent, systemContent, mode);
 		}
 
-		return new BuiltPrompt(BuildFullPrompt(stageDefinition, mission, policyProfile, stage, harnessContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, commandGuidance, stagePrompt), null, HarnessSystemMessageMode.None);
+		return new BuiltPrompt(BuildFullPrompt(stageDefinition, mission, policyProfile, stage, harnessContext, stageToolGuidance, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, commandGuidance, stagePrompt), null, HarnessSystemMessageMode.None);
 	}
 
-	private string BuildUserMessage(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string stagePrompt)
+	private string BuildUserMessage(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string stageToolGuidance, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string stagePrompt)
 	{
 		return $$"""
 			Target issue: #{{issueNumber}}
@@ -57,6 +58,7 @@ internal sealed class PromptBuilder(
 			Stage result contract version: {{stageDefinition.Contract.Version}}
 			Required artifacts: {{requiredArtifacts}}
 			{{harnessContext}}
+			{{stageToolGuidance}}
 
 			At the very end of your response, include a fenced JSON block with the best available stage result. The JSON must include `contract_version` and every required artifact for this stage when you have enough information to produce artifacts:
 
@@ -87,7 +89,7 @@ internal sealed class PromptBuilder(
 			""";
 	}
 
-	private string BuildFullPrompt(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string commandGuidance, string stagePrompt)
+	private string BuildFullPrompt(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string stageToolGuidance, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string commandGuidance, string stagePrompt)
 	{
 		return $$"""
 			You are running as the Cyberpilot SDK cyberpilot controller.
@@ -101,6 +103,7 @@ internal sealed class PromptBuilder(
 			Stage result contract version: {{stageDefinition.Contract.Version}}
 			Required artifacts: {{requiredArtifacts}}
 			{{harnessContext}}
+			{{stageToolGuidance}}
 
 			The controller has already applied the permanent `sdk` provenance label and the correct SDK stage label for this stage.
 			Do not manage the `sdk` label or any `sdk/*` labels yourself. Do not close the issue.
@@ -221,6 +224,28 @@ internal sealed class PromptBuilder(
 		};
 
 		return string.Join(Environment.NewLine, lines);
+	}
+
+	private static string BuildStageToolGuidance(string stageName)
+	{
+		if (!stageName.Equals("review", StringComparison.OrdinalIgnoreCase)
+		    && !stageName.Equals("docs", StringComparison.OrdinalIgnoreCase)
+		    && !stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase))
+		{
+			return string.Empty;
+		}
+
+		return """
+
+			## Deterministic PR Tools
+
+			Before using shell, GitHub commands, or subagents to discover pull request shape, call Cyberpilot's deterministic PR tools in this order:
+			1. `get_pipeline_context`
+			2. `get_pr_details`
+			3. `get_pr_diff_summary`
+
+			Treat `get_pr_diff_summary` as the authoritative changed-file map for this stage. Use its file list, top-directory groups, extension groups, and review signals to decide which files need deeper inspection. When inspecting files directly, use paths relative to the repository root instead of absolute local paths.
+			""";
 	}
 
 	private static string BuildRepositoryProfileContext(string? profileSummary)

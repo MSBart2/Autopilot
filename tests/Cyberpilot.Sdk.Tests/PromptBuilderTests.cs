@@ -205,6 +205,9 @@ public sealed class PromptBuilderTests
         Assert.DoesNotContain("\"stage_name\":\"triage\"", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"known_approvals\":[\"plan:approved\",\"implement:approved\"]", prompt.UserMessage);
         Assert.Contains("structured artifacts as the primary workflow state", prompt.UserMessage);
+        Assert.Contains("## Deterministic PR Tools", prompt.UserMessage);
+        Assert.Contains("get_pr_diff_summary", prompt.UserMessage);
+        Assert.Contains("authoritative changed-file map", prompt.UserMessage);
     }
 
     [Fact]
