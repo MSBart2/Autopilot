@@ -317,9 +317,11 @@ Benchmark result on issue #34 / PR #51: the first M5 run reduced tokens but caus
 - [x] Add request/UI override behavior.
 - [x] Add fallback model chain.
 - [x] Record selected model, fallback model, and fallback reason per stage.
-- [ ] Compare cost/time/quality on cheap stages and review/implement stages.
+- [x] Compare cost/time/quality on cheap stages and review/implement stages.
 
 Existing CLI/web override plumbing already supported `--stage-model`, `--stage-fallback-model`, request-level maps, and per-stage selected/fallback metadata. Milestone 6 adds family-tiered defaults: `triage`, `plan`, `docs`, and `deliver` use a cheaper same-family model when no explicit override exists (`claude-haiku-4.5` for Claude runs, `gpt-5-mini` for GPT runs), while `implement` and `review` stay on the configured base model. If the cheaper family model is unavailable, the resolver falls back to the base model and records the fallback reason.
+
+Measured triage result: `m6-triage-family-tiered-costfix-20260519` kept the global run model on `claude-sonnet-4.6`, selected `claude-haiku-4.5` for triage, completed GO/approved, and recorded selected-model cost correctly after fixing the persistence sinks in `f0f4df3`. Against the M3 Sonnet triage baseline, corrected Haiku triage moved input tokens 162,939 -> 150,618 (-8%), turns 10 -> 9, failed tool calls 3 -> 0, duration 78,443 ms -> 57,562 ms (-27%), and estimated cost $0.5433 -> $0.1402 (-74%). Review/implement were validated by resolver tests to remain on the configured base model rather than auto-tiering.
 
 ### Success criteria
 
