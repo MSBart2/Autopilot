@@ -299,15 +299,17 @@ Validation evidence is stable after compacting output: ad hoc PowerShell validat
 - [x] Implement post-tool redaction for secret-looking output.
 - [x] Implement post-tool truncation/summarization for noisy output.
 - [x] Persist raw/detailed output separately from compact model context where useful.
-- [ ] Compare token usage before/after noisy output shaping.
+- [x] Compare token usage before/after noisy output shaping.
 
 Started with the least brittle version of hooks: post-tool output shaping rather than broader behavior policing. `StageToolPolicyHooks` now uses a small `ToolOutputShapingPolicy` that returns compact model-facing summaries for redacted or noisy tool results while optionally preserving larger redacted detail as `tool-output-*-detail` artifacts when `CaptureToolOutputArtifacts` is enabled. Existing pre-tool write guards remain in place, but M5 intentionally avoids expanding hard denial rules until metrics show a specific need.
+
+Benchmark result on issue #34 / PR #51: the first M5 run reduced tokens but caused false `tool_execution_failed` metrics because it replaced SDK tool result envelopes with plain strings. After preserving the SDK `resultType=success` envelope, the corrected run (`m5-review-output-shaping-envelope-20260519`, SHA `d71a355`) beat the best M4 review run: input tokens 255,513 → 178,700 (-30%), failed calls 3 → 0, duration 104,585 ms → 97,215 ms (-7%), cost $0.8362 → $0.6070 (-27%), while retaining 19 diagnostic artifact rows / 41,174 chars of redacted detail for auditability.
 
 ### Success criteria
 
 - [x] Read-only stages cannot perform broad writes.
 - [x] Secret-looking output is redacted before model context.
-- [ ] Token usage from tool output decreases or stays flat without reducing human auditability.
+- [x] Token usage from tool output decreases or stays flat without reducing human auditability.
 
 ## Milestone 6: Per-stage model tiers and fallback
 
