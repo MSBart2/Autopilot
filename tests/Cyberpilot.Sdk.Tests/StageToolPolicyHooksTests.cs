@@ -2,6 +2,7 @@ using Cyberpilot.Copilot;
 using Cyberpilot.Options;
 using Cyberpilot.Pipeline;
 using GitHub.Copilot.SDK;
+using System.Text.Json;
 
 namespace Cyberpilot.Sdk.Tests;
 
@@ -214,7 +215,7 @@ public sealed class StageToolPolicyHooksTests
             ToolResult = secretOutput,
         });
 
-        var modified = Assert.IsType<string>(output.ModifiedResult);
+        var modified = ExtractModelText(output.ModifiedResult);
         Assert.Contains("Cyberpilot compacted this tool output", modified);
         Assert.Contains("Redacted secrets: yes", modified);
         Assert.Contains("Truncated for model context: yes", modified);
@@ -238,7 +239,7 @@ public sealed class StageToolPolicyHooksTests
             ToolResult = secretOutput,
         });
 
-        var modified = Assert.IsType<string>(output.ModifiedResult);
+        var modified = ExtractModelText(output.ModifiedResult);
         Assert.Contains("Detailed redacted artifact: tool-output-run_in_terminal-detail", modified);
         Assert.Contains("Detailed redacted output is recorded", output.AdditionalContext);
         var artifact = Assert.Single(context.GetToolArtifacts("review"));
@@ -246,6 +247,29 @@ public sealed class StageToolPolicyHooksTests
         Assert.Contains("token=[REDACTED]", artifact.Value);
         Assert.Contains("Artifact truncated: no", artifact.Value);
         Assert.DoesNotContain("abc123", artifact.Value);
+    }
+
+    [Fact]
+    public void ShapePostToolUse_PreservesSdkSuccessEnvelopeWhenCompacting()
+    {
+        var hooks = new StageToolPolicyHooks(Stage("review"), CreateContext());
+
+        var output = hooks.ShapePostToolUse(new PostToolUseHookInput
+        {
+            ToolName = "powershell",
+            ToolResult = new
+            {
+                textResultForLlm = new string('x', 2_000),
+                resultType = "success",
+                sessionLog = "full log",
+                toolTelemetry = new { },
+            },
+        });
+
+        var serialized = JsonSerializer.Serialize(output.ModifiedResult);
+        using var document = JsonDocument.Parse(serialized);
+        Assert.Equal("success", document.RootElement.GetProperty("resultType").GetString());
+        Assert.Contains("Cyberpilot compacted this tool output", document.RootElement.GetProperty("textResultForLlm").GetString());
     }
 
     private static StageToolPolicyHooks CreateHooks(string stageName)
@@ -277,4 +301,14 @@ public sealed class StageToolPolicyHooksTests
 
     private static StageDefinition Stage(string name)
         => new(name.ToUpperInvariant(), name, $"{name}.agent.md", $"sdk/{name}");
+
+    private static string ExtractModelText(object? value)
+    {
+        var serialized = JsonSerializer.Serialize(value);
+        using var document = JsonDocument.Parse(serialized);
+        return document.RootElement.ValueKind == JsonValueKind.Object
+            && document.RootElement.TryGetProperty("textResultForLlm", out var text)
+            ? text.GetString() ?? string.Empty
+            : document.RootElement.GetString() ?? string.Empty;
+    }
 }

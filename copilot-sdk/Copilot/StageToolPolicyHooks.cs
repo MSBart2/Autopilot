@@ -111,7 +111,7 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
 
         return new PostToolUseHookOutput
         {
-            ModifiedResult = compactResult,
+            ModifiedResult = BuildModifiedToolResult(input.ToolResult, compactResult),
             AdditionalContext = artifact is not null
                 ? "Tool output was redacted or compacted by Cyberpilot stage policy. Detailed redacted output is recorded as a run artifact; use the compact excerpt for model reasoning."
                 : "Tool output was redacted or compacted by Cyberpilot stage policy. Enable tool output artifact capture to persist detailed redacted output for diagnostics.",
@@ -280,6 +280,22 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
         ]);
     }
 
+    private static object BuildModifiedToolResult(object? originalResult, string compactResult)
+    {
+        if (TryReadResultType(originalResult, out var resultType))
+        {
+            return new Dictionary<string, object?>
+            {
+                ["textResultForLlm"] = compactResult,
+                ["resultType"] = resultType,
+                ["sessionLog"] = compactResult,
+                ["toolTelemetry"] = new Dictionary<string, object?>(),
+            };
+        }
+
+        return compactResult;
+    }
+
     private static string BuildDetailedArtifactValue(
         string toolName,
         int originalLength,
@@ -320,6 +336,33 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
     }
 
     private static string FormatBool(bool value) => value ? "yes" : "no";
+
+    private static bool TryReadResultType(object? value, out string resultType)
+    {
+        resultType = string.Empty;
+        if (value is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(Serialize(value));
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("resultType", out var resultTypeProperty)
+                && resultTypeProperty.ValueKind == JsonValueKind.String)
+            {
+                resultType = resultTypeProperty.GetString() ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(resultType);
+            }
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        return false;
+    }
 
     private static string SanitizeName(string value)
     {
