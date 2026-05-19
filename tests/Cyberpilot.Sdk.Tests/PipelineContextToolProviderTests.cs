@@ -166,6 +166,38 @@ public sealed class PipelineContextToolProviderTests
         Assert.Empty(context.GetToolArtifacts("review"));
     }
 
+    [Fact]
+    public async Task RenderStageCommentAsync_ReturnsDeterministicReviewVerdictBody()
+    {
+        var context = CreateContext(prNumber: 17);
+        var provider = new PipelineContextToolProvider(context, Stage("review"), new FakeGitHubCli());
+
+        var response = await provider.RenderStageCommentAsync("verdict", "Approved after architecture, security, and test review.");
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Data);
+        Assert.Equal("review", response.Data.StageName);
+        Assert.Equal("verdict", response.Data.CommentKind);
+        Assert.Equal("PR #17", response.Data.Target);
+        Assert.Equal("review-verdict", response.Data.SuggestedArtifactName);
+        Assert.Equal("## 🎸 The Critic's Verdict", response.Data.Heading);
+        Assert.Contains("**Target:** PR #17", response.Data.Body);
+        Assert.Contains("Approved after architecture", response.Data.Body);
+        Assert.Contains("do not post", response.Data.Usage);
+    }
+
+    [Fact]
+    public async Task RenderStageCommentAsync_RejectsUnsupportedKind()
+    {
+        var provider = new PipelineContextToolProvider(CreateContext(), Stage("docs"), new FakeGitHubCli());
+
+        var response = await provider.RenderStageCommentAsync("confetti", "Done.");
+
+        Assert.False(response.Success);
+        Assert.NotNull(response.Error);
+        Assert.Equal("unsupported_comment_kind", response.Error.Code);
+    }
+
     private static PipelineExecutionContext CreateContext(bool captureToolOutputArtifacts = false, string? prHeadBranch = null, int? prNumber = null)
     {
         return new PipelineExecutionContext(

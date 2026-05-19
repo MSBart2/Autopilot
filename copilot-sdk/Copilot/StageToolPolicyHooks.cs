@@ -21,6 +21,7 @@ internal sealed partial class StageToolPolicyHooks(StageDefinition stage, Pipeli
         "get_pipeline_context",
         "get_pr_details",
         "get_pr_diff_summary",
+        "render_stage_comment",
     };
 
     public SessionHooks CreateHooks()

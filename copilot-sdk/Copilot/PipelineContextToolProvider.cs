@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Globalization;
 using Cyberpilot.GitHub;
 using Cyberpilot.Pipeline;
 using Microsoft.Extensions.AI;
@@ -23,6 +24,10 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
                 (int maxFiles, CancellationToken cancellationToken) => GetPullRequestDiffSummaryAsync(maxFiles, cancellationToken),
                 "get_pr_diff_summary",
                 "Returns compact pull request diff stats, touched areas, review signals, and a reference to detailed persisted output."),
+            AIFunctionFactory.Create(
+                (string commentKind, string summary, CancellationToken cancellationToken) => RenderStageCommentAsync(commentKind, summary, cancellationToken),
+                "render_stage_comment",
+                "Renders a deterministic Markdown stage comment body without posting to GitHub."),
         ];
     }
 
@@ -112,6 +117,41 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
         {
             return PipelineToolResponse<PullRequestDiffSummaryToolResult>.Fail("pr_diff_summary_failed", $"Unable to load PR diff summary for #{prNumber}: {ex.Message}");
         }
+    }
+
+    public Task<PipelineToolResponse<StageCommentToolResult>> RenderStageCommentAsync(string commentKind, string summary, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (string.IsNullOrWhiteSpace(commentKind))
+        {
+            return Task.FromResult(PipelineToolResponse<StageCommentToolResult>.Fail("missing_comment_kind", "Comment kind is required. Use started, progress, verdict, verification, or landing_report."));
+        }
+
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            return Task.FromResult(PipelineToolResponse<StageCommentToolResult>.Fail("missing_summary", "A concise comment summary is required."));
+        }
+
+        var normalizedKind = NormalizeCommentKind(commentKind);
+        if (normalizedKind is null)
+        {
+            return Task.FromResult(PipelineToolResponse<StageCommentToolResult>.Fail("unsupported_comment_kind", $"Unsupported comment kind '{commentKind}'. Use started, progress, verdict, verification, or landing_report."));
+        }
+
+        var target = context.PullRequestNumber is > 0 ? $"PR #{context.PullRequestNumber}" : $"issue #{context.Options.IssueNumber}";
+        var heading = BuildStageCommentHeading(stage.Name, normalizedKind, context.Options.IssueNumber);
+        var body = BuildStageCommentBody(heading, normalizedKind, summary.Trim(), target);
+        var result = new StageCommentToolResult(
+            stage.Name,
+            normalizedKind,
+            target,
+            RequiredArtifactName(stage.Name),
+            heading,
+            body,
+            "Return this body in the stage result artifact; do not post it from read-only stages.");
+
+        return Task.FromResult(PipelineToolResponse<StageCommentToolResult>.Ok(result));
     }
 
     private ToolOutputReference? PersistToolOutput(string toolName, string rawOutput, string mediaType)
@@ -242,6 +282,78 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
         return signals;
     }
 
+    private static string? NormalizeCommentKind(string value)
+    {
+        return value.Trim().ToLowerInvariant().Replace("-", "_") switch
+        {
+            "start" or "started" or "review_started" => "started",
+            "progress" or "update" => "progress",
+            "verdict" or "decision" or "review_verdict" => "verdict",
+            "verification" or "docs_verification" => "verification",
+            "landing" or "landing_report" or "deliver" => "landing_report",
+            _ => null,
+        };
+    }
+
+    private static string BuildStageCommentHeading(string stageName, string commentKind, int issueNumber)
+    {
+        if (stageName.Equals("review", StringComparison.OrdinalIgnoreCase) && commentKind == "verdict")
+        {
+            return "## 🎸 The Critic's Verdict";
+        }
+
+        if (stageName.Equals("docs", StringComparison.OrdinalIgnoreCase) && commentKind == "verification")
+        {
+            return $"## 📚 Docs & Verification — Issue #{issueNumber}";
+        }
+
+        if (stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase) || commentKind == "landing_report")
+        {
+            return $"## 🚀 Landing Report — Issue #{issueNumber}";
+        }
+
+        var stageLabel = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(stageName.Replace("_", " ").Replace("-", " "));
+        var kindLabel = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(commentKind.Replace("_", " "));
+        var emoji = stageName.ToLowerInvariant() switch
+        {
+            "triage" => "🧭",
+            "plan" => "📝",
+            "implement" => "🛠️",
+            "review" => "🎸",
+            "docs" => "📚",
+            _ => "🤖",
+        };
+
+        return $"## {emoji} {stageLabel} {kindLabel} — Issue #{issueNumber}";
+    }
+
+    private static string BuildStageCommentBody(string heading, string commentKind, string summary, string target)
+    {
+        var kindLabel = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(commentKind.Replace("_", " "));
+        return string.Join(Environment.NewLine, [
+            heading,
+            "",
+            $"**Target:** {target}",
+            $"**Update type:** {kindLabel}",
+            "",
+            summary,
+        ]);
+    }
+
+    private static string RequiredArtifactName(string stageName)
+    {
+        return stageName.ToLowerInvariant() switch
+        {
+            "triage" => "triage-comment",
+            "plan" => "plan-comment",
+            "implement" => "pull-request",
+            "review" => "review-verdict",
+            "docs" => "documentation-summary",
+            "deliver" => "landing-report",
+            _ => "stage-comment",
+        };
+    }
+
     private static void AddSignal(List<string> signals, bool condition, string signal)
     {
         if (condition)
@@ -321,6 +433,15 @@ internal sealed record PullRequestDiffSummaryToolResult(
     IReadOnlyList<string> Signals);
 
 internal sealed record PullRequestDiffGroup(string Name, int FileCount, int? Additions, int? Deletions);
+
+internal sealed record StageCommentToolResult(
+    string StageName,
+    string CommentKind,
+    string Target,
+    string SuggestedArtifactName,
+    string Heading,
+    string Body,
+    string Usage);
 
 internal sealed record PullRequestFileSummary(string Path, int? Additions, int? Deletions, string? Status)
 {

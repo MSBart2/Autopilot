@@ -253,7 +253,7 @@ Against the M3 review baseline, the guided M4 run is also modestly better: input
 | Fetch PR metadata | Tool | `get_pr_details` | Not started |
 | Fetch/summarize PR diff | Tool/cache | `get_pr_diff_summary` | **Promoted first:** typed file stats, directory/extension groups, and review signals. Review/docs prompts now prefer this tool before shell/GitHub diff discovery. |
 | Run known validation commands | Script/tool | `collect_validation_evidence` | Not started |
-| Render stage comments | Harness/tool | `render_stage_comment` | Not started |
+| Render stage comments | Harness/tool | `render_stage_comment` | **Promoted:** typed Markdown renderer for started/progress/verdict/verification/landing comments. Read-only stages return rendered bodies as artifacts instead of attempting blocked GitHub writes. |
 | Persist stage artifacts | Harness/tool | `record_stage_artifact` | Not started |
 | Manage SDK labels | Harness/tool | `set_pipeline_label` | Not started |
 
