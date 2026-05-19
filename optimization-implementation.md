@@ -258,6 +258,20 @@ Against the M3 review baseline, the guided M4 run is also modestly better: input
 
 The compact renderer removed GitHub write denials and renderer failures, but it did not beat the diff-summary guided run on tokens. Keep it for policy-safe comment rendering; target absolute-path file reads and ad hoc validation next.
 
+### Additional promoted workflows: validation evidence and changed-file reads
+
+`collect_validation_evidence` runs known `dotnet build` / `dotnet test` commands without shell syntax and returns typed pass/fail, exit code, timeout, duration, and output-tail evidence. `get_changed_file_content` reads repository-relative files with line numbers to reduce absolute-path `view` failures.
+
+| | Renderer compact baseline (SHA a1d422b) | Best validation/file run (SHA 3388907) | Δ |
+| --- | ---: | ---: | ---: |
+| Input tokens | 414,376 | 255,513 | **-158,863 (-38%)** |
+| Tool calls | 19 | 12 | **-7 (-37%)** |
+| Failed tool calls | 6 | 3 | **-3 (-50%)** |
+| Duration ms | 124,775 | 104,585 | **-20,190 (-16%)** |
+| Est. cost USD | $1.3328 | $0.8362 | **-$0.4966 (-37%)** |
+
+Validation evidence is stable after compacting output: ad hoc PowerShell validation failures dropped to zero. Changed-file content is only partially promoted: it reduced absolute-path view use in one run but still produced SDK tool-result failures, so it needs follow-up hardening before it can fully replace direct file reads.
+
 ### Candidate workflows
 
 | Workflow | Likely owner | Candidate implementation | Status |
@@ -270,7 +284,7 @@ The compact renderer removed GitHub write denials and renderer failures, but it 
 | Render stage comments | Harness/tool | `render_stage_comment` | **Promoted:** typed Markdown renderer for started/progress/verdict/verification/landing comments. Read-only stages return rendered bodies as artifacts instead of attempting blocked GitHub writes. |
 | Persist stage artifacts | Harness/tool | `record_stage_artifact` | Not started |
 | Manage SDK labels | Harness/tool | `set_pipeline_label` | Not started |
-| Read changed file content | Tool | `get_changed_file_content` | **Promoted from baseline failures:** repository-relative changed-file reads with line numbers; avoids repeated absolute-path `view` failures. |
+| Read changed file content | Tool | `get_changed_file_content` | **Partially promoted from baseline failures:** repository-relative changed-file reads with line numbers; promising metrics, but SDK tool-result failures remain and need hardening. |
 
 ### Success criteria
 
