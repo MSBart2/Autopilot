@@ -172,6 +172,25 @@ If a task can't be completed:
 3. Continue with remaining tasks if possible
 4. Report which tasks succeeded and which failed
 
+## Rework Mode
+
+When the harness prompt contains a **REWORK MODE** section, you are re-running after a review rejection. This is not a verification pass — it is a mandatory code-change pass.
+
+**Rules for rework:**
+1. Read every item in the `Mandatory rework items` list from the harness prompt. These come directly from the reviewer's `required_actions`.
+2. Make actual code edits to address each item. Open the file, find the line, fix the problem.
+3. Run `dotnet build` and `dotnet test` to confirm nothing is broken after your changes.
+4. Commit the changes with a clear message describing what the review asked for and what you fixed.
+5. Push the updated branch.
+6. Only then report GO with evidence confirming each item was addressed.
+
+**Do NOT:**
+- Report GO by re-verifying that the existing code "already satisfies" the review item.
+- Skip an item because you disagree with it — flag disagreements in evidence but still address the item.
+- Spend the rework pass reading the existing codebase without making changes.
+
+A rework pass that produces no commits has failed.
+
 ## Return Value
 
 When complete, return:

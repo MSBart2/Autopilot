@@ -68,7 +68,7 @@ internal sealed record StageContextSnapshot(
         var includedStages = stageName.ToLowerInvariant() switch
         {
             "plan" => new[] { "triage" },
-            "implement" => ["triage", "plan"],
+            "implement" => ["triage", "plan", "review"],
             "review" => ["plan", "implement"],
             "docs" => ["implement", "review"],
             "deliver" => ["review", "docs"],
@@ -108,7 +108,8 @@ internal sealed record StageContextStageSummary(
     [property: JsonPropertyName("error")] string? Error,
     [property: JsonPropertyName("recommended_model_tier")] string? RecommendedModelTier,
     [property: JsonPropertyName("artifacts")] IReadOnlyList<string> Artifacts,
-    [property: JsonPropertyName("evidence")] IReadOnlyList<string> Evidence)
+    [property: JsonPropertyName("evidence")] IReadOnlyList<string> Evidence,
+    [property: JsonPropertyName("required_actions")] IReadOnlyList<string>? RequiredActions)
 {
     public static StageContextStageSummary FromSummary(StageExecutionSummary summary)
     {
@@ -119,6 +120,7 @@ internal sealed record StageContextStageSummary(
             summary.Error,
             summary.RecommendedModelTier,
             summary.Artifacts,
-            summary.Evidence);
+            summary.Evidence,
+            summary.RequiredActions);
     }
 }

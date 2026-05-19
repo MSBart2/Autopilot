@@ -462,6 +462,93 @@ public sealed class PromptBuilderTests
     private static PipelineStageDefinition Stage(string displayName, string name, string promptFile, string label, IReadOnlyList<string> requiredArtifacts)
         => new(new StageDefinition(displayName, name, promptFile, label), new StageContract(PipelineDefinitionDefaults.ContractVersion, requiredArtifacts), []);
 
+    [Fact]
+    public async Task BuildAsync_ImplementAfterReviewStop_InjectsReworkContextWithRequiredActions()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "implement.agent.md"), "implement instructions");
+        var builder = new PromptBuilder(targetRepo.Path, agentRepo.Path, 42);
+        var context = Context(targetRepo.Path);
+        context.RecordStageResult(
+            "review",
+            new StageResult(
+                "STOP",
+                "changes_requested",
+                false,
+                null,
+                RequiredActions: ["Add integration tests for /weatherforecast at Program.cs:128.", "Add XML docs to CachedWeatherService.cs:7."]));
+
+        var prompt = await builder.BuildAsync(
+            Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", ["pull-request"]),
+            "implement issue",
+            StandardPolicy(),
+            context);
+
+        Assert.Contains("REWORK MODE", prompt.UserMessage);
+        Assert.Contains("Mandatory rework items", prompt.UserMessage);
+        Assert.Contains("Add integration tests for /weatherforecast", prompt.UserMessage);
+        Assert.Contains("Add XML docs to CachedWeatherService.cs:7.", prompt.UserMessage);
+        Assert.Contains("Reporting GO without addressing every item above is a pipeline error", prompt.UserMessage);
+    }
+
+    [Fact]
+    public async Task BuildAsync_ImplementWithNoReviewStop_OmitsReworkContext()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "implement.agent.md"), "implement instructions");
+        var builder = new PromptBuilder(targetRepo.Path, agentRepo.Path, 42);
+        var context = Context(targetRepo.Path);
+        context.RecordStageResult(
+            "plan",
+            new StageResult("GO", "approved", true, null));
+
+        var prompt = await builder.BuildAsync(
+            Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", ["pull-request"]),
+            "implement issue",
+            StandardPolicy(),
+            context);
+
+        Assert.DoesNotContain("REWORK MODE", prompt.UserMessage);
+        Assert.DoesNotContain("Mandatory rework items", prompt.UserMessage);
+    }
+
+    [Fact]
+    public async Task BuildAsync_ImplementAfterReviewStop_HarnessContextIncludesReviewRequiredActions()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "implement.agent.md"), "implement instructions");
+        var builder = new PromptBuilder(targetRepo.Path, agentRepo.Path, 42);
+        var context = Context(targetRepo.Path);
+        context.RecordStageResult(
+            "review",
+            new StageResult(
+                "STOP",
+                "changes_requested",
+                false,
+                null,
+                RequiredActions: ["Fix the thing at Foo.cs:10."]));
+
+        var prompt = await builder.BuildAsync(
+            Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", ["pull-request"]),
+            "implement issue",
+            StandardPolicy(),
+            context);
+
+        // The harness context JSON should carry the review's required_actions
+        Assert.Contains("\"required_actions\":[\"Fix the thing at Foo.cs:10.\"]", prompt.UserMessage);
+        // And the review stage should appear in prior_stages for implement
+        Assert.Contains("\"stage_name\":\"review\"", prompt.UserMessage);
+    }
+
     private sealed class TempDirectory : IDisposable
     {
         public TempDirectory()

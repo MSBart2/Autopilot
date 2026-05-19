@@ -31,6 +31,7 @@ internal sealed class PromptBuilder(
 		var repositoryProfileContext = BuildRepositoryProfileContext(targetRepositoryProfileSummary);
 		var harnessContext = BuildHarnessContext(stage.Name, context);
 		var stageToolGuidance = BuildStageToolGuidance(stage.Name);
+		var reworkContext = BuildReworkContext(stage.Name, context);
 		var commandGuidance = BuildCommandGuidance(runtimePreferences);
 		var systemMessage = runtimePreferences?.GetSystemMessageForStage(stage.Name)
 			?? new HarnessStageSystemMessage();
@@ -39,14 +40,14 @@ internal sealed class PromptBuilder(
 		{
 			var mode = systemMessage.Mode;
 			var systemContent = BuildHarnessSystemMessage(systemMessage.Profile, commandGuidance);
-			var userContent = BuildUserMessage(stageDefinition, mission, policyProfile, stage, harnessContext, stageToolGuidance, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, stagePrompt);
+			var userContent = BuildUserMessage(stageDefinition, mission, policyProfile, stage, harnessContext, stageToolGuidance, reworkContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, stagePrompt);
 			return new BuiltPrompt(userContent, systemContent, mode);
 		}
 
-		return new BuiltPrompt(BuildFullPrompt(stageDefinition, mission, policyProfile, stage, harnessContext, stageToolGuidance, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, commandGuidance, stagePrompt), null, HarnessSystemMessageMode.None);
+		return new BuiltPrompt(BuildFullPrompt(stageDefinition, mission, policyProfile, stage, harnessContext, stageToolGuidance, reworkContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, commandGuidance, stagePrompt), null, HarnessSystemMessageMode.None);
 	}
 
-	private string BuildUserMessage(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string stageToolGuidance, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string stagePrompt)
+	private string BuildUserMessage(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string stageToolGuidance, string reworkContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string stagePrompt)
 	{
 		return $$"""
 			Target issue: #{{issueNumber}}
@@ -58,6 +59,7 @@ internal sealed class PromptBuilder(
 			Stage result contract version: {{stageDefinition.Contract.Version}}
 			Required artifacts: {{requiredArtifacts}}
 			{{harnessContext}}
+			{{reworkContext}}
 			{{stageToolGuidance}}
 
 			At the very end of your response, include a fenced JSON block with the best available stage result. The JSON must include `contract_version` and every required artifact for this stage when you have enough information to produce artifacts:
@@ -91,7 +93,7 @@ internal sealed class PromptBuilder(
 			""";
 	}
 
-	private string BuildFullPrompt(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string stageToolGuidance, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string commandGuidance, string stagePrompt)
+	private string BuildFullPrompt(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string stageToolGuidance, string reworkContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string commandGuidance, string stagePrompt)
 	{
 		return $$"""
 			You are running as the Cyberpilot SDK cyberpilot controller.
@@ -105,6 +107,7 @@ internal sealed class PromptBuilder(
 			Stage result contract version: {{stageDefinition.Contract.Version}}
 			Required artifacts: {{requiredArtifacts}}
 			{{harnessContext}}
+			{{reworkContext}}
 			{{stageToolGuidance}}
 
 			The controller has already applied the permanent `sdk` provenance label and the correct SDK stage label for this stage.
@@ -228,6 +231,48 @@ internal sealed class PromptBuilder(
 		};
 
 		return string.Join(Environment.NewLine, lines);
+	}
+
+	/// <summary>
+	/// Builds an explicit rework block when the implement stage is re-running after a review STOP.
+	/// This ensures the agent treats review required_actions as a mandatory work list, not a checklist.
+	/// </summary>
+	private static string BuildReworkContext(string stageName, PipelineExecutionContext? context)
+	{
+		if (!stageName.Equals("implement", StringComparison.OrdinalIgnoreCase) || context is null)
+		{
+			return string.Empty;
+		}
+
+		var reviewStop = context.StageHistory
+			.Where(s => s.StageName.Equals("review", StringComparison.OrdinalIgnoreCase)
+			         && s.Status.Equals("STOP", StringComparison.OrdinalIgnoreCase))
+			.LastOrDefault();
+
+		if (reviewStop is null || reviewStop.RequiredActions is not { Count: > 0 } actions)
+		{
+			return string.Empty;
+		}
+
+		var actionList = string.Join(Environment.NewLine, actions.Select((a, i) => $"{i + 1}. {a}"));
+
+		return $$"""
+
+			## ⚠️ REWORK MODE — You are fixing review feedback
+
+			The previous review stage rejected this implementation with `changes_requested`. You MUST make code changes to address every item below before reporting GO. Do NOT report GO without first making the required changes and verifying the build still passes.
+
+			**Mandatory rework items (from review `required_actions`):**
+			{{actionList}}
+
+			For each item:
+			1. Open the file at the specified path and line number.
+			2. Make the required code change.
+			3. Verify the change is correct and the build still passes.
+			4. Note what you changed in your evidence.
+
+			Reporting GO without addressing every item above is a pipeline error.
+			""";
 	}
 
 	private static string BuildStageToolGuidance(string stageName)
