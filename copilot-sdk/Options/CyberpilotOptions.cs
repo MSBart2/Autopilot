@@ -106,11 +106,7 @@ internal sealed record CyberpilotOptions(
 
         var parsed = ParseArguments(args);
 
-        if ((parsed.IssueNumber is null or <= 0) && !parsed.CheckLabelsOnly && !parsed.CheckModelOnly && !parsed.ResetMode
-            && parsed.OnlyStage is null && parsed.BenchmarkRepeat <= 1)
-        {
-            throw new ArgumentException("Provide a positive issue number. Try: dotnet run --project copilot-sdk-exe/Cyberpilot.Sdk.Exe.csproj -- run issue 135");
-        }
+        // Issue number validation is deferred to CyberpilotApp after config applies BenchmarkIssue.
 
         return new CyberpilotOptions(
             parsed.IssueNumber ?? 0,
