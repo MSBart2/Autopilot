@@ -161,7 +161,7 @@ public sealed class CyberpilotPipelineService(
                 RuntimePreferences: new CyberpilotRuntimePreferences(
                     options.Value.CommandStyle,
                     options.Value.CaptureToolOutputArtifacts,
-                    options.Value.UseHarnessSystemMessage)), sink, cancellationToken);
+                    options.Value.SystemMessageMode)), sink, cancellationToken);
 
             run.Status = result.Status;
             run.BranchName = result.BranchName;

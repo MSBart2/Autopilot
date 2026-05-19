@@ -115,6 +115,17 @@ public sealed class PipelineRun
     /// <summary>Gets or sets when the run was benchmark-reset. Set when remote state (PR, branch, comments) was cleaned up for re-run while preserving DB metrics.</summary>
     public DateTime? BenchmarkResetAt { get; set; }
 
+    /// <summary>Gets or sets the experiment variant name for benchmark runs (e.g. "append-triage-iter-2").</summary>
+    [StringLength(200)]
+    public string? ExperimentVariant { get; set; }
+
+    /// <summary>Gets or sets the 1-based iteration number within a benchmark repeat group.</summary>
+    public int? BenchmarkIteration { get; set; }
+
+    /// <summary>Gets or sets the shared group ID across all iterations of one benchmark run.</summary>
+    [StringLength(64)]
+    public string? BenchmarkRepeatGroup { get; set; }
+
     /// <summary>Gets or sets the stage logs for this run.</summary>
     public ICollection<PipelineStageLog> StageLogs { get; set; } = [];
 

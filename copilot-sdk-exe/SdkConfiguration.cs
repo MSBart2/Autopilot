@@ -93,7 +93,9 @@ internal sealed class SdkConfiguration
                 ? RuntimePreferences.CommandStyle
                 : optionPreferences.CommandStyle,
             CaptureToolOutputArtifacts = optionPreferences.CaptureToolOutputArtifacts || RuntimePreferences.CaptureToolOutputArtifacts,
-            UseHarnessSystemMessage = optionPreferences.UseHarnessSystemMessage || RuntimePreferences.UseHarnessSystemMessage,
+            SystemMessageMode = optionPreferences.SystemMessageMode == HarnessSystemMessageMode.None
+                ? RuntimePreferences.SystemMessageMode
+                : optionPreferences.SystemMessageMode,
         };
     }
 
@@ -172,10 +174,16 @@ internal sealed class SdkConfiguration
             current = current with { CaptureToolOutputArtifacts = captureToolOutput.GetBoolean() };
         }
 
-        if (cyberpilot.TryGetProperty("UseHarnessSystemMessage", out var useHarnessSystemMessage)
-            && useHarnessSystemMessage.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        if (cyberpilot.TryGetProperty("SystemMessageMode", out var systemMessageModeEl)
+            && TryParseSystemMessageMode(systemMessageModeEl.GetString(), out var parsedMode))
         {
-            current = current with { UseHarnessSystemMessage = useHarnessSystemMessage.GetBoolean() };
+            current = current with { SystemMessageMode = parsedMode };
+        }
+        else if (cyberpilot.TryGetProperty("UseHarnessSystemMessage", out var useHarnessSystemMessage)
+            && useHarnessSystemMessage.ValueKind is JsonValueKind.True or JsonValueKind.False
+            && useHarnessSystemMessage.GetBoolean())
+        {
+            current = current with { SystemMessageMode = HarnessSystemMessageMode.Append };
         }
 
         runtimePreferences = current;
@@ -213,9 +221,13 @@ internal sealed class SdkConfiguration
             current = current with { CaptureToolOutputArtifacts = captureToolOutputArtifacts };
         }
 
-        if (bool.TryParse(Environment.GetEnvironmentVariable("Cyberpilot__UseHarnessSystemMessage"), out var useHarnessSystemMessage))
+        if (TryParseSystemMessageMode(Environment.GetEnvironmentVariable("Cyberpilot__SystemMessageMode"), out var systemMessageMode))
         {
-            current = current with { UseHarnessSystemMessage = useHarnessSystemMessage };
+            current = current with { SystemMessageMode = systemMessageMode };
+        }
+        else if (bool.TryParse(Environment.GetEnvironmentVariable("Cyberpilot__UseHarnessSystemMessage"), out var useHarnessSystemMessage) && useHarnessSystemMessage)
+        {
+            current = current with { SystemMessageMode = HarnessSystemMessageMode.Append };
         }
 
         runtimePreferences = current;
@@ -239,6 +251,27 @@ internal sealed class SdkConfiguration
 
         return value.Trim().Equals("auto", StringComparison.OrdinalIgnoreCase)
             || commandStyle != CommandStylePreference.Auto;
+    }
+
+    private static bool TryParseSystemMessageMode(string? value, out HarnessSystemMessageMode mode)
+    {
+        mode = HarnessSystemMessageMode.None;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        mode = value.Trim().ToLowerInvariant() switch
+        {
+            "none" => HarnessSystemMessageMode.None,
+            "append" => HarnessSystemMessageMode.Append,
+            "replace" => HarnessSystemMessageMode.Replace,
+            _ => HarnessSystemMessageMode.None,
+        };
+
+        return !value.Trim().Equals("none", StringComparison.OrdinalIgnoreCase)
+            ? mode != HarnessSystemMessageMode.None
+            : true;
     }
 
     private static void AddRepository(string? name, string? repositoryInput, string? repoRoot, string? token, Dictionary<string, SdkRepositoryConnection> repositories)

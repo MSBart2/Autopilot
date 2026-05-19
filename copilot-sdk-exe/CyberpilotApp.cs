@@ -41,6 +41,11 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
                 return await RunResetAsync(options, issueClient, dbContext, cancellationToken);
             }
 
+            if (options.BenchmarkRepeat > 1)
+            {
+                return await RunBenchmarkLoopAsync(options, issueClient, dbContext, cancellationToken);
+            }
+
             var labels = new SdkLabelService(issueClient, output);
             var run = dbContext is null ? null : await CreateRunAsync(dbContext, options, cancellationToken);
             var branchProvisioner = new BranchProvisioner();
@@ -93,6 +98,82 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
         return 0;
     }
 
+    private async Task<int> RunBenchmarkLoopAsync(CyberpilotOptions options, IGitHubIssueClient issueClient, CyberpilotDbContext? dbContext, CancellationToken cancellationToken)
+    {
+        var stage = options.OnlyStage ?? "pipeline";
+        var modeLabel = options.RuntimePreferences?.SystemMessageMode switch
+        {
+            HarnessSystemMessageMode.Append => "append",
+            HarnessSystemMessageMode.Replace => "replace",
+            _ => "none",
+        };
+        var variantBase = options.ExperimentVariant ?? $"{modeLabel}-{stage}";
+        var repeatGroup = Guid.NewGuid().ToString("N")[..12];
+
+        output.WriteLine($"============================================================");
+        output.WriteLine($"Benchmark: issue #{options.IssueNumber} | stage: {stage} | mode: {modeLabel} | repeat: {options.BenchmarkRepeat}x | group: {repeatGroup}");
+        output.WriteLine($"============================================================");
+
+        var resetService = new PipelineResetService(issueClient, dbContext);
+        var results = new List<(int Iteration, string Status, long? InputTokens, long? DurationMs, int? ToolCalls, int? FailedTools)>();
+
+        for (var iteration = 1; iteration <= options.BenchmarkRepeat; iteration++)
+        {
+            if (iteration > 1)
+            {
+                output.WriteLine($"\n[benchmark] Resetting issue #{options.IssueNumber} before iteration {iteration}...");
+                var resetResult = await resetService.ResetIssueAsync(options.IssueNumber, options.RepoRoot, cancellationToken: cancellationToken);
+                output.WriteLine($"[benchmark] {resetResult.ToSummary()}");
+            }
+
+            output.WriteLine($"\n============================================================");
+            output.WriteLine($"Iteration {iteration} of {options.BenchmarkRepeat} — variant: {variantBase}-iter-{iteration}");
+            output.WriteLine($"============================================================");
+
+            var labels = new SdkLabelService(issueClient, output);
+            var variant = $"{variantBase}-iter-{iteration}";
+            var run = dbContext is null ? null : await CreateRunAsync(dbContext, options, cancellationToken, variant, iteration, repeatGroup);
+            var branchProvisioner = new BranchProvisioner();
+            var progressSink = CreateProgressSink(dbContext, run, options);
+            var promptBuilder = new PromptBuilder(options.RepoRoot, options.AgentPromptRoot ?? options.RepoRoot, options.IssueNumber, runtimePreferences: options.RuntimePreferences);
+            var stageRunner = new CopilotStageRunner(options.RepoRoot, progressSink, error);
+            var modelChecker = new CopilotModelAvailabilityChecker();
+            var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output);
+            var exitCode = await runner.RunAsync(cancellationToken);
+
+            if (dbContext is not null && run is not null)
+            {
+                run.Status = exitCode switch { 0 => "Completed", 2 => "Stopped", _ => "Failed" };
+                run.CurrentStage = runner.FinalStage;
+                run.BranchName = runner.BranchName;
+                run.CompletedAt = DateTime.UtcNow;
+                await dbContext.SaveChangesAsync(cancellationToken);
+
+                var stageLog = dbContext.Set<PipelineStageLog>()
+                    .Where(s => s.RunId == run.Id)
+                    .OrderBy(s => s.StartedAt)
+                    .FirstOrDefault(s => s.StageName.Equals(stage, StringComparison.OrdinalIgnoreCase));
+                results.Add((iteration, run.Status, stageLog?.InputTokens, (long?)stageLog?.DurationMs, stageLog?.ToolCallCount, stageLog?.FailedToolCallCount));
+            }
+            else
+            {
+                results.Add((iteration, exitCode == 0 ? "Completed" : "Failed", null, null, null, null));
+            }
+        }
+
+        output.WriteLine($"\n============================================================");
+        output.WriteLine($"Benchmark Summary — {variantBase} (group: {repeatGroup})");
+        output.WriteLine($"============================================================");
+        output.WriteLine($"{"Iter",-6} {"Status",-12} {"InputTokens",-14} {"Duration",-12} {"Tools",-8} {"Failed",-8}");
+        output.WriteLine(new string('-', 62));
+        foreach (var (iter, status, tokens, duration, tools, failed) in results)
+        {
+            output.WriteLine($"{iter,-6} {status,-12} {tokens?.ToString() ?? "n/a",-14} {(duration.HasValue ? $"{duration / 1000.0:F1}s" : "n/a"),-12} {tools?.ToString() ?? "n/a",-8} {failed?.ToString() ?? "n/a",-8}");
+        }
+
+        return 0;
+    }
+
     private static IGitHubIssueClient CreateIssueClient(CyberpilotOptions options, SdkConfiguration configuration)    {
         var token = configuration.GetToken(options.Repository)
             ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN")
@@ -126,7 +207,8 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
         return dbContext;
     }
 
-    private static async Task<PipelineRun> CreateRunAsync(CyberpilotDbContext dbContext, CyberpilotOptions options, CancellationToken cancellationToken)
+    private static async Task<PipelineRun> CreateRunAsync(CyberpilotDbContext dbContext, CyberpilotOptions options, CancellationToken cancellationToken,
+        string? experimentVariant = null, int? benchmarkIteration = null, string? benchmarkRepeatGroup = null)
     {
         var targetRepoSha = await GitRevParser.TryGetHeadShaAsync(options.RepoRoot, cancellationToken);
         var cyberpilotRoot = GitRevParser.FindGitRoot(AppContext.BaseDirectory);
@@ -150,6 +232,9 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             ContractVersion = PipelineDefinitionDefaults.ContractVersion,
             TargetRepoSha = targetRepoSha,
             CyberpilotSha = cyberpilotSha,
+            ExperimentVariant = experimentVariant ?? options.ExperimentVariant,
+            BenchmarkIteration = benchmarkIteration,
+            BenchmarkRepeatGroup = benchmarkRepeatGroup,
         };
 
         dbContext.PipelineRuns.Add(run);

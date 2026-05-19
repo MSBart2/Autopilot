@@ -233,7 +233,7 @@ public sealed class PromptBuilderTests
     private static PolicyProfile StandardPolicy() => new("standard", PolicyStrictness.Standard);
 
     [Fact]
-    public async Task BuildAsync_WithUseHarnessSystemMessage_SplitsControllerIdentityIntoSystemMessage()
+    public async Task BuildAsync_WithSystemMessageModeAppend_SplitsControllerIdentityIntoSystemMessage()
     {
         using var targetRepo = new TempDirectory();
         using var agentRepo = new TempDirectory();
@@ -244,7 +244,7 @@ public sealed class PromptBuilderTests
             targetRepo.Path,
             agentRepo.Path,
             7,
-            runtimePreferences: new CyberpilotRuntimePreferences(UseHarnessSystemMessage: true));
+            runtimePreferences: new CyberpilotRuntimePreferences(SystemMessageMode: HarnessSystemMessageMode.Append));
 
         var built = await builder.BuildAsync(
             Stage("TRIAGE", "triage", "triage.agent.md", "sdk/triage", ["triage-comment"]),
@@ -252,6 +252,7 @@ public sealed class PromptBuilderTests
             StandardPolicy());
 
         Assert.NotNull(built.SystemMessageContent);
+        Assert.Equal(HarnessSystemMessageMode.Append, built.SystemMessageMode);
         Assert.Contains("Cyberpilot SDK cyberpilot controller", built.SystemMessageContent);
         Assert.Contains("## Output Formatting", built.SystemMessageContent);
         Assert.Contains("## JSON Output Safety", built.SystemMessageContent);
@@ -261,7 +262,32 @@ public sealed class PromptBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_WithUseHarnessSystemMessage_MovesCommandGuidanceToSystemMessage()
+    public async Task BuildAsync_WithSystemMessageModeReplace_SetsReplaceModeOnBuiltPrompt()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "triage.agent.md"), "triage instructions");
+        var builder = new PromptBuilder(
+            targetRepo.Path,
+            agentRepo.Path,
+            7,
+            runtimePreferences: new CyberpilotRuntimePreferences(SystemMessageMode: HarnessSystemMessageMode.Replace));
+
+        var built = await builder.BuildAsync(
+            Stage("TRIAGE", "triage", "triage.agent.md", "sdk/triage", ["triage-comment"]),
+            "classify issue",
+            StandardPolicy());
+
+        Assert.NotNull(built.SystemMessageContent);
+        Assert.Equal(HarnessSystemMessageMode.Replace, built.SystemMessageMode);
+        Assert.Contains("Cyberpilot SDK cyberpilot controller", built.SystemMessageContent);
+        Assert.DoesNotContain("Cyberpilot SDK cyberpilot controller", built.UserMessage);
+    }
+
+    [Fact]
+    public async Task BuildAsync_WithSystemMessageModeAppend_MovesCommandGuidanceToSystemMessage()
     {
         using var targetRepo = new TempDirectory();
         using var agentRepo = new TempDirectory();
@@ -272,7 +298,7 @@ public sealed class PromptBuilderTests
             targetRepo.Path,
             agentRepo.Path,
             21,
-            runtimePreferences: new CyberpilotRuntimePreferences(CommandStylePreference.Windows, UseHarnessSystemMessage: true));
+            runtimePreferences: new CyberpilotRuntimePreferences(CommandStylePreference.Windows, SystemMessageMode: HarnessSystemMessageMode.Append));
 
         var built = await builder.BuildAsync(
             Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", []),
@@ -285,7 +311,7 @@ public sealed class PromptBuilderTests
     }
 
     [Fact]
-    public async Task BuildAsync_WithoutUseHarnessSystemMessage_ReturnsNullSystemMessageContent()
+    public async Task BuildAsync_WithSystemMessageModeNone_ReturnsNullSystemMessageContent()
     {
         using var targetRepo = new TempDirectory();
         using var agentRepo = new TempDirectory();
@@ -300,6 +326,7 @@ public sealed class PromptBuilderTests
             StandardPolicy());
 
         Assert.Null(built.SystemMessageContent);
+        Assert.Equal(HarnessSystemMessageMode.None, built.SystemMessageMode);
         Assert.Contains("Cyberpilot SDK cyberpilot controller", built.UserMessage);
     }
 

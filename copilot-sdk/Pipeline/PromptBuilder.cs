@@ -2,8 +2,9 @@ namespace Cyberpilot.Pipeline;
 
 /// <summary>The result of building a stage prompt, optionally split between a system message and user message.</summary>
 /// <param name="UserMessage">The user-facing prompt containing runtime context, harness context, and the stage agent prompt.</param>
-/// <param name="SystemMessageContent">When non-null, harness law content to inject via <c>SessionConfig.SystemMessage</c> (append mode).</param>
-internal sealed record BuiltPrompt(string UserMessage, string? SystemMessageContent);
+/// <param name="SystemMessageContent">When non-null, harness law content to inject via <c>SessionConfig.SystemMessage</c>.</param>
+/// <param name="SystemMessageMode">The SDK system message mode to use when <see cref="SystemMessageContent"/> is non-null.</param>
+internal sealed record BuiltPrompt(string UserMessage, string? SystemMessageContent, HarnessSystemMessageMode SystemMessageMode = HarnessSystemMessageMode.None);
 
 internal interface IPromptBuilder
 {
@@ -31,14 +32,15 @@ internal sealed class PromptBuilder(
 		var harnessContext = BuildHarnessContext(stage.Name, context);
 		var commandGuidance = BuildCommandGuidance(runtimePreferences);
 
-		if (runtimePreferences?.UseHarnessSystemMessage == true)
+		if (runtimePreferences?.SystemMessageMode is HarnessSystemMessageMode.Append or HarnessSystemMessageMode.Replace)
 		{
+			var mode = runtimePreferences.SystemMessageMode;
 			var systemContent = BuildHarnessSystemMessage(commandGuidance);
 			var userContent = BuildUserMessage(stageDefinition, mission, policyProfile, stage, harnessContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, stagePrompt);
-			return new BuiltPrompt(userContent, systemContent);
+			return new BuiltPrompt(userContent, systemContent, mode);
 		}
 
-		return new BuiltPrompt(BuildFullPrompt(stageDefinition, mission, policyProfile, stage, harnessContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, commandGuidance, stagePrompt), null);
+		return new BuiltPrompt(BuildFullPrompt(stageDefinition, mission, policyProfile, stage, harnessContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, commandGuidance, stagePrompt), null, HarnessSystemMessageMode.None);
 	}
 
 	private string BuildUserMessage(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string stagePrompt)

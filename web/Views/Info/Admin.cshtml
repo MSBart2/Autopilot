@@ -94,16 +94,18 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td><code>Cyberpilot:UseHarnessSystemMessage</code></td>
+                                    <td><code>Cyberpilot:SystemMessageMode</code></td>
                                     <td>
-                                        @if (Model.Options.UseHarnessSystemMessage)
-                                        {
-                                            <span class="badge text-bg-info text-dark">true &mdash; harness law injected via SDK system message (append)</span>
+                                        @{
+                                            var mode = Model.Options.SystemMessageMode;
+                                            var modeLabel = mode switch {
+                                                Cyberpilot.Pipeline.HarnessSystemMessageMode.Append => "Append — harness law injected after built-in Copilot guidance",
+                                                Cyberpilot.Pipeline.HarnessSystemMessageMode.Replace => "Replace — harness law replaces built-in Copilot guidance",
+                                                _ => "None — harness law included in every user prompt"
+                                            };
+                                            var modeBadge = mode == Cyberpilot.Pipeline.HarnessSystemMessageMode.None ? "text-bg-secondary" : "text-bg-info text-dark";
                                         }
-                                        else
-                                        {
-                                            <span class="badge text-bg-secondary">false &mdash; harness law included in every user prompt</span>
-                                        }
+                                        <span class="badge @modeBadge">@mode &mdash; @modeLabel</span>
                                     </td>
                                 </tr>
                                 <tr>
@@ -210,7 +212,7 @@
                                 "MaxStageRetries": 3,                // Maximum retry attempts per stage per run
                                 "CommandStyle": "Auto",              // Auto, Windows, or Linux command guidance for agents
                                 "CaptureToolOutputArtifacts": false, // Capture verbose tool output artifacts for diagnostics
-                                "UseHarnessSystemMessage": false,    // Inject harness law via SDK system message (append); off by default
+                                "SystemMessageMode": "None",         // None, Append, or Replace — controls how harness law is delivered to the SDK session
 
                                 "Repositories": [                    // Pre-configured repos available in the issue launcher
                                 {
@@ -306,13 +308,14 @@
                                                 </td>
                                             </tr>
                                             <tr>
-                                                <td><code>UseHarnessSystemMessage</code></td>
-                                                <td>bool</td>
+                                                <td><code>SystemMessageMode</code></td>
+                                                <td>string (None / Append / Replace)</td>
                                                 <td>
-                                                    When <code>true</code>, injects harness law (controller identity, output formatting, JSON
-                                                    safety, command guidance) as an appended SDK system message instead of repeating it in
-                                                    every stage user prompt. Reduces per-prompt token usage and enables prompt caching. Off by
-                                                    default pending A/B validation.
+                                                    Controls how harness law (controller identity, output formatting, JSON safety, command guidance)
+                                                    is delivered to the SDK session. <code>None</code> (default) includes it in every user prompt.
+                                                    <code>Append</code> injects it as an SDK system message after built-in Copilot guidance, reducing
+                                                    per-prompt token usage and enabling prompt caching. <code>Replace</code> replaces built-in Copilot
+                                                    guidance entirely with Cyberpilot harness law — use with caution.
                                                 </td>
                                             </tr>
                                             <tr>

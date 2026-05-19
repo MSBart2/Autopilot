@@ -30,7 +30,10 @@ internal sealed record CyberpilotOptions(
     IReadOnlyDictionary<string, string>? StageModelFallbacks = null,
     bool ResetMode = false,
     bool BenchmarkReset = false,
-    CyberpilotRuntimePreferences? RuntimePreferences = null)
+    CyberpilotRuntimePreferences? RuntimePreferences = null,
+    string? OnlyStage = null,
+    int BenchmarkRepeat = 1,
+    string? ExperimentVariant = null)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);
@@ -72,7 +75,12 @@ internal sealed record CyberpilotOptions(
             "  --capture-tool-output-artifacts",
             "                       Persist shaped tool output as diagnostic artifacts. Defaults to off.",
             "  --use-harness-system-message",
-            "                       Inject harness law via SDK system message (append) instead of repeating it in the user prompt. Defaults to off.",
+            "                       Alias for --system-message-mode append. Inject harness law via SDK system message instead of repeating it in the user prompt.",
+            "  --system-message-mode <none|append|replace>",
+            "                       How to deliver harness law to the SDK session. none=inline (default), append=add after built-in Copilot guidance, replace=replace built-in guidance entirely.",
+            "  --only-stage <name>  Run only this stage then stop (e.g. triage, plan, implement). Implies --start-stage.",
+            "  --repeat <n>         Run the stage N times, resetting between iterations. Use with --only-stage for benchmarking.",
+            "  --variant <name>     Tag these runs in the database with an experiment variant name.",
             "  --db <connection>  Persist this run to the shared Cyberpilot database.",
             "  --config <path>    Load repo/token pairs from an appsettings-style JSON file.",
             "  --skip-deliver      Run through docs but stop before merge/deliver.",
@@ -116,7 +124,11 @@ internal sealed record CyberpilotOptions(
             StageModelFallbacks: parsed.StageModelFallbacks,
             ResetMode: parsed.ResetMode,
             BenchmarkReset: parsed.BenchmarkReset,
-            RuntimePreferences: parsed.RuntimePreferences);
+            RuntimePreferences: parsed.RuntimePreferences,
+            OnlyStage: parsed.OnlyStage,
+            BenchmarkRepeat: parsed.BenchmarkRepeat,
+            ExperimentVariant: parsed.ExperimentVariant,
+            StartStage: parsed.OnlyStage ?? parsed.StartStage);
     }
 
     private sealed record ParsedArgs(
@@ -142,7 +154,11 @@ internal sealed record CyberpilotOptions(
         IReadOnlyDictionary<string, string>? StageModelFallbacks = null,
         bool ResetMode = false,
         bool BenchmarkReset = false,
-        CyberpilotRuntimePreferences? RuntimePreferences = null)
+        CyberpilotRuntimePreferences? RuntimePreferences = null,
+        string? OnlyStage = null,
+        int BenchmarkRepeat = 1,
+        string? ExperimentVariant = null,
+        string? StartStage = null)
     {
         public static ParsedArgs Default => new() { StageTimeout = DefaultStageTimeout };
     }
@@ -199,7 +215,19 @@ internal sealed record CyberpilotOptions(
                     parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithCaptureToolOutputArtifacts(true) };
                     break;
                 case "--use-harness-system-message":
-                    parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithUseHarnessSystemMessage(true) };
+                    parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithSystemMessageMode(HarnessSystemMessageMode.Append) };
+                    break;
+                case "--system-message-mode":
+                    parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithSystemMessageMode(ParseSystemMessageMode(RequireNonEmptyValue(args, ref index, arg), arg)) };
+                    break;
+                case "--only-stage":
+                    parsed = parsed with { OnlyStage = RequireNonEmptyValue(args, ref index, arg).ToLowerInvariant() };
+                    break;
+                case "--repeat":
+                    parsed = parsed with { BenchmarkRepeat = ParsePositiveInt(RequireValue(args, ref index, arg), arg) };
+                    break;
+                case "--variant":
+                    parsed = parsed with { ExperimentVariant = RequireNonEmptyValue(args, ref index, arg) };
                     break;
                 case "--skip-deliver":
                     parsed = parsed with { SkipDeliver = true };
@@ -248,7 +276,7 @@ internal sealed record CyberpilotOptions(
 
     public bool CaptureToolOutputArtifacts => Preferences.CaptureToolOutputArtifacts;
 
-    public bool UseHarnessSystemMessage => Preferences.UseHarnessSystemMessage;
+    public HarnessSystemMessageMode SystemMessageMode => Preferences.SystemMessageMode;
 
     private static TimeSpan ParsePositiveMinutes(string value, string optionName)
     {
@@ -314,6 +342,27 @@ internal sealed record CyberpilotOptions(
             _ => throw new ArgumentException($"{optionName} expects one of: auto, windows, linux."),
         };
     }
+
+    private static HarnessSystemMessageMode ParseSystemMessageMode(string value, string optionName)
+    {
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "none" => HarnessSystemMessageMode.None,
+            "append" => HarnessSystemMessageMode.Append,
+            "replace" => HarnessSystemMessageMode.Replace,
+            _ => throw new ArgumentException($"{optionName} expects one of: none, append, replace."),
+        };
+    }
+
+    private static int ParsePositiveInt(string value, string optionName)
+    {
+        if (!int.TryParse(value, out var n) || n <= 0)
+        {
+            throw new ArgumentException($"{optionName} requires a positive integer.");
+        }
+
+        return n;
+    }
 }
 
 internal static class CyberpilotRuntimePreferenceExtensions
@@ -330,9 +379,9 @@ internal static class CyberpilotRuntimePreferenceExtensions
         return current with { CaptureToolOutputArtifacts = captureToolOutputArtifacts };
     }
 
-    public static CyberpilotRuntimePreferences WithUseHarnessSystemMessage(this CyberpilotRuntimePreferences? preferences, bool useHarnessSystemMessage)
+    public static CyberpilotRuntimePreferences WithSystemMessageMode(this CyberpilotRuntimePreferences? preferences, HarnessSystemMessageMode mode)
     {
         var current = preferences ?? CyberpilotRuntimePreferences.Default;
-        return current with { UseHarnessSystemMessage = useHarnessSystemMessage };
+        return current with { SystemMessageMode = mode };
     }
 }

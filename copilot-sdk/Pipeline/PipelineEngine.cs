@@ -42,6 +42,7 @@ internal sealed class PipelineEngine(
         {
             var result = await RunTriageStageAsync(cancellationToken);
             if (result.HasValue) return result.Value;
+            if (IsOnlyStage("triage")) return 0;
         }
 
         context.BranchName = await branchCoordinator.EnsureBranchAsync(start, cancellationToken);
@@ -50,12 +51,14 @@ internal sealed class PipelineEngine(
         {
             var result = await RunPlanStageAsync(cancellationToken);
             if (result.HasValue) return result.Value;
+            if (IsOnlyStage("plan")) return 0;
         }
 
         if (ShouldRun(start, "implement", out _))
         {
             var result = await RunImplementStageAsync(cancellationToken);
             if (result.HasValue) return result.Value;
+            if (IsOnlyStage("implement")) return 0;
         }
 
         StageDefinition? docsStage = null;
@@ -64,6 +67,7 @@ internal sealed class PipelineEngine(
             var (reviewExit, reviewDocsStage) = await RunReviewStageAsync(cancellationToken);
             if (reviewExit.HasValue) return reviewExit.Value;
             docsStage = reviewDocsStage;
+            if (IsOnlyStage("review")) return 0;
         }
 
         if (docsStage is null && ShouldRun(start, "docs", out var selectedDocsStage))
@@ -75,6 +79,7 @@ internal sealed class PipelineEngine(
         {
             var result = await RunDocsStageAsync(docsStage, cancellationToken);
             if (result.HasValue) return result.Value;
+            if (IsOnlyStage("docs") || IsOnlyStage(docsStage.Name)) return 0;
         }
 
         return await RunDeliverStageAsync(cancellationToken);
@@ -375,6 +380,11 @@ internal sealed class PipelineEngine(
         }
 
         return null;
+    }
+
+    private bool IsOnlyStage(string stageName)
+    {
+        return Options.OnlyStage?.Equals(stageName, StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private StageDefinition Stage(string name)

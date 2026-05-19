@@ -29,7 +29,13 @@ internal sealed class CopilotStageRunner(string repoRoot, ICyberpilotProgressSin
             Tools = toolProvider.CreateTools(),
             Hooks = toolPolicy.CreateHooks(),
             SystemMessage = builtPrompt.SystemMessageContent is not null
-                ? new SystemMessageConfig { Mode = SystemMessageMode.Append, Content = builtPrompt.SystemMessageContent }
+                ? new SystemMessageConfig
+                {
+                    Mode = builtPrompt.SystemMessageMode == HarnessSystemMessageMode.Replace
+                        ? SystemMessageMode.Replace
+                        : SystemMessageMode.Append,
+                    Content = builtPrompt.SystemMessageContent,
+                }
                 : null,
         });
 
