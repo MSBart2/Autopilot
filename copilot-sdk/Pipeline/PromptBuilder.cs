@@ -30,6 +30,7 @@ internal sealed class PromptBuilder(
 		var reportingGuidance = BuildReportingGuidance(stage.Name);
 		var repositoryProfileContext = BuildRepositoryProfileContext(targetRepositoryProfileSummary);
 		var harnessContext = BuildHarnessContext(stage.Name, context);
+		var prefetchedContext = BuildPrefetchedContext(context);
 		var stageToolGuidance = BuildStageToolGuidance(stage.Name);
 		var reworkContext = BuildReworkContext(stage.Name, context);
 		var commandGuidance = BuildCommandGuidance(runtimePreferences);
@@ -40,14 +41,14 @@ internal sealed class PromptBuilder(
 		{
 			var mode = systemMessage.Mode;
 			var systemContent = BuildHarnessSystemMessage(systemMessage.Profile, commandGuidance);
-			var userContent = BuildUserMessage(stageDefinition, mission, policyProfile, stage, harnessContext, stageToolGuidance, reworkContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, stagePrompt);
+			var userContent = BuildUserMessage(stageDefinition, mission, policyProfile, stage, harnessContext, prefetchedContext, stageToolGuidance, reworkContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, stagePrompt);
 			return new BuiltPrompt(userContent, systemContent, mode);
 		}
 
-		return new BuiltPrompt(BuildFullPrompt(stageDefinition, mission, policyProfile, stage, harnessContext, stageToolGuidance, reworkContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, commandGuidance, stagePrompt), null, HarnessSystemMessageMode.None);
+		return new BuiltPrompt(BuildFullPrompt(stageDefinition, mission, policyProfile, stage, harnessContext, prefetchedContext, stageToolGuidance, reworkContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, commandGuidance, stagePrompt), null, HarnessSystemMessageMode.None);
 	}
 
-	private string BuildUserMessage(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string stageToolGuidance, string reworkContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string stagePrompt)
+	private string BuildUserMessage(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string prefetchedContext, string stageToolGuidance, string reworkContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string stagePrompt)
 	{
 		return $$"""
 			Target issue: #{{issueNumber}}
@@ -59,6 +60,7 @@ internal sealed class PromptBuilder(
 			Stage result contract version: {{stageDefinition.Contract.Version}}
 			Required artifacts: {{requiredArtifacts}}
 			{{harnessContext}}
+			{{prefetchedContext}}
 			{{reworkContext}}
 			{{stageToolGuidance}}
 
@@ -93,7 +95,7 @@ internal sealed class PromptBuilder(
 			""";
 	}
 
-	private string BuildFullPrompt(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string stageToolGuidance, string reworkContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string commandGuidance, string stagePrompt)
+	private string BuildFullPrompt(PipelineStageDefinition stageDefinition, string mission, PolicyProfile policyProfile, StageDefinition stage, string harnessContext, string prefetchedContext, string stageToolGuidance, string reworkContext, string requiredArtifacts, string artifactExample, string reportingGuidance, string repositoryProfileContext, string commandGuidance, string stagePrompt)
 	{
 		return $$"""
 			You are running as the Cyberpilot SDK cyberpilot controller.
@@ -107,6 +109,7 @@ internal sealed class PromptBuilder(
 			Stage result contract version: {{stageDefinition.Contract.Version}}
 			Required artifacts: {{requiredArtifacts}}
 			{{harnessContext}}
+			{{prefetchedContext}}
 			{{reworkContext}}
 			{{stageToolGuidance}}
 
@@ -231,6 +234,16 @@ internal sealed class PromptBuilder(
 		};
 
 		return string.Join(Environment.NewLine, lines);
+	}
+
+	private static string BuildPrefetchedContext(PipelineExecutionContext? context)
+	{
+		if (context?.PrefetchedIssueContext is null)
+		{
+			return string.Empty;
+		}
+
+		return Environment.NewLine + context.PrefetchedIssueContext;
 	}
 
 	/// <summary>

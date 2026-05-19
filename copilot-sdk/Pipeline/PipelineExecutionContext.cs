@@ -35,6 +35,9 @@ internal sealed class PipelineExecutionContext(CyberpilotOptions options, Pipeli
 
     public string? HeadBranch => string.IsNullOrWhiteSpace(Options.PrHeadBranch) ? BranchName : Options.PrHeadBranch;
 
+    /// <summary>Pre-fetched issue context block for the triage stage. When set, <see cref="PromptBuilder"/> injects it directly into the prompt so the agent skips redundant issue-read tool calls.</summary>
+    public string? PrefetchedIssueContext { get; set; }
+
     public int? PrNumber => TryParsePullRequestNumber(PrUrl);
 
     public int? PullRequestNumber => KnownPullRequestNumber ?? PrNumber ?? Options.PrNumber;

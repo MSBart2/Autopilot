@@ -94,6 +94,13 @@ internal sealed class PipelineEngine(
     {
         var triageStage = Stage("triage");
         await labels.SetStageAsync(Options.IssueNumber, triageStage.Label, cancellationToken);
+
+        var prefetched = await TriageIssuePrefetcher.FetchAsync(Options.IssueNumber, Options.RepoRoot, cancellationToken);
+        if (prefetched is not null)
+        {
+            context.PrefetchedIssueContext = prefetched;
+        }
+
         var triage = await RunStageAsync(triageStage, "Classify the issue and produce the mandatory triage handoff as a stage artifact. Do not post comments or mutate GitHub from triage.", cancellationToken);
 
         if (StageStatus.IsStop(triage))
