@@ -313,17 +313,19 @@ Benchmark result on issue #34 / PR #51: the first M5 run reduced tokens but caus
 
 ## Milestone 6: Per-stage model tiers and fallback
 
-- [ ] Add stage-specific model config.
-- [ ] Add request/UI override behavior.
-- [ ] Add fallback model chain.
-- [ ] Record selected model, fallback model, and fallback reason per stage.
+- [x] Add stage-specific model config.
+- [x] Add request/UI override behavior.
+- [x] Add fallback model chain.
+- [x] Record selected model, fallback model, and fallback reason per stage.
 - [ ] Compare cost/time/quality on cheap stages and review/implement stages.
+
+Existing CLI/web override plumbing already supported `--stage-model`, `--stage-fallback-model`, request-level maps, and per-stage selected/fallback metadata. Milestone 6 adds family-tiered defaults: `triage`, `plan`, `docs`, and `deliver` use a cheaper same-family model when no explicit override exists (`claude-haiku-4.5` for Claude runs, `gpt-5-mini` for GPT runs), while `implement` and `review` stay on the configured base model. If the cheaper family model is unavailable, the resolver falls back to the base model and records the fallback reason.
 
 ### Success criteria
 
-- [ ] Cheap stages can use cheaper defaults without global model changes.
-- [ ] Model unavailability can fall back gracefully.
-- [ ] Actual model usage is visible in metrics.
+- [x] Cheap stages can use cheaper defaults without global model changes.
+- [x] Model unavailability can fall back gracefully.
+- [x] Actual model usage is visible in metrics.
 
 ## Milestone 7: Session persistence and human steering
 

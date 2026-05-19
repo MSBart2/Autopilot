@@ -35,7 +35,7 @@ dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- run issue 13
 
 Use `--db "Data Source=<path>"` to persist EXE-triggered runs into the SDK-owned EF Core run-history database.
 
-The default SDK model is `claude-sonnet-4.6`. Use `--model` when you need a different Copilot model available to your account.
+The default SDK model is `claude-sonnet-4.6`. Use `--model` when you need a different Copilot model available to your account. Family-tiered defaults keep `implement` and `review` on the configured base model, while cheaper stages (`triage`, `plan`, `docs`, `deliver`) use a cheaper same-family sibling when available (`claude-haiku-4.5` for Claude, `gpt-5-mini` for GPT) and fall back to the base model if unavailable. Use `--stage-model <stage>=<model>` and `--stage-fallback-model <stage>=<model>` for explicit overrides.
 
 Useful options:
 

@@ -52,7 +52,69 @@ public sealed class StageModelResolverTests
         Assert.Contains("Fallback 'claude-haiku-4.5' is also unavailable", selection.Error);
     }
 
+    [Theory]
+    [InlineData("triage")]
+    [InlineData("plan")]
+    [InlineData("docs")]
+    [InlineData("deliver")]
+    public async Task ResolveAsync_ForCheapClaudeStage_SelectsHaikuWithinFamily(string stageName)
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-haiku-4.5" });
+        var resolver = new StageModelResolver(CreateOptions(), checker);
+
+        var selection = await resolver.ResolveAsync(Stage(stageName), CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("claude-haiku-4.5", selection.ConfiguredModel);
+        Assert.Equal("claude-haiku-4.5", selection.SelectedModel);
+        Assert.Null(selection.FallbackModel);
+    }
+
+    [Theory]
+    [InlineData("implement")]
+    [InlineData("review")]
+    public async Task ResolveAsync_ForHighJudgmentClaudeStage_KeepsBaseModel(string stageName)
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-sonnet-4.6" });
+        var resolver = new StageModelResolver(CreateOptions(), checker);
+
+        var selection = await resolver.ResolveAsync(Stage(stageName), CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("claude-sonnet-4.6", selection.ConfiguredModel);
+        Assert.Equal("claude-sonnet-4.6", selection.SelectedModel);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_ForUnavailableAutoTieredModel_FallsBackToBaseModel()
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "claude-sonnet-4.6" });
+        var resolver = new StageModelResolver(CreateOptions(), checker);
+
+        var selection = await resolver.ResolveAsync(Stage("triage"), CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("claude-haiku-4.5", selection.ConfiguredModel);
+        Assert.Equal("claude-sonnet-4.6", selection.SelectedModel);
+        Assert.Equal("claude-sonnet-4.6", selection.FallbackModel);
+        Assert.Contains("claude-haiku-4.5 unavailable", selection.FallbackReason);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_ForCheapGptStage_SelectsMiniWithinFamily()
+    {
+        var checker = new FakeModelAvailabilityChecker(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "gpt-5-mini" });
+        var resolver = new StageModelResolver(CreateOptions(model: "gpt-5.4"), checker);
+
+        var selection = await resolver.ResolveAsync(Stage("docs"), CancellationToken.None);
+
+        Assert.True(selection.IsAvailable);
+        Assert.Equal("gpt-5-mini", selection.ConfiguredModel);
+        Assert.Equal("gpt-5-mini", selection.SelectedModel);
+    }
+
     private static CyberpilotOptions CreateOptions(
+        string model = "claude-sonnet-4.6",
         IReadOnlyDictionary<string, string>? stageModels = null,
         IReadOnlyDictionary<string, string>? fallbackModels = null)
     {
@@ -60,7 +122,7 @@ public sealed class StageModelResolverTests
             42,
             Directory.GetCurrentDirectory(),
             "owner/repo",
-            "claude-sonnet-4.6",
+            model,
             false,
             false,
             false,
