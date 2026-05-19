@@ -5,15 +5,15 @@ namespace Cyberpilot.Web.UnitTests.Models;
 public class PipelineDashboardViewModelTests
 {
     [Fact]
-    public void AvailableModels_IsNotEmpty()
+    public void AvailableModelFamilies_IsNotEmpty()
     {
-        Assert.NotEmpty(PipelineIssuesViewModel.AvailableModels);
+        Assert.NotEmpty(PipelineIssuesViewModel.AvailableModelFamilies);
     }
 
     [Fact]
-    public void AvailableModels_ContainsClaude()
+    public void AvailableModelFamilies_ContainsClaude()
     {
-        Assert.Contains("claude-sonnet-4.6", PipelineIssuesViewModel.AvailableModels);
+        Assert.Contains(PipelineIssuesViewModel.AvailableModelFamilies, f => f.ModelValue.StartsWith("claude-", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -5,6 +5,15 @@ using Cyberpilot.Persistence;
 namespace Cyberpilot.Web.Models;
 
 /// <summary>
+/// Represents a model family option shown in the dispatch picker.
+/// <see cref="ModelValue"/> is a seed model ID that lets <c>StageModelResolver</c> detect
+/// the family and apply per-stage tier defaults automatically.
+/// </summary>
+/// <param name="DisplayName">Human-readable family label shown in the UI.</param>
+/// <param name="ModelValue">Seed model ID submitted with the form.</param>
+public sealed record ModelFamilyOption(string DisplayName, string ModelValue);
+
+/// <summary>
 /// Identifies which Cyberpilot runner is active on an issue.
 /// </summary>
 public enum CyberpilotRunnerType
@@ -108,17 +117,14 @@ public sealed record PipelineIssuesViewModel(
     public PipelineIssuesViewModel(IReadOnlyList<GitHubIssueSummary> issues, string repository, string? error)
         : this(issues, [], repository, repository, null, error, [], new HashSet<int>(), new Dictionary<int, string>(), [], []) { }
 
-    /// <summary>Gets the curated list of Copilot models available for selection.</summary>
-    public static IReadOnlyList<string> AvailableModels { get; } =
+    /// <summary>
+    /// Gets the model family options available for dispatch. The value is a seed model ID that
+    /// <c>StageModelResolver</c> uses to detect the family and apply per-stage tiers automatically.
+    /// </summary>
+    public static IReadOnlyList<ModelFamilyOption> AvailableModelFamilies { get; } =
     [
-        "claude-sonnet-4.6",
-        "claude-sonnet-4.5",
-        "claude-haiku-4.5",
-        "claude-opus-4.7",
-        "claude-opus-4.6",
-        "claude-opus-4.5",
-        "gpt-4.1",
-        "gpt-5-mini",
+        new("Claude (auto-tier)", "claude-sonnet-4.6"),
+        new("GPT (auto-tier)", "gpt-5.4"),
     ];
 
     /// <summary>

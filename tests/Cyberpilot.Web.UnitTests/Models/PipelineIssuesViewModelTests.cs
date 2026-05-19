@@ -145,12 +145,12 @@ public sealed class PipelineIssuesViewModelTests
     }
 
     [Fact]
-    public void GetStatus_AvailableModels_IsNotEmpty()
+    public void AvailableModelFamilies_IsNotEmpty()
     {
-        var models = PipelineIssuesViewModel.AvailableModels;
+        var families = PipelineIssuesViewModel.AvailableModelFamilies;
 
-        Assert.NotEmpty(models);
-        Assert.Contains("claude-sonnet-4.5", models);
-        Assert.Contains("gpt-4.1", models);
+        Assert.NotEmpty(families);
+        Assert.Contains(families, f => f.ModelValue.StartsWith("claude-", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(families, f => f.ModelValue.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase));
     }
 }

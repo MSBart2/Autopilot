@@ -186,11 +186,11 @@ else
                         <input type="hidden" name="IssueNumber" value="@issue.Number" />
                         <input type="hidden" name="Repository" value="@Model.Repository" />
                         <input type="hidden" name="ConnectionId" value="@Model.ConnectionId" />
-                        <select class="form-select form-select-sm" name="Model" aria-label="Model" @(disableForm ? "disabled" :
+                        <select class="form-select form-select-sm" name="Model" aria-label="Model family" @(disableForm ? "disabled" :
                                                                                                                                                                                                                                                                                   null)>
-                            @foreach (var m in Cyberpilot.Web.Models.PipelineIssuesViewModel.AvailableModels)
+                            @foreach (var f in Cyberpilot.Web.Models.PipelineIssuesViewModel.AvailableModelFamilies)
                             {
-                                <option value="@m" selected="@(m == "claude-sonnet-4.6" ? "selected" : null)">@m</option>
+                                <option value="@f.ModelValue" selected="@(f.ModelValue == "claude-sonnet-4.6" ? "selected" : null)">@f.DisplayName</option>
                             }
                         </select>
                         <select class="form-select form-select-sm" name="PipelineDefinitionName"
@@ -281,10 +281,10 @@ else
                         <input type="hidden" name="Repository" value="@Model.Repository" />
                         <input type="hidden" name="ConnectionId" value="@Model.ConnectionId" />
                         <input type="hidden" name="StageTimeoutMinutes" value="20" />
-                        <select class="form-select form-select-sm" name="Model" aria-label="Model" @(prActive ? "disabled" : null)>
-                            @foreach (var m in Cyberpilot.Web.Models.PipelineIssuesViewModel.AvailableModels)
+                        <select class="form-select form-select-sm" name="Model" aria-label="Model family" @(prActive ? "disabled" : null)>
+                            @foreach (var f in Cyberpilot.Web.Models.PipelineIssuesViewModel.AvailableModelFamilies)
                             {
-                                <option value="@m" selected="@(m == "claude-sonnet-4.6" ? "selected" : null)">@m</option>
+                                <option value="@f.ModelValue" selected="@(f.ModelValue == "claude-sonnet-4.6" ? "selected" : null)">@f.DisplayName</option>
                             }
                         </select>
                         <button class="btn btn-sm btn-secondary w-100" type="submit" @(prActive ? "disabled" : null)
