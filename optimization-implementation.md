@@ -276,14 +276,14 @@ Validation evidence is stable after compacting output: ad hoc PowerShell validat
 
 | Workflow | Likely owner | Candidate implementation | Status |
 | --- | --- | --- | --- |
-| Find PR for known PR-first run | Harness | Structured context / route shortcut | Not started |
-| Compute next stage route | Harness | `compute_stage_route` gate/helper | Not started |
-| Fetch PR metadata | Tool | `get_pr_details` | Not started |
+| Find PR for known PR-first run | Harness | Structured context / route shortcut | **Covered/promoted earlier:** `PipelineBranchCoordinator` finds existing PRs and PR-first runs can pass `--pr-head-branch` + `--pr-number`; M3 structured context carries the known PR forward. |
+| Compute next stage route | Harness | `compute_stage_route` gate/helper | **Covered by harness orchestration:** `PipelineEngine` computes route/loops deterministically; no model tool needed unless future logs show agents still trying to route themselves. |
+| Fetch PR metadata | Tool | `get_pr_details` | **Promoted earlier:** typed deterministic PR metadata tool; paired with `get_pr_diff_summary` in review/docs/deliver prompt guidance. |
 | Fetch/summarize PR diff | Tool/cache | `get_pr_diff_summary` | **Promoted first:** typed file stats, directory/extension groups, and review signals. Review/docs prompts now prefer this tool before shell/GitHub diff discovery. |
 | Run known validation commands | Script/tool | `collect_validation_evidence` | **Promoted:** deterministic `dotnet build` / `dotnet test` runner with typed exit code, duration, timeout, and output-tail evidence; avoids shell syntax roulette. |
 | Render stage comments | Harness/tool | `render_stage_comment` | **Promoted:** typed Markdown renderer for started/progress/verdict/verification/landing comments. Read-only stages return rendered bodies as artifacts instead of attempting blocked GitHub writes. |
-| Persist stage artifacts | Harness/tool | `record_stage_artifact` | Not started |
-| Manage SDK labels | Harness/tool | `set_pipeline_label` | Not started |
+| Persist stage artifacts | Harness/tool | `record_stage_artifact` | **Covered by harness persistence:** stage result artifacts are persisted as `PipelineArtifacts` by progress sinks. No model-write tool exposed yet; defer unless mid-stage artifact append becomes necessary. |
+| Manage SDK labels | Harness/tool | `set_pipeline_label` | **Covered by harness label service:** `PipelineEngine` + `SdkLabelService` own `sdk/*` transitions. Model-side label mutation remains intentionally blocked by policy. |
 | Read changed file content | Tool | `get_changed_file_content` | **Partially promoted from baseline failures:** repository-relative changed-file reads with line numbers; promising metrics, but SDK tool-result failures remain and need hardening. |
 
 ### Success criteria
