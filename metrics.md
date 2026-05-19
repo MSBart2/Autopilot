@@ -179,6 +179,8 @@ Copy one row per stage per run. Most values come from the database queries above
 | | **TOTALS** | | | | | **2,048,809** | **29,066** | **1,899,987** | **0** | **72** | **105** | **22** | **567,066** | **$6.58** | | | SkipDeliver=true. 1 review cycle. M2+M3 active. |
 | 6faf8925253d425fb1dd911c2f117de5 | m4-review-diff-summary (#34/#51) | review | claude-sonnet-4.6 | 7187117 | 55aa422 | 465,748 | 9,060 | 398,398 | 0 | 9 | 35 | 8 | 200,783 | $1.5331 | ✅ | ✅ | First M4 attempt: typed diff tool promoted, but agent-file guidance was too soft. |
 | e08a8865eb3a4c4fae4fe0e946094fd0 | m4-review-diff-summary-guided (#34/#51) | review | claude-sonnet-4.6 | 7cacdbd | 55aa422 | 323,328 | 4,799 | 289,526 | 0 | 9 | 14 | 7 | 103,064 | $1.0420 | ✅ | ✅ | SDK wrapper requires deterministic PR tools before manual diff discovery. |
+| ca98c30595f443f3a044da5497bb68a7 | m4-review-comment-renderer (#34/#51) | review | claude-sonnet-4.6 | 009e27c | 55aa422 | 418,455 | 6,231 | 370,300 | 0 | 11 | 21 | 8 | 141,359 | $1.3488 | ✅ | ✅ | First renderer attempt: removed denied write attempts but renderer output was too large and failed once. |
+| b6fb7ee7edce4ff7968555191cb0d959 | m4-review-comment-renderer-compact (#34/#51) | review | claude-sonnet-4.6 | a1d422b | 55aa422 | 414,376 | 5,980 | 377,240 | 0 | 11 | 19 | 6 | 124,775 | $1.3328 | ✅ | ✅ | Compact renderer: 0 denied writes, 0 renderer failures; token cost not improved vs guided diff baseline. |
 | 9e82c517258b4b9985a5682f7dad6d55 | baseline-aspire-helper (#33) | triage |claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 269,817 | 3,965 | 225,276 | 0 | 7 | 10 | 4 | 86,361 | $0.8689 | | | Run 1 |
 | 9e82c517258b4b9985a5682f7dad6d55 | baseline-aspire-helper (#33) | plan | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 541,785 | 7,919 | 496,514 | 0 | 12 | 19 | 10 | 156,557 | $1.7441 | | | |
 | 9e82c517258b4b9985a5682f7dad6d55 | baseline-aspire-helper (#33) | implement (1) | claude-sonnet-4.6 | d1c3d35 | 8a4cadc | 640,796 | 6,313 | 598,810 | 0 | 15 | 17 | 9 | 143,598 | $2.0171 | | | |
@@ -206,6 +208,7 @@ Copy one row per stage per run. Most values come from the database queries above
 | Milestone 2 PR-first review sweep | Fresh PR clones #46-#50 at same commit | `review5clone-20260518-2030-inline-full` | `review5clone-20260518-2030-append-lean` | -210,611 | -6 | -64,776 | 5/5 valid JSON; all approved | Use `append-lean` for review. |
 | Milestone 2+3 full pipeline (#34) | #34 full flow, M2+M3 active vs pre-M2 baseline | `724eb0c` (pre-M2) | `64b7bb5` (M2+M3) | -1,816,441 (-47%) | -15 (-17%) | -255,559 (-31%) | 5/5 GO; all approved; 22 vs 46 failed tool calls (-52%) | M2+M3 combined. Docs alone: -1,024,662 tokens (-75%). Review: -213,395 (-39%). Implement: -561,203 (-50%). |
 | Milestone 4 PR diff-summary promotion | #34/#51 review-only, same PR head | `m4-review-diff-summary-20260519` | `m4-review-diff-summary-guided-20260519` | -142,420 (-31%) | 0 | -97,719 (-49%) | 2/2 GO; guided run cut tool calls 35→14 and failed calls 8→7 | Agent-file guidance was too soft; SDK wrapper-level deterministic PR tool guidance is required. Guided run also beat M3 review baseline by -15,321 tokens and -15,203 ms. |
+| Milestone 4 stage-comment renderer | #34/#51 review-only, same PR head | `m4-review-comment-renderer-20260519` | `m4-review-comment-renderer-compact-20260519` | -4,079 (-1%) | 0 | -16,584 (-12%) | 2/2 GO; denied GitHub writes 0/0; renderer failures 1→0 | Keep `render_stage_comment` for safety/reliability, not token savings. Compact cap fixed long-summary tool failure. |
 
 ### Milestone 2 stage prompt benchmark details
 
@@ -271,3 +274,15 @@ Fixture: issue #34 PR #51 at head commit `55aa4226a05803984a5f203525a86a2078e94c
 | M4 guided (`m4-review-diff-summary-guided-20260519`) | `7cacdbd` | 323,328 | 4,799 | 289,526 | 9 | 14 | 7 | 103,064 | $1.0420 | GO / approved |
 
 Takeaway: simply improving the tool and agent files was not enough; the stage still used absolute-path file reads, denied subagent/task calls, and more tool calls. Moving deterministic PR tool instructions into the SDK prompt wrapper made the workflow stick: compared with the first M4 attempt, guided review reduced input tokens by 142,420 (-31%), tool calls by 21 (-60%), and duration by 97,719 ms (-49%). Compared with the M3 review baseline, guided review is modestly better on input tokens (-15,321 / -5%), tool calls (-1), duration (-15,203 ms / -13%), and cost (-$0.0584 / -5%).
+
+### Milestone 4 stage-comment renderer (`m4-review-comment-renderer-*`)
+
+Fixture: same issue #34 PR #51 head commit `55aa4226a05803984a5f203525a86a2078e94c57`. This promoted `render_stage_comment`, a deterministic no-write tool that renders started/progress/verdict/verification/landing Markdown for stage artifacts instead of having read-only stages attempt GitHub comments or reviews.
+
+| Run | Cyberpilot SHA | Input tokens | Output tokens | Cache read | Turns | Tool calls | Failed calls | Duration ms | Cost | Failure profile | Result |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| M4 guided baseline (`m4-review-diff-summary-guided-20260519`) | `7cacdbd` | 323,328 | 4,799 | 289,526 | 9 | 14 | 7 | 103,064 | $1.0420 | 4 view path failures, 2 denied writes, 1 PowerShell failure | GO / approved |
+| Renderer first attempt (`m4-review-comment-renderer-20260519`) | `009e27c` | 418,455 | 6,231 | 370,300 | 11 | 21 | 8 | 141,359 | $1.3488 | 6 view path failures, 1 PowerShell failure, 1 renderer failure | GO / approved |
+| Compact renderer (`m4-review-comment-renderer-compact-20260519`) | `a1d422b` | 414,376 | 5,980 | 377,240 | 11 | 19 | 6 | 124,775 | $1.3328 | 5 view path failures, 1 PowerShell failure, 0 denied writes, 0 renderer failures | GO / approved |
+
+Takeaway: `render_stage_comment` is a safety/reliability promotion, not a token win. It eliminated denied durable-write attempts and, after adding a compact summary cap, eliminated renderer tool failures. The next likely M4 target should address the remaining repeated failures: absolute-path file reads and ad hoc validation commands.

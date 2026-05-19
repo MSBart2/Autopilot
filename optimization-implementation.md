@@ -244,6 +244,20 @@ The first M4 pass promoted richer `get_pr_diff_summary` output and updated revie
 
 Against the M3 review baseline, the guided M4 run is also modestly better: input tokens -15,321 (-5%), tool calls -1, duration -15,203 ms (-13%), and cost -$0.0584 (-5%).
 
+### Additional promoted workflow: stage-comment rendering
+
+`render_stage_comment` renders started/progress/verdict/verification/landing Markdown as typed tool output without posting to GitHub. This is a safety/reliability promotion: it lets read-only stages return intended comments as artifacts instead of attempting durable GitHub writes that policy blocks.
+
+| | Renderer first attempt (SHA 009e27c) | Compact renderer (SHA a1d422b) | Δ |
+| --- | ---: | ---: | ---: |
+| Input tokens | 418,455 | 414,376 | -4,079 (-1%) |
+| Tool calls | 21 | 19 | -2 (-10%) |
+| Failed tool calls | 8 | 6 | -2 (-25%) |
+| Duration ms | 141,359 | 124,775 | -16,584 (-12%) |
+| Est. cost USD | $1.3488 | $1.3328 | -$0.0160 (-1%) |
+
+The compact renderer removed GitHub write denials and renderer failures, but it did not beat the diff-summary guided run on tokens. Keep it for policy-safe comment rendering; target absolute-path file reads and ad hoc validation next.
+
 ### Candidate workflows
 
 | Workflow | Likely owner | Candidate implementation | Status |
