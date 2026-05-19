@@ -274,7 +274,7 @@ internal sealed class PipelineEngine(
 
             if (!StageStatus.IsGo(review))
             {
-                return new StageResult("STOP", review.Decision, review.IsValid, review.Error);
+                return review with { Status = StageStatus.Stop };
             }
 
             if (!StageDecision.RequestsChanges(review))
@@ -296,7 +296,7 @@ internal sealed class PipelineEngine(
             var rework = await RunStageAsync(implementStage, "Address the latest review findings, push fixes to the existing PR branch, and update the issue.", cancellationToken);
             if (!StageStatus.IsGo(rework))
             {
-                return new StageResult("STOP", rework.Decision, rework.IsValid, rework.Error);
+                return rework with { Status = StageStatus.Stop };
             }
 
             progressSink.OnDispatch(DispatchType.Routing, "Implement rework complete — returning to Review");

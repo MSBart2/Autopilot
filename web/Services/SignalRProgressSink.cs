@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json;
 using Cyberpilot;
 using Cyberpilot.Persistence;
 using Cyberpilot.Pipeline;
@@ -56,7 +55,11 @@ public sealed class SignalRProgressSink(
         var run = dbContext.PipelineRuns.Find(runId);
         if (run is not null)
         {
-            run.CurrentStage = stage.Name;
+            if (!IsReviewDimensionStage(stage))
+            {
+                run.CurrentStage = stage.Name;
+            }
+
             if (run.Status != "Pausing")
                 run.Status = "Running";
         }
@@ -78,17 +81,7 @@ public sealed class SignalRProgressSink(
         var stageLog = ResolveStageLog(stage);
         if (stageLog is not null)
         {
-            stageLog.Status = result.Status;
-            stageLog.CompletedAt = DateTime.UtcNow;
-            stageLog.InputTokens = result.InputTokens;
-            stageLog.OutputTokens = result.OutputTokens;
-            ApplyMetrics(stageLog, result, model);
-            ApplySessionMetadata(stageLog, result, stageLog.CompletedAt.Value);
-            stageLog.EstimatedCostUsd = ModelPricingService.Estimate(ResolveCostModel(result, stageLog, model), result.InputTokens, result.OutputTokens);
-            stageLog.StageResultJson = JsonSerializer.Serialize(result);
-            stageLog.StageResultContractVersion = string.IsNullOrWhiteSpace(result.ContractVersion)
-                ? PipelineDefinitionDefaults.ContractVersion
-                : result.ContractVersion;
+            PipelineStageLogResultMapper.Apply(stageLog, result, model, DateTime.UtcNow);
             dbContext.PipelineArtifacts.AddRange(PipelineArtifact.FromStageResult(runId, stage.Name, stageLog, result));
             dbContext.PipelineEvidence.AddRange(PipelineEvidence.FromStageResult(runId, stage.Name, stageLog, result));
             dbContext.PipelineToolFailures.AddRange(PipelineToolFailure.FromStageResult(runId, stage.Name, stageLog, result));
@@ -114,51 +107,6 @@ public sealed class SignalRProgressSink(
         }).GetAwaiter().GetResult();
     }
 
-    private static void ApplyMetrics(PipelineStageLog log, StageResult result, string configuredModel)
-    {
-        var metrics = result.Metrics;
-        log.Model = string.IsNullOrWhiteSpace(metrics?.Model) ? configuredModel : metrics.Model;
-        log.ConfiguredModel = string.IsNullOrWhiteSpace(result.ConfiguredModel) ? configuredModel : result.ConfiguredModel;
-        log.SelectedModel = string.IsNullOrWhiteSpace(result.SelectedModel) ? log.Model : result.SelectedModel;
-        log.FallbackModel = result.FallbackModel;
-        log.FallbackReason = result.FallbackReason;
-        log.CacheReadTokens = metrics?.CacheReadTokens;
-        log.CacheWriteTokens = metrics?.CacheWriteTokens;
-        log.ReasoningTokens = metrics?.ReasoningTokens;
-        log.PremiumRequestCost = metrics?.PremiumRequestCost;
-        log.DurationMs = metrics?.DurationMs;
-        log.TurnCount = metrics?.TurnCount;
-        log.ToolCallCount = metrics?.ToolCallCount;
-        log.FailedToolCallCount = metrics?.FailedToolCallCount;
-        log.SessionErrorCount = metrics?.SessionErrorCount;
-        log.ReachedIdle = metrics?.ReachedIdle;
-        log.WasAborted = metrics?.WasAborted;
-        log.ProviderCallIds = JoinIds(metrics?.ProviderCallIds);
-        log.ApiCallIds = JoinIds(metrics?.ApiCallIds);
-    }
-
-    private static void ApplySessionMetadata(PipelineStageLog log, StageResult result, DateTime completedAtUtc)
-    {
-        log.SdkSessionId = result.SdkSessionId;
-        var resume = StageSessionResumePolicy.Evaluate(result, completedAtUtc);
-        log.SessionState = resume.SessionState;
-        log.ResumeEligibility = resume.ResumeEligibility;
-        log.ResumeBlockedReason = resume.ResumeBlockedReason;
-        log.SessionCleanupAfter = resume.SessionCleanupAfter;
-    }
-
-    private static string? JoinIds(IReadOnlyList<string>? values)
-    {
-        return values is null || values.Count == 0 ? null : string.Join(",", values);
-    }
-
-    private static string ResolveCostModel(StageResult result, PipelineStageLog log, string configuredModel)
-        => !string.IsNullOrWhiteSpace(result.SelectedModel)
-            ? result.SelectedModel
-            : !string.IsNullOrWhiteSpace(log.Model)
-                ? log.Model
-                : configuredModel;
-
     private PipelineStageLog? ResolveStageLog(StageDefinition stage)
     {
         if (currentLog is not null
@@ -176,6 +124,9 @@ public sealed class SignalRProgressSink(
             .OrderByDescending(log => log.StartedAt)
             .FirstOrDefault();
     }
+
+    private static bool IsReviewDimensionStage(StageDefinition stage)
+        => stage.Name.StartsWith("review:", StringComparison.OrdinalIgnoreCase);
 
     /// <inheritdoc />
     public void OnBranchReady(string branchName)

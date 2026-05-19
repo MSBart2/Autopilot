@@ -66,6 +66,22 @@ public class SignalRProgressSinkTests : IDisposable
     }
 
     [Fact]
+    public void OnStageStarted_ForReviewDimension_DoesNotReplaceParentCurrentStage()
+    {
+        var sink = CreateSink();
+        var review = new StageDefinition("REVIEW", "review", "review.agent.md", "sdk/review");
+        var dimension = new StageDefinition("REVIEW/SECURITY", "review:security", "security-reviewer.agent.md", "sdk/review");
+
+        sink.OnStageStarted(review, 42);
+        sink.OnStageStarted(dimension, 42);
+
+        var updatedRun = _dbContext.PipelineRuns.Find(_run.Id)!;
+        Assert.Equal("review", updatedRun.CurrentStage);
+        var stageNames = _dbContext.PipelineStageLogs.OrderBy(log => log.Id).Select(log => log.StageName).ToArray();
+        Assert.Equal(new[] { "review", "review:security" }, stageNames);
+    }
+
+    [Fact]
     public void OnBranchReady_PersistsBranchEvidence()
     {
         var sink = CreateSink();

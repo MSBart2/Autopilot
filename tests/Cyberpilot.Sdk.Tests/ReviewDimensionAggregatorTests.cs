@@ -45,7 +45,7 @@ public sealed class ReviewDimensionAggregatorTests
     {
         var failed = DimensionResult("security", "approved") with
         {
-            Result = new StageResult("INVALID", "unknown", false, "bad json"),
+            Result = new StageResult("INVALID", "changes_requested", false, "bad json"),
         };
         var approved = DimensionResult("quality", "approved");
 
@@ -54,6 +54,7 @@ public sealed class ReviewDimensionAggregatorTests
         Assert.Equal("STOP", aggregate.Status);
         Assert.Equal("changes_requested", aggregate.Decision);
         Assert.Contains("security", aggregate.Error);
+        Assert.Contains("valid structured result", aggregate.PolicyRationale);
         Assert.Contains(aggregate.Evidence!, evidence => evidence.Name == "review-dimension:quality");
         Assert.Contains("Security: produce a valid structured review result. bad json", aggregate.RequiredActions!);
     }
