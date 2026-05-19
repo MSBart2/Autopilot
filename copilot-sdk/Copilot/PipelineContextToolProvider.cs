@@ -10,7 +10,7 @@ namespace Cyberpilot.Copilot;
 internal sealed class PipelineContextToolProvider(PipelineExecutionContext context, StageDefinition stage, IGitHubCli gitHubCli)
 {
     private const int MaxRenderedCommentSummaryLength = 2800;
-    private const int MaxFileContentLength = 4000;
+    private const int MaxFileContentLength = 1500;
     private const int MaxValidationOutputLength = 2000;
 
     public ICollection<AIFunction> CreateTools()
@@ -191,7 +191,7 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
         }
 
         var content = await File.ReadAllTextAsync(fullPath, cancellationToken);
-        var limit = Math.Clamp(maxChars <= 0 ? MaxFileContentLength : maxChars, 500, MaxFileContentLength);
+        var limit = Math.Clamp(maxChars <= 0 ? MaxFileContentLength : maxChars, 300, MaxFileContentLength);
         var truncated = content.Length > limit;
         var visibleContent = truncated ? Truncate(content, limit) : content;
         var result = new ChangedFileContentToolResult(
