@@ -171,16 +171,28 @@ Split prompt responsibilities so the SDK `SystemMessage` carries harness law (id
   - stage mission = current task
 - [x] Wire system prompt behind config or feature flag; do not enable by default.
 - [x] Verify whether SDK `SystemMessage` augments or replaces default Copilot runtime behavior.
-  - **Finding:** `SessionConfig.SystemMessage` accepts a `SystemMessageConfig` with `Mode = SystemMessageMode.Append` (appends to default) or `Replace` (full override). Cyberpilot uses `Append` so built-in tool guidance is preserved.
-- [ ] Run A/B comparison on `baseline-pr-review`.
-- [ ] Record valid JSON rate, turns, tool calls, token usage, prompt size, and runtime.
+  - **Finding:** `SessionConfig.SystemMessage` accepts a `SystemMessageConfig` with `Mode = SystemMessageMode.Append` (appends to default) or `Replace` (full override). Cyberpilot supports both modes, plus `full` and `lean` harness profiles.
+- [x] Run A/B comparison on `baseline-pr-review`.
+  - **Finding:** Fresh PR clones of the same #34 fixture commit were required because submitted PR reviews are not safely resettable. `append-lean` won review on runtime, turns, tool calls, failed tool calls, and premium request cost.
+- [x] Record valid JSON rate, turns, tool calls, token usage, prompt size, and runtime.
+  - **Finding:** Stage-level metrics are recorded in `metrics.md`. Raw prompt character count is not yet persisted per run, so input-token usage is the persisted prompt/context-size proxy.
+
+### Milestone 2 benchmark decisions
+
+| Stage | Winner | Rationale |
+| --- | --- | --- |
+| triage | `replace-lean` | Fastest one-shot triage run and substantially lower input-token usage than inline-full. |
+| plan | `inline-full` | Fastest, lowest input-token use, and fewest failed tools when seeded with the same triage result. |
+| review | `append-lean` | Fastest PR-first review run with the fewest turns, tools, failed tools, and lowest premium request cost across fresh PR clones. |
+
+Implementation note: stage-aware defaults now allow global `replace-lean` while overriding `plan` to `inline-full` and `review` to `append-lean`. Explicit CLI `--system-message-mode` / `--system-message-profile` flags still override stage defaults for benchmarking.
 
 ### Success criteria
 
-- [ ] Stage prompts no longer need repeated controller boilerplate.
-- [ ] Review no longer performs known PR/issue rediscovery when structured context contains the answer.
-- [ ] JSON validity and artifact validation do not regress.
-- [ ] Turns/tool calls/token usage improve or stay flat with clearer behavior.
+- [x] Stage prompts no longer need repeated controller boilerplate.
+- [x] Review no longer performs known PR/issue rediscovery when structured context contains the answer.
+- [x] JSON validity and artifact validation do not regress.
+- [x] Turns/tool calls/token usage improve or stay flat with clearer behavior.
 
 ## Milestone 3: Harness-owned structured context
 

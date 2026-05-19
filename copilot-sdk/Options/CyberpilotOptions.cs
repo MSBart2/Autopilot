@@ -33,7 +33,8 @@ internal sealed record CyberpilotOptions(
     CyberpilotRuntimePreferences? RuntimePreferences = null,
     string? OnlyStage = null,
     int BenchmarkRepeat = 1,
-    string? ExperimentVariant = null)
+    string? ExperimentVariant = null,
+    IReadOnlyDictionary<string, string>? SeedStageResultVariants = null)
 {
     public const string DefaultModel = "claude-sonnet-4.6";
     public static readonly TimeSpan DefaultStageTimeout = TimeSpan.FromMinutes(10);
@@ -78,9 +79,15 @@ internal sealed record CyberpilotOptions(
             "                       Alias for --system-message-mode append. Inject harness law via SDK system message instead of repeating it in the user prompt.",
             "  --system-message-mode <none|append|replace>",
             "                       How to deliver harness law to the SDK session. none=inline (default), append=add after built-in Copilot guidance, replace=replace built-in guidance entirely.",
+            "  --system-message-profile <full|lean>",
+            "                       System-message harness guidance profile. full=current guidance, lean=compact benchmark guidance.",
             "  --only-stage <name>  Run only this stage then stop (e.g. triage, plan, implement). Implies --start-stage.",
+            "  --pr-head-branch <branch>",
+            "                       Known pull request head branch for PR-first review runs.",
             "  --repeat <n>         Run the stage N times, resetting between iterations. Use with --only-stage for benchmarking.",
             "  --variant <name>     Tag these runs in the database with an experiment variant name.",
+            "  --seed-stage-result <stage>=<variant>",
+            "                       Seed prior stage history from a completed DB run variant before executing.",
             "  --db <connection>  Persist this run to the shared Cyberpilot database.",
             "  --config <path>    Load repo/token pairs from an appsettings-style JSON file.",
             "  --skip-deliver      Run through docs but stop before merge/deliver.",
@@ -120,6 +127,7 @@ internal sealed record CyberpilotOptions(
             PipelineDefinitionVersion: parsed.PipelineDefinitionVersion,
             PolicyProfileName: parsed.PolicyProfileName,
             PipelineDefinitionFilePath: parsed.PipelineDefinitionFilePath,
+            PrHeadBranch: string.IsNullOrWhiteSpace(parsed.PrHeadBranch) ? null : parsed.PrHeadBranch,
             AgentPromptRoot: string.IsNullOrWhiteSpace(parsed.AgentPromptRoot) ? null : Path.GetFullPath(parsed.AgentPromptRoot),
             StageModelOverrides: parsed.StageModelOverrides,
             StageModelFallbacks: parsed.StageModelFallbacks,
@@ -129,6 +137,7 @@ internal sealed record CyberpilotOptions(
             OnlyStage: parsed.OnlyStage,
             BenchmarkRepeat: parsed.BenchmarkRepeat,
             ExperimentVariant: parsed.ExperimentVariant,
+            SeedStageResultVariants: parsed.SeedStageResultVariants,
             StartStage: parsed.OnlyStage ?? parsed.StartStage);
     }
 
@@ -150,6 +159,7 @@ internal sealed record CyberpilotOptions(
         string PipelineDefinitionVersion = PipelineDefinitionDefaults.DefinitionVersion,
         string PolicyProfileName = PipelineDefinitionDefaults.PolicyProfileName,
         string? PipelineDefinitionFilePath = null,
+        string? PrHeadBranch = null,
         string? AgentPromptRoot = null,
         IReadOnlyDictionary<string, string>? StageModelOverrides = null,
         IReadOnlyDictionary<string, string>? StageModelFallbacks = null,
@@ -159,7 +169,8 @@ internal sealed record CyberpilotOptions(
         string? OnlyStage = null,
         int BenchmarkRepeat = 1,
         string? ExperimentVariant = null,
-        string? StartStage = null)
+        string? StartStage = null,
+        IReadOnlyDictionary<string, string>? SeedStageResultVariants = null)
     {
         public static ParsedArgs Default => new() { StageTimeout = DefaultStageTimeout };
     }
@@ -221,14 +232,23 @@ internal sealed record CyberpilotOptions(
                 case "--system-message-mode":
                     parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithSystemMessageMode(ParseSystemMessageMode(RequireNonEmptyValue(args, ref index, arg), arg)) };
                     break;
+                case "--system-message-profile":
+                    parsed = parsed with { RuntimePreferences = parsed.RuntimePreferences.WithSystemMessageProfile(ParseSystemMessageProfile(RequireNonEmptyValue(args, ref index, arg), arg)) };
+                    break;
                 case "--only-stage":
                     parsed = parsed with { OnlyStage = RequireNonEmptyValue(args, ref index, arg).ToLowerInvariant() };
+                    break;
+                case "--pr-head-branch":
+                    parsed = parsed with { PrHeadBranch = RequireNonEmptyValue(args, ref index, arg) };
                     break;
                 case "--repeat":
                     parsed = parsed with { BenchmarkRepeat = ParsePositiveInt(RequireValue(args, ref index, arg), arg) };
                     break;
                 case "--variant":
                     parsed = parsed with { ExperimentVariant = RequireNonEmptyValue(args, ref index, arg) };
+                    break;
+                case "--seed-stage-result":
+                    parsed = parsed with { SeedStageResultVariants = AddSeedStageResult(parsed.SeedStageResultVariants, RequireNonEmptyValue(args, ref index, arg), arg) };
                     break;
                 case "--skip-deliver":
                     parsed = parsed with { SkipDeliver = true };
@@ -278,6 +298,8 @@ internal sealed record CyberpilotOptions(
     public bool CaptureToolOutputArtifacts => Preferences.CaptureToolOutputArtifacts;
 
     public HarnessSystemMessageMode SystemMessageMode => Preferences.SystemMessageMode;
+
+    public HarnessSystemMessageProfile SystemMessageProfile => Preferences.SystemMessageProfile;
 
     private static TimeSpan ParsePositiveMinutes(string value, string optionName)
     {
@@ -333,6 +355,28 @@ internal sealed record CyberpilotOptions(
         return updated;
     }
 
+    private static IReadOnlyDictionary<string, string> AddSeedStageResult(IReadOnlyDictionary<string, string>? current, string value, string optionName)
+    {
+        var separator = value.IndexOf('=', StringComparison.Ordinal);
+        if (separator <= 0 || separator == value.Length - 1)
+        {
+            throw new ArgumentException($"{optionName} expects <stage>=<variant>.");
+        }
+
+        var stageName = value[..separator].Trim().ToLowerInvariant();
+        var variant = value[(separator + 1)..].Trim();
+        if (string.IsNullOrWhiteSpace(stageName) || string.IsNullOrWhiteSpace(variant))
+        {
+            throw new ArgumentException($"{optionName} expects <stage>=<variant>.");
+        }
+
+        var updated = new Dictionary<string, string>(current ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
+        {
+            [stageName] = variant,
+        };
+        return updated;
+    }
+
     private static CommandStylePreference ParseCommandStyle(string value, string optionName)
     {
         return value.Trim().ToLowerInvariant() switch
@@ -352,6 +396,16 @@ internal sealed record CyberpilotOptions(
             "append" => HarnessSystemMessageMode.Append,
             "replace" => HarnessSystemMessageMode.Replace,
             _ => throw new ArgumentException($"{optionName} expects one of: none, append, replace."),
+        };
+    }
+
+    private static HarnessSystemMessageProfile ParseSystemMessageProfile(string value, string optionName)
+    {
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "full" => HarnessSystemMessageProfile.Full,
+            "lean" => HarnessSystemMessageProfile.Lean,
+            _ => throw new ArgumentException($"{optionName} expects one of: full, lean."),
         };
     }
 
@@ -383,6 +437,12 @@ internal static class CyberpilotRuntimePreferenceExtensions
     public static CyberpilotRuntimePreferences WithSystemMessageMode(this CyberpilotRuntimePreferences? preferences, HarnessSystemMessageMode mode)
     {
         var current = preferences ?? CyberpilotRuntimePreferences.Default;
-        return current with { SystemMessageMode = mode };
+        return current with { SystemMessageMode = mode, SystemMessageModeConfigured = true };
+    }
+
+    public static CyberpilotRuntimePreferences WithSystemMessageProfile(this CyberpilotRuntimePreferences? preferences, HarnessSystemMessageProfile profile)
+    {
+        var current = preferences ?? CyberpilotRuntimePreferences.Default;
+        return current with { SystemMessageProfile = profile, SystemMessageProfileConfigured = true };
     }
 }

@@ -311,6 +311,97 @@ public sealed class PromptBuilderTests
     }
 
     [Fact]
+    public async Task BuildAsync_WithLeanSystemMessageProfile_UsesCompactHarnessLaw()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "triage.agent.md"), "triage instructions");
+        var builder = new PromptBuilder(
+            targetRepo.Path,
+            agentRepo.Path,
+            7,
+            runtimePreferences: new CyberpilotRuntimePreferences(
+                SystemMessageMode: HarnessSystemMessageMode.Append,
+                SystemMessageProfile: HarnessSystemMessageProfile.Lean));
+
+        var built = await builder.BuildAsync(
+            Stage("TRIAGE", "triage", "triage.agent.md", "sdk/triage", ["triage-comment"]),
+            "classify issue",
+            StandardPolicy());
+
+        Assert.NotNull(built.SystemMessageContent);
+        Assert.Contains("You are the Cyberpilot SDK controller", built.SystemMessageContent);
+        Assert.Contains("Do not delegate", built.SystemMessageContent);
+        Assert.DoesNotContain("## Output Formatting", built.SystemMessageContent);
+    }
+
+    [Fact]
+    public async Task BuildAsync_WithStageSystemMessageOverride_UsesPlanInlineFull()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "plan.agent.md"), "plan instructions");
+        var builder = new PromptBuilder(
+            targetRepo.Path,
+            agentRepo.Path,
+            7,
+            runtimePreferences: new CyberpilotRuntimePreferences(
+                SystemMessageMode: HarnessSystemMessageMode.Replace,
+                SystemMessageProfile: HarnessSystemMessageProfile.Lean,
+                StageSystemMessages: new Dictionary<string, HarnessStageSystemMessage>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["plan"] = new(HarnessSystemMessageMode.None, HarnessSystemMessageProfile.Full),
+                }));
+
+        var built = await builder.BuildAsync(
+            Stage("PLAN", "plan", "plan.agent.md", "sdk/planning", ["implementation-plan"]),
+            "plan issue",
+            StandardPolicy());
+
+        Assert.Null(built.SystemMessageContent);
+        Assert.Equal(HarnessSystemMessageMode.None, built.SystemMessageMode);
+        Assert.Contains("Cyberpilot SDK cyberpilot controller", built.UserMessage);
+        Assert.Contains("## Output Formatting", built.UserMessage);
+    }
+
+    [Fact]
+    public async Task BuildAsync_WithExplicitSystemMessageMode_IgnoresStageOverride()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "plan.agent.md"), "plan instructions");
+        var builder = new PromptBuilder(
+            targetRepo.Path,
+            agentRepo.Path,
+            7,
+            runtimePreferences: new CyberpilotRuntimePreferences(
+                SystemMessageMode: HarnessSystemMessageMode.Replace,
+                SystemMessageProfile: HarnessSystemMessageProfile.Lean,
+                StageSystemMessages: new Dictionary<string, HarnessStageSystemMessage>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["plan"] = new(HarnessSystemMessageMode.None, HarnessSystemMessageProfile.Full),
+                },
+                SystemMessageModeConfigured: true,
+                SystemMessageProfileConfigured: true));
+
+        var built = await builder.BuildAsync(
+            Stage("PLAN", "plan", "plan.agent.md", "sdk/planning", ["implementation-plan"]),
+            "plan issue",
+            StandardPolicy());
+
+        Assert.NotNull(built.SystemMessageContent);
+        Assert.Equal(HarnessSystemMessageMode.Replace, built.SystemMessageMode);
+        Assert.Contains("You are the Cyberpilot SDK controller", built.SystemMessageContent);
+        Assert.DoesNotContain("## Output Formatting", built.SystemMessageContent);
+    }
+
+    [Fact]
     public async Task BuildAsync_WithSystemMessageModeNone_ReturnsNullSystemMessageContent()
     {
         using var targetRepo = new TempDirectory();

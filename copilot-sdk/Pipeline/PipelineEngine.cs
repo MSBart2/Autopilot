@@ -45,7 +45,10 @@ internal sealed class PipelineEngine(
             if (IsOnlyStage("triage")) return 0;
         }
 
-        context.BranchName = await branchCoordinator.EnsureBranchAsync(start, cancellationToken);
+        if (string.IsNullOrWhiteSpace(context.BranchName))
+        {
+            context.BranchName = await branchCoordinator.EnsureBranchAsync(start, cancellationToken);
+        }
 
         if (ShouldRun(start, "plan", out _))
         {

@@ -5,6 +5,7 @@ using Cyberpilot.Options;
 using Cyberpilot.Persistence;
 using Cyberpilot.Pipeline;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Cyberpilot;
 
@@ -54,12 +55,13 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
 
             var labels = new SdkLabelService(issueClient, output);
             var run = dbContext is null ? null : await CreateRunAsync(dbContext, options, cancellationToken);
+            var seededStageResults = await LoadSeededStageResultsAsync(options, dbContext, cancellationToken);
             var branchProvisioner = new BranchProvisioner();
             var progressSink = CreateProgressSink(dbContext, run, options);
             var promptBuilder = new PromptBuilder(options.RepoRoot, options.AgentPromptRoot ?? options.RepoRoot, options.IssueNumber, runtimePreferences: options.RuntimePreferences);
             var stageRunner = new CopilotStageRunner(options.RepoRoot, progressSink, error);
             var modelChecker = new CopilotModelAvailabilityChecker();
-            var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output);
+            var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output, seededStageResults);
             var exitCode = await runner.RunAsync(cancellationToken);
             if (dbContext is not null && run is not null)
             {
@@ -139,12 +141,13 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             var labels = new SdkLabelService(issueClient, output);
             var variant = $"{variantBase}-iter-{iteration}";
             var run = dbContext is null ? null : await CreateRunAsync(dbContext, options, cancellationToken, variant, iteration, repeatGroup);
+            var seededStageResults = await LoadSeededStageResultsAsync(options, dbContext, cancellationToken);
             var branchProvisioner = new BranchProvisioner();
             var progressSink = CreateProgressSink(dbContext, run, options);
             var promptBuilder = new PromptBuilder(options.RepoRoot, options.AgentPromptRoot ?? options.RepoRoot, options.IssueNumber, runtimePreferences: options.RuntimePreferences);
             var stageRunner = new CopilotStageRunner(options.RepoRoot, progressSink, error);
             var modelChecker = new CopilotModelAvailabilityChecker();
-            var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output);
+            var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output, seededStageResults);
             var exitCode = await runner.RunAsync(cancellationToken);
 
             if (dbContext is not null && run is not null)
@@ -178,6 +181,49 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
         }
 
         return 0;
+    }
+
+    private async Task<IReadOnlyList<(string StageName, StageResult Result)>> LoadSeededStageResultsAsync(
+        CyberpilotOptions options,
+        CyberpilotDbContext? dbContext,
+        CancellationToken cancellationToken)
+    {
+        if (options.SeedStageResultVariants is null || options.SeedStageResultVariants.Count == 0)
+        {
+            return [];
+        }
+
+        if (dbContext is null)
+        {
+            throw new InvalidOperationException("--seed-stage-result requires a configured database.");
+        }
+
+        var seeds = new List<(string StageName, StageResult Result)>();
+        foreach (var (stageName, variant) in options.SeedStageResultVariants)
+        {
+            var stageLog = await dbContext.Set<PipelineStageLog>()
+                .AsNoTracking()
+                .Where(log => log.StageName.ToLower() == stageName.ToLower())
+                .Where(log => dbContext.Set<PipelineRun>()
+                    .Any(run => run.Id == log.RunId
+                        && run.IssueNumber == options.IssueNumber
+                        && run.ExperimentVariant == variant))
+                .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (stageLog?.StageResultJson is null)
+            {
+                throw new InvalidOperationException($"No seeded stage result found for {stageName}={variant}.");
+            }
+
+            var result = JsonSerializer.Deserialize<StageResult>(stageLog.StageResultJson)
+                ?? throw new InvalidOperationException($"Seeded stage result for {stageName}={variant} could not be deserialized.");
+
+            seeds.Add((stageName, result));
+            output.WriteLine($"[benchmark] Seeded {stageName} stage history from variant '{variant}'.");
+        }
+
+        return seeds;
     }
 
     private static IGitHubIssueClient CreateIssueClient(CyberpilotOptions options, SdkConfiguration configuration)    {

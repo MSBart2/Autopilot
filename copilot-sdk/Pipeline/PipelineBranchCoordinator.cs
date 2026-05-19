@@ -30,11 +30,6 @@ internal sealed class PipelineBranchCoordinator(
 
     private async Task<BranchRoutingResult> FastForwardForExistingPullRequestAsync(PipelineStart start, PipelineDefinition definition, CancellationToken cancellationToken)
     {
-        if (start.IsResume)
-        {
-            return new BranchRoutingResult(start, null, null);
-        }
-
         // If the caller already knows the PR head branch (e.g., "Review & Deliver" launched from the UI), use it directly.
         if (!string.IsNullOrWhiteSpace(options.PrHeadBranch))
         {
@@ -42,6 +37,11 @@ internal sealed class PipelineBranchCoordinator(
             console.WriteSuccess($"Using supplied PR branch {options.PrHeadBranch}. Skipping triage/plan/implement.");
             var reviewStage = definition.Stage("review");
             return new BranchRoutingResult(new PipelineStart(definition.IndexOf(reviewStage.Name), reviewStage, true), options.PrHeadBranch, null);
+        }
+
+        if (start.IsResume)
+        {
+            return new BranchRoutingResult(start, null, null);
         }
 
         try

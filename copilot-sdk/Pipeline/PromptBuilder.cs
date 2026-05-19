@@ -31,11 +31,13 @@ internal sealed class PromptBuilder(
 		var repositoryProfileContext = BuildRepositoryProfileContext(targetRepositoryProfileSummary);
 		var harnessContext = BuildHarnessContext(stage.Name, context);
 		var commandGuidance = BuildCommandGuidance(runtimePreferences);
+		var systemMessage = runtimePreferences?.GetSystemMessageForStage(stage.Name)
+			?? new HarnessStageSystemMessage();
 
-		if (runtimePreferences?.SystemMessageMode is HarnessSystemMessageMode.Append or HarnessSystemMessageMode.Replace)
+		if (systemMessage.Mode is HarnessSystemMessageMode.Append or HarnessSystemMessageMode.Replace)
 		{
-			var mode = runtimePreferences.SystemMessageMode;
-			var systemContent = BuildHarnessSystemMessage(commandGuidance);
+			var mode = systemMessage.Mode;
+			var systemContent = BuildHarnessSystemMessage(systemMessage.Profile, commandGuidance);
 			var userContent = BuildUserMessage(stageDefinition, mission, policyProfile, stage, harnessContext, requiredArtifacts, artifactExample, reportingGuidance, repositoryProfileContext, stagePrompt);
 			return new BuiltPrompt(userContent, systemContent, mode);
 		}
@@ -150,7 +152,16 @@ internal sealed class PromptBuilder(
 			""";
 	}
 
-	private static string BuildHarnessSystemMessage(string commandGuidance)
+	private static string BuildHarnessSystemMessage(HarnessSystemMessageProfile profile, string commandGuidance)
+	{
+		return profile switch
+		{
+			HarnessSystemMessageProfile.Lean => BuildLeanHarnessSystemMessage(commandGuidance),
+			_ => BuildFullHarnessSystemMessage(commandGuidance),
+		};
+	}
+
+	private static string BuildFullHarnessSystemMessage(string commandGuidance)
 	{
 		return $$"""
 			You are running as the Cyberpilot SDK cyberpilot controller.
@@ -177,6 +188,18 @@ internal sealed class PromptBuilder(
 			If an artifact contains markdown, store it as a normal JSON string: escape line breaks as `\n`, escape double quotes, and never paste raw multi-line markdown directly into the JSON block.
 			Do not include nested triple-backtick fences inside artifact strings. If you must quote code in an artifact, use indented code blocks or short inline snippets instead.
 			After the final fenced `json` block, do not write any additional text.
+			{{commandGuidance}}
+			""";
+	}
+
+	private static string BuildLeanHarnessSystemMessage(string commandGuidance)
+	{
+		return $$"""
+			You are the Cyberpilot SDK controller for this stage.
+
+			Run the stage yourself. Do not delegate to background agents, manage `sdk` labels, or close the issue. Treat harness context and structured artifacts as canonical workflow state; comments are only human-readable reports.
+
+			End with exactly one fenced `json` block containing a valid stage result object. Include `contract_version`, required artifacts when available, evidence, policy rationale, required actions, and `issue_number`. Do not write anything after the final JSON fence.
 			{{commandGuidance}}
 			""";
 	}

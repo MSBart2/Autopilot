@@ -14,7 +14,8 @@ internal sealed class SdkCyberpilotRunner(
     IStageRunner stageRunner,
     IModelAvailabilityChecker modelChecker,
     ICyberpilotProgressSink progressSink,
-    TextWriter output)
+    TextWriter output,
+    IReadOnlyList<(string StageName, StageResult Result)>? seededStageResults = null)
 {
     public string FinalStage => pipelineContext.FinalStage;
     public string? BranchName => pipelineContext.BranchName;
@@ -57,6 +58,10 @@ internal sealed class SdkCyberpilotRunner(
         }
 
         pipelineContext = new PipelineExecutionContext(options, definition!);
+        foreach (var seed in seededStageResults ?? [])
+        {
+            pipelineContext.RecordStageResult(seed.StageName, seed.Result);
+        }
 
         console.WriteHeader($"Cyberpilot issue #{options.IssueNumber}");
         console.WriteDetail("Repository", options.RepoRoot);

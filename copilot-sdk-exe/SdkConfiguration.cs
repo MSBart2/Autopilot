@@ -147,9 +147,17 @@ internal sealed class SdkConfiguration
                 ? RuntimePreferences.CommandStyle
                 : optionPreferences.CommandStyle,
             CaptureToolOutputArtifacts = optionPreferences.CaptureToolOutputArtifacts || RuntimePreferences.CaptureToolOutputArtifacts,
-            SystemMessageMode = optionPreferences.SystemMessageMode == HarnessSystemMessageMode.None
-                ? RuntimePreferences.SystemMessageMode
-                : optionPreferences.SystemMessageMode,
+            SystemMessageMode = optionPreferences.SystemMessageModeConfigured
+                ? optionPreferences.SystemMessageMode
+                : RuntimePreferences.SystemMessageMode,
+            SystemMessageModeConfigured = optionPreferences.SystemMessageModeConfigured,
+            SystemMessageProfile = optionPreferences.SystemMessageProfileConfigured
+                ? optionPreferences.SystemMessageProfile
+                : RuntimePreferences.SystemMessageProfile,
+            SystemMessageProfileConfigured = optionPreferences.SystemMessageProfileConfigured,
+            StageSystemMessages = optionPreferences.SystemMessageModeConfigured || optionPreferences.SystemMessageProfileConfigured
+                ? null
+                : RuntimePreferences.StageSystemMessages,
         };
     }
 
@@ -238,6 +246,18 @@ internal sealed class SdkConfiguration
             && useHarnessSystemMessage.GetBoolean())
         {
             current = current with { SystemMessageMode = HarnessSystemMessageMode.Append };
+        }
+
+        if (cyberpilot.TryGetProperty("SystemMessageProfile", out var systemMessageProfileEl)
+            && TryParseSystemMessageProfile(systemMessageProfileEl.GetString(), out var parsedProfile))
+        {
+            current = current with { SystemMessageProfile = parsedProfile };
+        }
+
+        if (cyberpilot.TryGetProperty("StageSystemMessages", out var stageSystemMessagesEl)
+            && stageSystemMessagesEl.ValueKind == JsonValueKind.Object)
+        {
+            current = current with { StageSystemMessages = ParseStageSystemMessages(stageSystemMessagesEl) };
         }
 
         runtimePreferences = current;
@@ -330,6 +350,11 @@ internal sealed class SdkConfiguration
             current = current with { SystemMessageMode = HarnessSystemMessageMode.Append };
         }
 
+        if (TryParseSystemMessageProfile(Environment.GetEnvironmentVariable("Cyberpilot__SystemMessageProfile"), out var systemMessageProfile))
+        {
+            current = current with { SystemMessageProfile = systemMessageProfile };
+        }
+
         runtimePreferences = current;
     }
 
@@ -372,6 +397,53 @@ internal sealed class SdkConfiguration
         return !value.Trim().Equals("none", StringComparison.OrdinalIgnoreCase)
             ? mode != HarnessSystemMessageMode.None
             : true;
+    }
+
+    private static IReadOnlyDictionary<string, HarnessStageSystemMessage> ParseStageSystemMessages(JsonElement element)
+    {
+        var values = new Dictionary<string, HarnessStageSystemMessage>(StringComparer.OrdinalIgnoreCase);
+        foreach (var stage in element.EnumerateObject())
+        {
+            if (stage.Value.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var mode = HarnessSystemMessageMode.None;
+            if (stage.Value.TryGetProperty("Mode", out var modeEl))
+            {
+                TryParseSystemMessageMode(modeEl.GetString(), out mode);
+            }
+
+            var profile = HarnessSystemMessageProfile.Full;
+            if (stage.Value.TryGetProperty("Profile", out var profileEl))
+            {
+                TryParseSystemMessageProfile(profileEl.GetString(), out profile);
+            }
+
+            values[stage.Name] = new HarnessStageSystemMessage(mode, profile);
+        }
+
+        return values;
+    }
+
+    private static bool TryParseSystemMessageProfile(string? value, out HarnessSystemMessageProfile profile)
+    {
+        profile = HarnessSystemMessageProfile.Full;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        profile = value.Trim().ToLowerInvariant() switch
+        {
+            "full" => HarnessSystemMessageProfile.Full,
+            "lean" => HarnessSystemMessageProfile.Lean,
+            _ => HarnessSystemMessageProfile.Full,
+        };
+
+        return value.Trim().Equals("full", StringComparison.OrdinalIgnoreCase)
+            || profile != HarnessSystemMessageProfile.Full;
     }
 
     private static void AddRepository(string? name, string? repositoryInput, string? repoRoot, string? token, Dictionary<string, SdkRepositoryConnection> repositories)

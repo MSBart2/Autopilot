@@ -42,7 +42,7 @@ These issues in `MSBart2/Aspire1` are scoped to give useful signal without deliv
 | `baseline-aspire-ui` | [#32 Diagnostics panel](https://github.com/MSBart2/aspire1/issues/32) | Larger / cross-cutting | Architecture discovery, UI, feature flags, review |
 | `baseline-aspire-helper` | [#33 Weather summary helper](https://github.com/MSBart2/aspire1/issues/33) | Medium / code + tests | Discovery, implementation, validation, review |
 | `baseline-aspire-docs` | [#34 Observability runbook](https://github.com/MSBart2/aspire1/issues/34) | Small / docs | Low-complexity baseline; minimal code noise |
-| `baseline-pr-review` | TBD PR from a benchmark run | — / PR-first review | Review → docs → deliver without issue routing overhead |
+| `baseline-pr-review` | Fresh cloned PR fixtures from #34 implementation commit (`review5clone-20260518-2030-*`) | — / PR-first review | Review-only comparison without issue routing overhead |
 
 ## Recommended baseline cadence
 
@@ -193,4 +193,44 @@ Copy one row per stage per run. Most values come from the database queries above
 
 | Experiment | Scenario | Before run | After run | Input token Δ | Turn Δ | Duration Δ ms | Reliability | Decision |
 | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
-| | | | | | | | | |
+| Milestone 2 triage system-message sweep | #34 one-shot triage | `triage5-20260518-1936-inline-full` | `triage5-20260518-1936-replace-lean` | -138,219 | +2 | -9,890 | 5/5 valid JSON; all approved | Use `replace-lean` for triage. |
+| Milestone 2 plan seeded sweep | #34 plan with fixed triage seed | `plan5-20260518-2009-replace-lean` | `plan5-20260518-2009-inline-full` | -47,514 | -2 | -20,780 | 5/5 valid JSON; all approved | Use `inline-full` for plan. |
+| Milestone 2 PR-first review sweep | Fresh PR clones #46-#50 at same commit | `review5clone-20260518-2030-inline-full` | `review5clone-20260518-2030-append-lean` | -210,611 | -6 | -64,776 | 5/5 valid JSON; all approved | Use `append-lean` for review. |
+
+### Milestone 2 stage prompt benchmark details
+
+#### Triage: issue #34 one-shot sweep (`triage5-20260518-1936-*`)
+
+| Variant | Status | Duration ms | Input tokens | Output tokens | Cache read | Turns | Tool calls | Failed calls | Premium cost | Result |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| inline-full | GO | 77,367 | 307,770 | 3,650 | 272,780 | 8 | 11 | 3 | 8 | approved / valid |
+| append-full | GO | 94,761 | 282,812 | 4,511 | 249,468 | 8 | 16 | 5 | 8 | approved / valid |
+| replace-full | GO | 79,211 | 151,161 | 3,858 | 134,539 | 8 | 16 | 5 | 8 | approved / valid |
+| append-lean | GO | 73,534 | 238,195 | 3,851 | 208,411 | 7 | 13 | 4 | 7 | approved / valid |
+| replace-lean | GO | 67,477 | 169,551 | 3,363 | 157,308 | 10 | 15 | 4 | 10 | approved / valid |
+
+#### Plan: issue #34 with fixed triage seed (`plan5-20260518-2009-*`)
+
+Seed: `planseed-triage-replace-lean-20260518-2009` completed GO / approved / valid in 79,872 ms with 149,402 input tokens. Each plan run loaded that exact triage `StageResultJson` into stage history.
+
+| Variant | Status | Duration ms | Input tokens | Output tokens | Cache read | Turns | Tool calls | Failed calls | Premium cost | Result |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| inline-full | GO | 96,820 | 147,576 | 5,376 | 134,765 | 9 | 15 | 3 | 9 | approved / valid |
+| append-full | GO | 120,836 | 251,435 | 7,136 | 215,603 | 7 | 17 | 4 | 7 | approved / valid |
+| replace-full | GO | 130,140 | 153,494 | 7,146 | 137,964 | 9 | 16 | 4 | 9 | approved / valid |
+| append-lean | GO | 146,338 | 329,376 | 8,181 | 291,138 | 9 | 17 | 7 | 9 | approved / valid |
+| replace-lean | GO | 117,600 | 195,090 | 6,268 | 180,363 | 11 | 17 | 5 | 11 | approved / valid |
+
+#### PR-first review: fresh PR clones at same fixture commit (`review5clone-20260518-2030-*`)
+
+Fixture source: issue #34 implementation PR #45 produced commit `d0461c8fe462718aa740787521609e1a5873d85f`. PRs #46-#50 were fresh branches pointing at the same commit so each review run started with equivalent PR state. The fixture PRs and branches were closed/deleted after metrics capture.
+
+| Variant | PR | Status | Duration ms | Input tokens | Output tokens | Cache read | Turns | Tool calls | Failed calls | Premium cost | Result |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| inline-full | #46 | GO | 169,168 | 496,272 | 7,682 | 460,298 | 14 | 19 | 8 | 14 | approved / valid |
+| append-full | #47 | GO | 183,083 | 507,891 | 8,676 | 463,577 | 13 | 22 | 9 | 13 | approved / valid |
+| replace-full | #48 | GO | 159,641 | 263,521 | 7,828 | 242,957 | 15 | 22 | 8 | 15 | approved / valid |
+| append-lean | #49 | GO | 104,392 | 285,661 | 4,716 | 250,868 | 8 | 13 | 5 | 8 | approved / valid |
+| replace-lean | #50 | GO | 173,126 | 323,513 | 8,478 | 303,536 | 17 | 21 | 10 | 17 | approved / valid |
+
+Prompt-size note: Cyberpilot does not currently persist raw prompt character count per run. The persisted input-token totals above are the operational prompt/context-size proxy for Milestone 2 comparisons.
