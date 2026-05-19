@@ -228,7 +228,21 @@ Biggest per-stage wins: docs −75% input tokens; implement −50%; review −39
 - [x] Rank candidates by frequency, token cost, runtime cost, and implementation risk.
 - [x] Promote the first deterministic workflow into code/tool/gate/script.
 - [x] Add tests for promoted deterministic behavior.
-- [ ] Record before/after metrics.
+- [x] Record before/after metrics.
+
+### Benchmark results (review-only, issue #34 PR #51)
+
+The first M4 pass promoted richer `get_pr_diff_summary` output and updated review/docs agent prompts, but the model still improvised file/diff discovery. The successful pass moved deterministic PR-tool guidance into the SDK prompt wrapper for review/docs/deliver.
+
+| | M4 first attempt (SHA 7187117) | M4 guided (SHA 7cacdbd) | Δ |
+| --- | ---: | ---: | ---: |
+| Input tokens | 465,748 | 323,328 | **-142,420 (-31%)** |
+| Tool calls | 35 | 14 | **-21 (-60%)** |
+| Failed tool calls | 8 | 7 | -1 (-13%) |
+| Duration ms | 200,783 | 103,064 | **-97,719 (-49%)** |
+| Est. cost USD | $1.5331 | $1.0420 | **-$0.4911 (-32%)** |
+
+Against the M3 review baseline, the guided M4 run is also modestly better: input tokens -15,321 (-5%), tool calls -1, duration -15,203 ms (-13%), and cost -$0.0584 (-5%).
 
 ### Candidate workflows
 
