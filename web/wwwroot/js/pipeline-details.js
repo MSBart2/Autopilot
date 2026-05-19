@@ -125,7 +125,12 @@
             <div class="agent-tagline">"${a.tagline}"</div>
                         ${retryReason ? `<div class="agent-retry-reason"><span class="agent-retry-reason-label">Retry reason</span><span>${escapeHtml(retryReason)}</span></div>` : ''}
             <div class="agent-state-note" aria-live="polite"></div>
-            <div class="agent-output"></div>
+            ${stage === 'plan'
+                ? `<div class="plan-output-actions">
+                     <a href="/Pipelines/${runId}/Plan" class="btn btn-xs btn-outline-info">📋 View Plan</a>
+                   </div>
+                   <div class="agent-output" style="display:none"></div>`
+                : `<div class="agent-output"></div>`}
           </div>`;
 
         return card;
@@ -153,11 +158,20 @@
         // Remove fenced json / bare json code blocks
         let out = text.replace(/```(?:json)?\s*\n[\s\S]*?\n```/gi, '');
 
-        // Ensure ## section headers always start on their own line
+        // Ensure ## / ### section headers always start on their own line
         out = out.replace(/([^\n])(#{2,4} )/g, '$1\n\n$2');
 
+        // Plan artifact: numbered task entries like "1. **File path:**" or "## The Jobs"
+        // often arrive concatenated — split before each numbered list item
+        out = out.replace(/([^\n])(\d+\. \*\*)/g, '$1\n\n$2');
+
+        // Split before standalone "- " bullet lines when concatenated mid-text
+        out = out.replace(/([^\n])(- \*\*)/g, '$1\n\n$2');
+
+        // Split before bold section markers common in plan artifacts
+        out = out.replace(/([^\n])(\*\*(?:Dependencies|Action|Details|File path|Assigned agent|File|Task):\*\*)/g, '$1\n$2');
+
         // Split common tool-call interjections onto their own lines when concatenated mid-text.
-        // Lookbehind ensures we only split when the pattern is preceded by non-newline content.
         out = out.replace(/(?<=[^\n])(Good\.|Great\.|Perfect\.|Right\.|Excellent\.|Noted\.|Let me |Now let me )/g, '\n$1');
 
         // Drop everything before the first ## header (tool-call noise before the narrative)
@@ -171,6 +185,7 @@
             if (t.startsWith('#')) return true;       // section headers
             if (t.startsWith('|')) return true;       // table rows
             if (/^[-*]\s/.test(t)) return true;       // bullet items
+            if (/^\d+\.\s/.test(t)) return true;      // numbered list items
             if (t.startsWith('`')) return true;       // code lines
             if (t.length < 120 && /^(Good\.?|Great\.?|Perfect\.?|Right\.?|Excellent\.?|Noted\.?|Let me|Now let me|Moving on|I'll now|I can see|I need to|Looking at|Starting with|Checking|Next,|First,?\s+I)/i.test(t)) return false;
             return true;
@@ -479,15 +494,17 @@
             html += renderSummary(out.dataset.stage ?? '', summary);
             html += `<details class="output-details"><summary>Raw transcript</summary><pre class="output-raw">${escapeHtml(raw)}</pre></details>`;
             out.innerHTML = html;
-        } else if (/^\s*#{2,4}\s+/m.test(raw) || /^\s*[-*]\s+/m.test(raw)) {
-            const cleaned = cleanAgentOutput(raw);
-            out.innerHTML = renderMarkdownLite(cleaned || raw);
         } else {
-            const prose = renderSmartProse(raw);
-            if (prose) {
-                out.innerHTML = prose;
+            const cleaned = cleanAgentOutput(raw);
+            if (/^\s*#{2,4}\s+/m.test(cleaned) || /^\s*[-*]\s+/m.test(cleaned)) {
+                out.innerHTML = renderMarkdownLite(cleaned || raw);
             } else {
-                out.innerHTML = `<pre class="output-raw">${escapeHtml(raw)}</pre>`;
+                const prose = renderSmartProse(cleaned || raw);
+                if (prose) {
+                    out.innerHTML = prose;
+                } else {
+                    out.innerHTML = `<pre class="output-raw">${escapeHtml(raw)}</pre>`;
+                }
             }
         }
 
@@ -755,16 +772,31 @@
     }
 
     // ── Cyberpilot dispatch (inline in agent feed) ─────────────────────
+    let preflightNode = null; // accumulate all Preflight rows into one card
+
     function appendSpineNode(type, message) {
+        const isPreflight = type === 'Preflight';
+
+        if (isPreflight && preflightNode) {
+            // Add a new row to the existing preflight card
+            const row = document.createElement('div');
+            row.className = 'spine-dispatch-row';
+            row.innerHTML = `<span class="spine-dot dot-${escapeHtml(type)}"></span><span class="spine-dispatch-text">${escapeHtml(message)}</span>`;
+            preflightNode.querySelector('.spine-dispatch-inner').appendChild(row);
+            return;
+        }
         const node = document.createElement('div');
         node.className = 'spine-dispatch';
         node.innerHTML = `
             <div class="spine-dispatch-inner">
-                <img src="/images/agents/cyberpilot.png" class="spine-dispatch-avatar" alt="AP" onerror="this.style.display='none'">
-                <span class="spine-dot dot-${escapeHtml(type)}"></span>
-                <span class="spine-dispatch-text">${escapeHtml(message)}</span>
+                <div class="spine-dispatch-header">
+                    <img src="/images/agents/cyberpilot.png" class="spine-dispatch-avatar" alt="AP" onerror="this.style.display='none'">
+                    <div class="spine-dispatch-row" style="padding-left:0"><span class="spine-dot dot-${escapeHtml(type)}"></span><span class="spine-dispatch-text">${escapeHtml(message)}</span></div>
+                </div>
             </div>`;
         feed.appendChild(node);
+
+        if (isPreflight) preflightNode = node;
     }
 
     // ── Pre-populate from server-rendered data (merged timeline) ──────

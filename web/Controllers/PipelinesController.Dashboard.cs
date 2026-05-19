@@ -2,6 +2,7 @@ using Cyberpilot.GitHub;
 using Cyberpilot.Persistence;
 using Cyberpilot.Web.Models;
 using Cyberpilot.Web.Services;
+using Markdig;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -133,7 +134,14 @@ public partial class PipelinesController
             return NotFound();
         }
 
-        return View(new PipelinePlanDocumentViewModel(run, plan));
+        string? renderedHtml = null;
+        if (!string.IsNullOrWhiteSpace(plan.FullPlanText))
+        {
+            var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
+            renderedHtml = Markdown.ToHtml(plan.FullPlanText, pipeline);
+        }
+
+        return View(new PipelinePlanDocumentViewModel(run, plan, renderedHtml));
     }
 
     /// <summary>

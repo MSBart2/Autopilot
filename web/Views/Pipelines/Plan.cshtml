@@ -38,7 +38,16 @@
             </div>
             @if (plan.HasFullPlanText)
             {
-                <pre class="plan-document-pre">@plan.FullPlanText</pre>
+                @if (Model.RenderedPlanHtml is not null)
+                {
+                    <div class="plan-rendered-body markdown-body">
+                        @Html.Raw(Model.RenderedPlanHtml)
+                    </div>
+                }
+                else
+                {
+                    <pre class="plan-document-pre">@plan.FullPlanText</pre>
+                }
             }
             else
             {

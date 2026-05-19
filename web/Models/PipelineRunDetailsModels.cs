@@ -177,7 +177,8 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
 /// </summary>
 /// <param name="Run">The pipeline run that produced the plan.</param>
 /// <param name="Plan">The structured plan review details.</param>
-public sealed record PipelinePlanDocumentViewModel(PipelineRun Run, PipelinePlanReviewViewModel Plan)
+/// <param name="RenderedPlanHtml">The plan full text rendered as HTML, when available.</param>
+public sealed record PipelinePlanDocumentViewModel(PipelineRun Run, PipelinePlanReviewViewModel Plan, string? RenderedPlanHtml = null)
 {
     /// <summary>Gets the GitHub issue URL, when available.</summary>
     public string IssueUrl => string.IsNullOrWhiteSpace(Run.IssueUrl)

@@ -488,6 +488,64 @@
         overflow: auto;
     }
 
+    .plan-rendered-body {
+        padding: .25rem .5rem;
+        color: var(--oc-light);
+        font-size: .9rem;
+        line-height: 1.7;
+    }
+
+    .plan-rendered-body h1,
+    .plan-rendered-body h2,
+    .plan-rendered-body h3 {
+        color: var(--oc-highlight, #e2e8f0);
+        margin-top: 1.5rem;
+        margin-bottom: .5rem;
+        font-weight: 600;
+    }
+
+    .plan-rendered-body h2 { font-size: 1.15rem; }
+    .plan-rendered-body h3 { font-size: 1rem; }
+
+    .plan-rendered-body ul,
+    .plan-rendered-body ol {
+        padding-left: 1.4rem;
+        margin-bottom: .75rem;
+    }
+
+    .plan-rendered-body li { margin-bottom: .25rem; }
+
+    .plan-rendered-body code {
+        background: rgba(99, 179, 237, .1);
+        border: 1px solid rgba(99, 179, 237, .18);
+        border-radius: .25rem;
+        padding: .1em .35em;
+        font-size: .83em;
+    }
+
+    .plan-rendered-body pre code {
+        background: transparent;
+        border: none;
+        padding: 0;
+        font-size: .82rem;
+    }
+
+    .plan-rendered-body pre {
+        background: rgba(2, 6, 23, .6);
+        border: 1px solid rgba(99, 179, 237, .12);
+        border-radius: .375rem;
+        padding: .75rem 1rem;
+        overflow-x: auto;
+        margin-bottom: 1rem;
+    }
+
+    .plan-rendered-body strong { color: #f1f5f9; }
+
+    .plan-rendered-body hr {
+        border-color: var(--line);
+        margin: 1.5rem 0;
+    }
+
     .plan-document-aside {
         display: grid;
         gap: 1rem;
@@ -1129,8 +1187,8 @@
 
     .spine-dispatch-inner {
         display: flex;
-        align-items: center;
-        gap: .6rem;
+        flex-direction: column;
+        gap: .3rem;
         padding: .55rem 1rem;
         border-radius: 8px;
         background: linear-gradient(135deg, rgba(34, 211, 238, .08), rgba(139, 92, 246, .06), rgba(5, 9, 18, .6));
@@ -1138,6 +1196,19 @@
         border-left: 3px solid rgba(34, 211, 238, .45);
         margin: .25rem 0;
         box-shadow: 0 0 16px rgba(34, 211, 238, .06), inset 0 0 0 1px rgba(255, 255, 255, .02);
+    }
+
+    .spine-dispatch-header {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+    }
+
+    .spine-dispatch-row {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        padding-left: calc(22px + .6rem); /* align with text after avatar */
     }
 
     .spine-dispatch-avatar {
@@ -1575,6 +1646,19 @@
     }
 
     /* ── Output terminal ──────────────────────────────────── */
+    .plan-output-actions {
+        display: flex;
+        gap: .4rem;
+        padding: .4rem 0;
+    }
+
+    .btn-xs {
+        padding: .15rem .5rem;
+        font-size: .72rem;
+        line-height: 1.4;
+        border-radius: .25rem;
+    }
+
     .agent-output {
         flex: 1;
         font-size: .78rem;
@@ -2122,10 +2206,47 @@
     }
 
     .run-telemetry-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: .75rem;
-        margin-bottom: 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
+        margin-bottom: .75rem;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+    }
+
+    .run-telemetry-grid .stat-card {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: .45rem .75rem;
+        border: none !important;
+        border-right: 1px solid var(--line) !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .run-telemetry-grid .stat-card:last-child {
+        border-right: none !important;
+    }
+
+    .run-telemetry-grid .stat-label {
+        font-size: .62rem;
+        margin-bottom: .1rem;
+    }
+
+    .run-telemetry-grid .stat-card strong {
+        font-size: .85rem;
+        display: block;
+    }
+
+    .run-telemetry-grid .stat-card small {
+        font-size: .72rem;
     }
 
     .issue-brief {
