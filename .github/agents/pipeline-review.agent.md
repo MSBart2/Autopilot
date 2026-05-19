@@ -38,7 +38,7 @@ Given a PR number (or issue number to find the associated PR):
 
 1. **Find the PR** — if given an issue number, find the PR that references it
 2. **Post a "Review Started" comment** on the issue immediately
-3. **Read the PR diff** and all changed files
+3. **Read the PR diff** and all changed files. When running under the SDK harness, call `get_pipeline_context`, then `get_pr_details`, then `get_pr_diff_summary` before using shell or GitHub commands for diff discovery; use the typed summary as the authoritative changed-file map and only inspect specific files/hunks when the summary says they matter.
 4. **Perform multi-dimensional review** (delegating where appropriate) — post a brief issue comment after each dimension completes
 5. **Post review findings** as a PR review
 6. **Make pass/fail decision**

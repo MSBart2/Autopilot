@@ -39,6 +39,8 @@ When called by the `pipeline` controller after `implement` completes, you have a
 ### 1. Read the PR diff
 Understand exactly what changed: which files, what was added/removed, what the feature does.
 
+When running under the SDK harness, call `get_pipeline_context`, then `get_pr_details`, then `get_pr_diff_summary` before using shell or GitHub commands for diff discovery. Use the typed diff summary as the authoritative changed-file map, then inspect only the specific production/docs files needed for documentation updates.
+
 ### 2. Update all applicable documentation
 - **XML documentation comments** on any new or modified public APIs in production code
 - **`architecture.md`** (repo root) — if the change adds/removes services, middleware, controllers, dependencies, or alters the middleware pipeline order, update the relevant tables in `architecture.md`. This is the single source of truth for solution structure.

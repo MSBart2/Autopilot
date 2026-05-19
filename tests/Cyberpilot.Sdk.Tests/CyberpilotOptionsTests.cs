@@ -206,10 +206,12 @@ public sealed class CyberpilotOptionsTests
     }
 
     [Fact]
-    public void Parse_NoIssueAndNotCheckOnly_Throws()
+    public void Parse_NoIssueAndNotCheckOnly_AllowsConfigToSupplyIssueLater()
     {
-        Assert.Throws<ArgumentException>(() =>
-            CyberpilotOptions.Parse(["--approve-all", "--repo-root", RepoRoot]));
+        var options = CyberpilotOptions.Parse(["--approve-all", "--repo-root", RepoRoot]);
+
+        Assert.Equal(0, options.IssueNumber);
+        Assert.True(options.ApproveAll);
     }
 
     [Fact]

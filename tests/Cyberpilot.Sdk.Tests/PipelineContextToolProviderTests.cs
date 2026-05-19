@@ -121,9 +121,9 @@ public sealed class PipelineContextToolProviderTests
               "additions": 90,
               "deletions": 12,
               "files": [
-                { "path": "a.cs", "additions": 10, "deletions": 1 },
-                { "path": "b.cs", "additions": 20, "deletions": 2 },
-                { "path": "c.cs", "additions": 60, "deletions": 9 }
+                { "path": "web/Controllers/WeatherController.cs", "additions": 10, "deletions": 1, "status": "modified" },
+                { "path": "tests/Cyberpilot.Sdk.Tests/WeatherTests.cs", "additions": 20, "deletions": 2, "status": "added" },
+                { "path": "docs/weather.md", "additions": 60, "deletions": 9, "status": "modified" }
               ]
             }
             """;
@@ -136,11 +136,20 @@ public sealed class PipelineContextToolProviderTests
         Assert.Equal(3, response.Data.ChangedFiles);
         Assert.Equal(2, response.Data.Files.Count);
         Assert.True(response.Data.Truncated);
-        Assert.Equal("a.cs", response.Data.Files[0].Path);
+        Assert.Equal("web/Controllers/WeatherController.cs", response.Data.Files[0].Path);
+        Assert.Equal("modified", response.Data.Files[0].Status);
+        Assert.Equal("web", response.Data.Files[0].TopDirectory);
+        Assert.Equal(".cs", response.Data.Files[0].Extension);
+        Assert.Contains(response.Data.TopDirectories, group => group is { Name: "web", FileCount: 1, Additions: 10, Deletions: 1 });
+        Assert.Contains(response.Data.Extensions, group => group is { Name: ".cs", FileCount: 2, Additions: 30, Deletions: 3 });
+        Assert.Contains("production_code_changed", response.Data.Signals);
+        Assert.Contains("test_code_changed", response.Data.Signals);
+        Assert.Contains("documentation_changed", response.Data.Signals);
+        Assert.Contains("web_surface_changed", response.Data.Signals);
         Assert.NotNull(response.DetailedOutput);
         var artifact = Assert.Single(context.GetToolArtifacts("docs"));
         Assert.Equal("tool-output-get_pr_diff_summary", artifact.Name);
-        Assert.Contains("c.cs", artifact.Value);
+        Assert.Contains("docs/weather.md", artifact.Value);
     }
 
     [Fact]

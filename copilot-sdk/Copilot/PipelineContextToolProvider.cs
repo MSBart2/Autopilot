@@ -22,7 +22,7 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
             AIFunctionFactory.Create(
                 (int maxFiles, CancellationToken cancellationToken) => GetPullRequestDiffSummaryAsync(maxFiles, cancellationToken),
                 "get_pr_diff_summary",
-                "Returns a compact pull request diff summary and a reference to detailed persisted output."),
+                "Returns compact pull request diff stats, touched areas, review signals, and a reference to detailed persisted output."),
         ];
     }
 
@@ -101,7 +101,10 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
                 ReadInt(root, "additions"),
                 ReadInt(root, "deletions"),
                 files.Take(limit).ToArray(),
-                files.Length > limit);
+                files.Length > limit,
+                GroupBy(files, file => file.TopDirectory),
+                GroupBy(files, file => file.Extension),
+                BuildSignals(files));
             var reference = PersistToolOutput("get_pr_diff_summary", raw, "application/json");
             return PipelineToolResponse<PullRequestDiffSummaryToolResult>.Ok(result, reference);
         }
@@ -183,9 +186,99 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
                 continue;
             }
 
-            yield return new PullRequestFileSummary(path, ReadInt(file, "additions"), ReadInt(file, "deletions"));
+            yield return new PullRequestFileSummary(
+                path,
+                ReadInt(file, "additions"),
+                ReadInt(file, "deletions"),
+                ReadString(file, "status") ?? ReadString(file, "changeType"));
         }
     }
+
+    private static IReadOnlyList<PullRequestDiffGroup> GroupBy(
+        IReadOnlyList<PullRequestFileSummary> files,
+        Func<PullRequestFileSummary, string> keySelector)
+    {
+        return files
+            .GroupBy(keySelector, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new PullRequestDiffGroup(
+                group.Key,
+                group.Count(),
+                SumNullable(group.Select(file => file.Additions)),
+                SumNullable(group.Select(file => file.Deletions))))
+            .OrderByDescending(group => group.FileCount)
+            .ThenBy(group => group.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static int? SumNullable(IEnumerable<int?> values)
+    {
+        var total = 0;
+        var hasValue = false;
+        foreach (var value in values)
+        {
+            if (value is null)
+            {
+                continue;
+            }
+
+            total += value.Value;
+            hasValue = true;
+        }
+
+        return hasValue ? total : null;
+    }
+
+    private static IReadOnlyList<string> BuildSignals(IReadOnlyList<PullRequestFileSummary> files)
+    {
+        var paths = files.Select(file => file.Path).ToArray();
+        var signals = new List<string>();
+
+        AddSignal(signals, paths.Any(IsProductionCode), "production_code_changed");
+        AddSignal(signals, paths.Any(IsTestCode), "test_code_changed");
+        AddSignal(signals, paths.Any(IsDocumentation), "documentation_changed");
+        AddSignal(signals, paths.Any(IsWebSurface), "web_surface_changed");
+        AddSignal(signals, paths.Any(IsConfiguration), "configuration_changed");
+
+        return signals;
+    }
+
+    private static void AddSignal(List<string> signals, bool condition, string signal)
+    {
+        if (condition)
+        {
+            signals.Add(signal);
+        }
+    }
+
+    private static bool IsProductionCode(string path)
+        => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+           && !IsTestCode(path)
+           && !path.Contains("/Migrations/", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsTestCode(string path)
+        => path.StartsWith("tests/", StringComparison.OrdinalIgnoreCase)
+           || path.Contains(".Tests/", StringComparison.OrdinalIgnoreCase)
+           || path.EndsWith("Tests.cs", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsDocumentation(string path)
+        => path.StartsWith("docs/", StringComparison.OrdinalIgnoreCase)
+           || path.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsWebSurface(string path)
+        => path.StartsWith("web/Controllers/", StringComparison.OrdinalIgnoreCase)
+           || path.StartsWith("web/Models/", StringComparison.OrdinalIgnoreCase)
+           || path.StartsWith("web/Views/", StringComparison.OrdinalIgnoreCase)
+           || path.StartsWith("web/wwwroot/", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsConfiguration(string path)
+        => path.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+           || path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
+           || path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)
+           || path.EndsWith(".props", StringComparison.OrdinalIgnoreCase)
+           || path.EndsWith(".targets", StringComparison.OrdinalIgnoreCase)
+           || path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+           || path.Equals("Dockerfile", StringComparison.OrdinalIgnoreCase)
+           || path.Equals("docker-compose.yml", StringComparison.OrdinalIgnoreCase);
 }
 
 internal sealed record PipelineToolResponse<T>(bool Success, T? Data, PipelineToolError? Error, ToolOutputReference? DetailedOutput)
@@ -222,6 +315,30 @@ internal sealed record PullRequestDiffSummaryToolResult(
     int? Additions,
     int? Deletions,
     IReadOnlyList<PullRequestFileSummary> Files,
-    bool Truncated);
+    bool Truncated,
+    IReadOnlyList<PullRequestDiffGroup> TopDirectories,
+    IReadOnlyList<PullRequestDiffGroup> Extensions,
+    IReadOnlyList<string> Signals);
 
-internal sealed record PullRequestFileSummary(string Path, int? Additions, int? Deletions);
+internal sealed record PullRequestDiffGroup(string Name, int FileCount, int? Additions, int? Deletions);
+
+internal sealed record PullRequestFileSummary(string Path, int? Additions, int? Deletions, string? Status)
+{
+    public string TopDirectory
+    {
+        get
+        {
+            var separator = Path.IndexOf('/');
+            return separator > 0 ? Path[..separator] : "(root)";
+        }
+    }
+
+    public string Extension
+    {
+        get
+        {
+            var extension = System.IO.Path.GetExtension(Path);
+            return string.IsNullOrWhiteSpace(extension) ? "(none)" : extension.ToLowerInvariant();
+        }
+    }
+}

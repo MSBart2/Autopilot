@@ -224,10 +224,10 @@ Biggest per-stage wins: docs −75% input tokens; implement −50%; review −39
 
 ## Milestone 4: Deterministic workflow promotion
 
-- [ ] Identify repeated model-discovered workflows from stage logs.
-- [ ] Rank candidates by frequency, token cost, runtime cost, and implementation risk.
-- [ ] Promote the first deterministic workflow into code/tool/gate/script.
-- [ ] Add tests for promoted deterministic behavior.
+- [x] Identify repeated model-discovered workflows from stage logs.
+- [x] Rank candidates by frequency, token cost, runtime cost, and implementation risk.
+- [x] Promote the first deterministic workflow into code/tool/gate/script.
+- [x] Add tests for promoted deterministic behavior.
 - [ ] Record before/after metrics.
 
 ### Candidate workflows
@@ -237,7 +237,7 @@ Biggest per-stage wins: docs −75% input tokens; implement −50%; review −39
 | Find PR for known PR-first run | Harness | Structured context / route shortcut | Not started |
 | Compute next stage route | Harness | `compute_stage_route` gate/helper | Not started |
 | Fetch PR metadata | Tool | `get_pr_details` | Not started |
-| Fetch/summarize PR diff | Tool/cache | `get_pr_diff_summary` | Not started |
+| Fetch/summarize PR diff | Tool/cache | `get_pr_diff_summary` | **Promoted first:** typed file stats, directory/extension groups, and review signals. Review/docs prompts now prefer this tool before shell/GitHub diff discovery. |
 | Run known validation commands | Script/tool | `collect_validation_evidence` | Not started |
 | Render stage comments | Harness/tool | `render_stage_comment` | Not started |
 | Persist stage artifacts | Harness/tool | `record_stage_artifact` | Not started |
@@ -245,9 +245,9 @@ Biggest per-stage wins: docs −75% input tokens; implement −50%; review −39
 
 ### Success criteria
 
-- [ ] At least one repeated workflow no longer requires model-invented shell/API steps.
-- [ ] The promoted workflow emits typed results.
-- [ ] Tool/gate output is compact for the model and detailed enough for humans.
+- [x] At least one repeated workflow no longer requires model-invented shell/API steps.
+- [x] The promoted workflow emits typed results.
+- [x] Tool/gate output is compact for the model and detailed enough for humans.
 
 ## Milestone 5: Hook-based output shaping and safety
 
