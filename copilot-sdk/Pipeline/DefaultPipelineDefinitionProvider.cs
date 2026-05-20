@@ -12,12 +12,12 @@ internal static class DefaultPipelineDefinitionProvider
         new PipelineDefinitionVersion(DefinitionVersion),
         new PolicyProfile(PolicyProfileName, PolicyStrictness.Standard),
         [
-            Stage("TRIAGE", "triage", "triage.agent.md", "sdk/triage", ["triage-comment"]),
-            Stage("PLAN", "plan", "plan.agent.md", "sdk/planning", ["plan-comment", "branch"]),
-            Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", ["pull-request", "validation-summary"]),
-            Stage("REVIEW", "review", "pipeline-review.agent.md", "sdk/review", ["review-verdict"]),
-            Stage("DOCS", "docs", "docs.agent.md", "sdk/docs", ["documentation-summary"]),
-            Stage("LAND", "deliver", "deliver.agent.md", "sdk/delivering", ["landing-report"]),
+            Stage("TRIAGE", "triage", "triage.agent.md", "sdk/triage", ["triage-comment"], PreStageGates()),
+            Stage("PLAN", "plan", "plan.agent.md", "sdk/planning", ["plan-comment", "branch"], PreStageGates()),
+            Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", ["pull-request", "validation-summary"], PreStageGates()),
+            Stage("REVIEW", "review", "pipeline-review.agent.md", "sdk/review", ["review-verdict"], PreStageGates()),
+            Stage("DOCS", "docs", "docs.agent.md", "sdk/docs", ["documentation-summary"], PreStageGates()),
+            Stage("LAND", "deliver", "deliver.agent.md", "sdk/delivering", ["landing-report"], PreStageGates()),
         ],
         [
             new StageTransition("triage", "plan", "GO"),
@@ -33,9 +33,13 @@ internal static class DefaultPipelineDefinitionProvider
         string name,
         string promptFile,
         string label,
-        IReadOnlyList<string> requiredArtifacts)
+        IReadOnlyList<string> requiredArtifacts,
+        params GateDefinition[] gates)
         => new(
             new StageDefinition(displayName, name, promptFile, label),
             new StageContract(ContractVersion, requiredArtifacts),
-            []);
+            gates);
+
+    private static GateDefinition[] PreStageGates()
+        => [new GateDefinition(BuiltInPipelineGates.RepositoryClean, GateTiming.BeforeStage, true)];
 }

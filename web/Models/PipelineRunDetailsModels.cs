@@ -114,6 +114,13 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
     /// <summary>Gets whether this terminal run can be requeued from its current stage.</summary>
     public bool CanContinue => Run.Status is "Failed" or "Stopped" or "Paused" or "Cancelled" && !HasPendingApprovals && !HasRejectedApprovals;
 
+    /// <summary>Gets whether the run failed because the target repository working tree is dirty.</summary>
+    public bool IsRepositoryCleanlinessFailure => Run.Status == "Failed"
+        && (Run.Error?.Contains("repository has uncommitted changes", StringComparison.OrdinalIgnoreCase) == true
+            || (Dispatches ?? []).Any(dispatch => dispatch.Type.Equals(DispatchType.Gate, StringComparison.OrdinalIgnoreCase)
+                && dispatch.Message.Contains("repository-clean", StringComparison.OrdinalIgnoreCase)
+                && dispatch.Message.Contains("failed", StringComparison.OrdinalIgnoreCase)));
+
     /// <summary>Gets whether the run can be sent back to implementation after a blocked review.</summary>
     public bool CanReworkFromReview => !Run.IsRemote
         && Run.Status is "Failed" or "Stopped"

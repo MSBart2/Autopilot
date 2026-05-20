@@ -186,6 +186,10 @@ public sealed class CyberpilotPipelineService(
             {
                 await hubContext.Clients.Group(PipelineHub.GroupName(run.Id)).SendAsync("runPaused", new { run.Id, pausedAfterStage = result.FinalStage, nextStage = run.CurrentStage }, cancellationToken);
             }
+            else if (result.Status == "Failed")
+            {
+                await hubContext.Clients.Group(PipelineHub.GroupName(run.Id)).SendAsync("runFailed", new { run.Id, error = run.Error ?? "Cyberpilot pipeline failed." }, cancellationToken);
+            }
             else
             {
                 await hubContext.Clients.Group(PipelineHub.GroupName(run.Id)).SendAsync("runCompleted", new { run.Id, run.Status, result.ExitCode, run.SkipDeliver }, cancellationToken);
@@ -216,7 +220,7 @@ public sealed class CyberpilotPipelineService(
             }
 
             await dbContext.SaveChangesAsync(CancellationToken.None);
-            await hubContext.Clients.Group(PipelineHub.GroupName(run.Id)).SendAsync("runFailed", new { run.Id, error = ex.Message }, CancellationToken.None);
+            await hubContext.Clients.Group(PipelineHub.GroupName(run.Id)).SendAsync("runFailed", new { run.Id, error = run.Error }, CancellationToken.None);
         }
     }
 

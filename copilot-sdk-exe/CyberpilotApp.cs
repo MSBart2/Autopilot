@@ -62,7 +62,8 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             var promptBuilder = new PromptBuilder(runOptions.RepoRoot, runOptions.AgentPromptRoot ?? runOptions.RepoRoot, runOptions.IssueNumber, runtimePreferences: runOptions.RuntimePreferences);
             var stageRunner = new CopilotStageRunner(runOptions.RepoRoot, progressSink, error);
             var modelChecker = new CopilotModelAvailabilityChecker();
-            var runner = new SdkCyberpilotRunner(runOptions, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output, seededStageResults);
+            var cleanlinessChecker = new GitRepositoryCleanlinessChecker();
+            var runner = new SdkCyberpilotRunner(runOptions, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, cleanlinessChecker, modelChecker, progressSink, output, seededStageResults);
             var exitCode = await runner.RunAsync(cancellationToken);
             if (dbContext is not null && run is not null)
             {
@@ -149,7 +150,8 @@ public sealed class CyberpilotApp(TextWriter output, TextWriter error)
             var promptBuilder = new PromptBuilder(runOptions.RepoRoot, runOptions.AgentPromptRoot ?? runOptions.RepoRoot, runOptions.IssueNumber, runtimePreferences: runOptions.RuntimePreferences);
             var stageRunner = new CopilotStageRunner(runOptions.RepoRoot, progressSink, error);
             var modelChecker = new CopilotModelAvailabilityChecker();
-            var runner = new SdkCyberpilotRunner(runOptions, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output, seededStageResults);
+            var cleanlinessChecker = new GitRepositoryCleanlinessChecker();
+            var runner = new SdkCyberpilotRunner(runOptions, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, cleanlinessChecker, modelChecker, progressSink, output, seededStageResults);
             var exitCode = await runner.RunAsync(cancellationToken);
 
             if (dbContext is not null && run is not null)

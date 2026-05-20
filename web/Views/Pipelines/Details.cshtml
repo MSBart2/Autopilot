@@ -33,6 +33,8 @@
     var stopDiagnostic = Model.StopDiagnostic;
     var canContinue = Model.CanContinue;
     var canReworkFromReview = Model.CanReworkFromReview;
+    var isRepositoryCleanlinessFailure = Model.IsRepositoryCleanlinessFailure;
+    var canShowStageRecovery = canContinue && !isRepositoryCleanlinessFailure;
     var maxStageRetries = Model.MaxStageRetries;
     var bootstrapJson = JsonSerializer.Serialize(new
     {
@@ -43,6 +45,7 @@
         currentRunStatus = Model.Run.Status,
         runStartUtc = DateTime.SpecifyKind(Model.Run.CreatedAt, DateTimeKind.Utc).ToString("o"),
         canReworkFromReview,
+        error = Model.Run.Error,
         logs = Model.Logs.Select(l => new
         {
             stage = l.StageName,
@@ -114,81 +117,81 @@
     <div class="run-bar-actions" id="run-bar-actions">
         <a href="@ghIssueUrl" target="_blank" rel="noopener" class="btn btn-sm btn-outline-info">Issue
             #@Model.Run.IssueNumber ↗</a>
-            @if (!string.IsNullOrWhiteSpace(Model.Run.PrUrl))
+        @if (!string.IsNullOrWhiteSpace(Model.Run.PrUrl))
+        {
+            <a href="@Model.Run.PrUrl" class="btn btn-sm btn-primary" target="_blank" rel="noopener" id="pr-link-live">View
+                PR</a>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.Run.PrUrl) && isAwaitingCopilot)
+        {
+            <form asp-action="ResumeReview" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-success"
+                        title="Copilot agent working — resume when PR is ready">▶ Resume Review</button>
+            </form>
+        }
+        @if (!isActive && !isAwaitingCopilot && canContinue)
+        {
+            @if (canReworkFromReview)
             {
-                <a href="@Model.Run.PrUrl" class="btn btn-sm btn-primary" target="_blank" rel="noopener" id="pr-link-live">View
-                    PR</a>
-                }
-                @if (isAwaitingCopilot)
-                {
-                    <form asp-action="ResumeReview" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <button type="submit" class="btn btn-sm btn-success"
-                                title="Copilot agent working — resume when PR is ready">▶ Resume Review</button>
-                    </form>
-                }
-                @if (!isActive && !isAwaitingCopilot && canContinue)
-                {
-                    @if (canReworkFromReview)
-                    {
-                        <form asp-action="ReworkFromReview" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-sm btn-success"
-                                    title="Send review findings back to implementation on the existing PR branch">
-                                Rework from Review
-                            </button>
-                        </form>
-                    }
-                    <form asp-action="Continue" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <button type="submit" class="btn btn-sm btn-primary">
-                            @(Model.Run.Status == "Paused" ? "▶ Resume" : canReworkFromReview ? "Retry Review" : "Continue")
-                        </button>
-                    </form>
-                }
-                @if (!isActive && !isDelivered && !Model.Run.IsRemote)
-                {
-                    <form asp-action="ResetMission" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <button type="submit" class="btn btn-sm btn-outline-danger">Reset</button>
-                    </form>
-                }
-                @if (!isActive && !isDelivered && !Model.Run.IsRemote && !Model.Run.BenchmarkResetAt.HasValue)
-                {
-                    <form asp-action="BenchmarkReset" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Clean up remote state (PR, branch, comments) while keeping run metrics in the database.">⚗ Benchmark Reset</button>
-                    </form>
-                }
-                @if (Model.Run.BenchmarkResetAt.HasValue)
-                {
-                    <span class="badge text-bg-secondary" title="Remote state was cleaned for re-run at @Model.Run.BenchmarkResetAt.Value.ToString("u")">⚗ Benchmark Reset</span>
-                }
-                @if (!isActive && !isDelivered && !Model.Run.IsRemote && canContinue)
-                {
-                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
-                            data-bs-target="#resume-stage-panel" aria-expanded="false" aria-controls="resume-stage-panel">
-                        ↩ Resume From Stage
+                <form asp-action="ReworkFromReview" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-sm btn-success"
+                            title="Send review findings back to implementation on the existing PR branch">
+                        Rework from Review
                     </button>
-                }
-                @if (isActive)
-                {
-                    <span id="cancel-section" class="d-inline-flex gap-1">
-                        <form asp-action="Pause" asp-route-id="@Model.Run.Id" method="post" class="d-inline" id="pause-form"
-                              style="@(Model.Run.Status == "Pausing" ? "display:none" : "")">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-sm btn-outline-warning" id="pause-btn">⏸ Pause</button>
-                        </form>
-                        <form asp-action="Cancel" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
-                        </form>
-                    </span>
-                }
-            </div>
+                </form>
+            }
+            <form asp-action="Continue" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-primary">
+                    @(Model.Run.Status == "Paused" ? "▶ Resume" : canReworkFromReview ? "Retry Review" : "Continue")
+                </button>
+            </form>
+        }
+        @if (!isActive && !isDelivered && !Model.Run.IsRemote)
+        {
+            <form asp-action="ResetMission" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-outline-danger">Reset</button>
+            </form>
+        }
+        @if (!isRepositoryCleanlinessFailure && !isActive && !isDelivered && !Model.Run.IsRemote && !Model.Run.BenchmarkResetAt.HasValue)
+        {
+            <form asp-action="BenchmarkReset" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-outline-warning" title="Clean up remote state (PR, branch, comments) while keeping run metrics in the database.">⚗ Benchmark Reset</button>
+            </form>
+        }
+        @if (!isRepositoryCleanlinessFailure && Model.Run.BenchmarkResetAt.HasValue)
+        {
+            <span class="badge text-bg-secondary" title="Remote state was cleaned for re-run at @Model.Run.BenchmarkResetAt.Value.ToString("u")">⚗ Benchmark Reset</span>
+        }
+        @if (!isActive && !isDelivered && !Model.Run.IsRemote && canShowStageRecovery)
+        {
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#resume-stage-panel" aria-expanded="false" aria-controls="resume-stage-panel">
+                ↩ Resume From Stage
+            </button>
+        }
+        @if (isActive)
+        {
+            <span id="cancel-section" class="d-inline-flex gap-1">
+                <form asp-action="Pause" asp-route-id="@Model.Run.Id" method="post" class="d-inline" id="pause-form"
+                      style="@(Model.Run.Status == "Pausing" ? "display:none" : "")">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-sm btn-outline-warning" id="pause-btn">⏸ Pause</button>
+                </form>
+                <form asp-action="Cancel" asp-route-id="@Model.Run.Id" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                </form>
+            </span>
+        }
+    </div>
         </header>
 
-        @if (!isActive && !isDelivered && !Model.Run.IsRemote && canContinue)
+        @if (!isActive && !isDelivered && !Model.Run.IsRemote && canShowStageRecovery)
         {
             <div class="collapse" id="resume-stage-panel">
                 <div class="resume-stage-panel mb-3">

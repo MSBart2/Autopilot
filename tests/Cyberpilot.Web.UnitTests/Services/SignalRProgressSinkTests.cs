@@ -161,6 +161,13 @@ public class SignalRProgressSinkTests : IDisposable
 
         var log = _dbContext.PipelineStageLogs.First();
         Assert.Contains("[info] Test message", log.Output);
+
+        _groupClient.Verify(client => client.SendCoreAsync(
+            "message",
+            It.Is<object?[]>(arguments =>
+                arguments.Length == 1
+                && (string?)arguments[0]!.GetType().GetProperty("stage")!.GetValue(arguments[0]) == "triage"),
+            It.IsAny<CancellationToken>()));
     }
 
     [Fact]
@@ -175,6 +182,13 @@ public class SignalRProgressSinkTests : IDisposable
 
         var log = _dbContext.PipelineStageLogs.First();
         Assert.Contains("part1part2", log.Output);
+
+        _groupClient.Verify(client => client.SendCoreAsync(
+            "streamDelta",
+            It.Is<object?[]>(arguments =>
+                arguments.Length == 1
+                && (string?)arguments[0]!.GetType().GetProperty("stage")!.GetValue(arguments[0]) == "plan"),
+            It.IsAny<CancellationToken>()), Times.AtLeastOnce);
     }
 
     [Fact]

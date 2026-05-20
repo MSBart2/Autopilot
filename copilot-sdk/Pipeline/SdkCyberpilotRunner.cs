@@ -12,6 +12,7 @@ internal sealed class SdkCyberpilotRunner(
     IBranchProvisioner branchProvisioner,
     IPromptBuilder promptBuilder,
     IStageRunner stageRunner,
+    IRepositoryCleanlinessChecker cleanlinessChecker,
     IModelAvailabilityChecker modelChecker,
     ICyberpilotProgressSink progressSink,
     TextWriter output,
@@ -101,7 +102,7 @@ internal sealed class SdkCyberpilotRunner(
         progressSink.OnDispatch(DispatchType.Preflight, $"Labels ready — launching pipeline for issue #{options.IssueNumber}");
 
         var deliveryCoordinator = new PipelineDeliveryCoordinator(pipelineContext, new GitHubCli(options.RepoRoot, options.Repository), progressSink, console);
-        var engine = new PipelineEngine(pipelineContext, labels, branchCoordinator, stageExecutor, new PipelineGateRunner(BuiltInPipelineGates.Create(modelChecker, labels, issueClient)), deliveryCoordinator, progressSink, console);
+        var engine = new PipelineEngine(pipelineContext, labels, branchCoordinator, stageExecutor, new PipelineGateRunner(BuiltInPipelineGates.Create(cleanlinessChecker, modelChecker, labels, issueClient)), deliveryCoordinator, progressSink, console);
         return await engine.ExecuteAsync(cancellationToken);
     }
 

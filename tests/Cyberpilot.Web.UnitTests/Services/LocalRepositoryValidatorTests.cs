@@ -86,13 +86,10 @@ public sealed class LocalRepositoryValidatorTests
 
         var fullPath = Path.GetFullPath(tempDir.Path);
         Assert.Equal(fullPath, result);
-        Assert.Equal(2, fakeGit.Calls.Count);
+        Assert.Single(fakeGit.Calls);
         Assert.Equal(fullPath, fakeGit.Calls[0].WorkingDirectory);
         Assert.Equal(["rev-parse", "--is-inside-work-tree"], fakeGit.Calls[0].Args);
         Assert.Null(fakeGit.Calls[0].GitHubToken);
-        Assert.Equal(fullPath, fakeGit.Calls[1].WorkingDirectory);
-        Assert.Equal(["status", "--porcelain"], fakeGit.Calls[1].Args);
-        Assert.Null(fakeGit.Calls[1].GitHubToken);
     }
 
     [Fact]
@@ -115,14 +112,12 @@ public sealed class LocalRepositoryValidatorTests
 
         var fullRepoRoot = Path.GetFullPath(repoRoot);
         Assert.Equal(fullRepoRoot, result);
-        Assert.Equal(3, fakeGit.Calls.Count);
+        Assert.Equal(2, fakeGit.Calls.Count);
         Assert.Equal(Path.GetFullPath(tempDir.Path), fakeGit.Calls[0].WorkingDirectory);
         Assert.Equal(["clone", "https://github.com/owner/repo.git", fullRepoRoot], fakeGit.Calls[0].Args);
         Assert.Equal("token-value", fakeGit.Calls[0].GitHubToken);
         Assert.Equal(fullRepoRoot, fakeGit.Calls[1].WorkingDirectory);
         Assert.Equal(["rev-parse", "--is-inside-work-tree"], fakeGit.Calls[1].Args);
-        Assert.Equal(fullRepoRoot, fakeGit.Calls[2].WorkingDirectory);
-        Assert.Equal(["status", "--porcelain"], fakeGit.Calls[2].Args);
     }
 
     [Fact]

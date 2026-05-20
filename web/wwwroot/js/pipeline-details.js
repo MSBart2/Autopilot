@@ -52,6 +52,7 @@
 
     const STATE_NOTES = {
         done: stage => (COMPLETION_TEXT[stage] ?? 'Completed') + ' — cleared for the next stage.',
+        duplicate: 'Duplicate located — work stopped because this issue is already covered.',
         stopped: 'Stopped intentionally. This agent needs clearer input before continuing.',
         failed: 'Failed during execution. Review the output for the blocking error.',
         skipped: 'Skipped by pipeline rules or prior stage outcome.',
@@ -133,12 +134,7 @@
             <div class="agent-tagline">"${a.tagline}"</div>
                         ${retryReason ? `<div class="agent-retry-reason"><span class="agent-retry-reason-label">Retry reason</span><span>${escapeHtml(retryReason)}</span></div>` : ''}
             <div class="agent-state-note" aria-live="polite"></div>
-                        ${STAGE_DOCUMENTS[stage]
-                            ? `<div class="plan-output-actions">
-                                 <a href="/Pipelines/${runId}/${STAGE_DOCUMENTS[stage]}" class="btn btn-xs btn-outline-info">View ${STAGE_DOCUMENTS[stage]}</a>
-                                 </div>
-                                 <div class="agent-output" style="display:none"></div>`
-                            : `<div class="agent-output"></div>`}
+                        <div class="agent-output"></div>
           </div>`;
 
         return card;
@@ -569,7 +565,7 @@
 
     // ── Append text to a card's output box ────────────────────────────
     function appendOutput(stage, text) {
-        const card = getActiveCard(stage);
+        const card = getActiveCard(stage) ?? ensureCard(stage);
         const out = card?.querySelector('.agent-output');
         if (!out) return;
         if (cursorEl?.parentNode === out) out.removeChild(cursorEl);
@@ -583,6 +579,7 @@
         renderOutput(out);
         out.appendChild(cursorEl);
         out.scrollTop = out.scrollHeight;
+        currentStage = stage;
         updateRunningNote(stage);
     }
 
@@ -623,10 +620,14 @@
         if (durEl) durEl.textContent = '';
         const noteEl = card.querySelector('.agent-state-note');
         if (noteEl) {
-            if (cls === 'state-stopped') noteEl.textContent = STATE_NOTES.stopped;
+            if (statusLower === 'duplicate') noteEl.textContent = STATE_NOTES.duplicate;
+            else if (cls === 'state-stopped') noteEl.textContent = STATE_NOTES.stopped;
             else if (cls === 'state-failed') noteEl.textContent = STATE_NOTES.failed;
             else if (cls === 'state-skipped') noteEl.textContent = STATE_NOTES.skipped;
             else noteEl.textContent = typeof STATE_NOTES.done === 'function' ? STATE_NOTES.done(stage) : STATE_NOTES.done;
+        }
+        if (['go', 'duplicate', 'stop'].includes(statusLower)) {
+            addStageDocumentLink(card, stage);
         }
         if (tokenData && hasMetricData(tokenData)) {
             const tagline = card.querySelector('.agent-tagline');
@@ -680,6 +681,18 @@
             }
         }
         removeCursor();
+    }
+
+    function addStageDocumentLink(card, stage) {
+        const documentName = STAGE_DOCUMENTS[stage];
+        if (!documentName || card.querySelector('.plan-output-actions')) return;
+        const content = card.querySelector('.agent-content');
+        const output = card.querySelector('.agent-output');
+        if (!content || !output) return;
+        const actions = document.createElement('div');
+        actions.className = 'plan-output-actions';
+        actions.innerHTML = `<a href="/Pipelines/${runId}/${documentName}" class="btn btn-xs btn-outline-info">View ${escapeHtml(documentName)}</a>`;
+        content.insertBefore(actions, output);
     }
 
     function hasMetricData(tokenData) {
@@ -1031,6 +1044,7 @@
     function injectPostRunButtons() {
         const bar = document.getElementById('run-bar-actions');
         if (!bar || document.getElementById('post-run-buttons')) return;
+        if (bar.querySelector('form[action$="/Continue"], form[action$="/ResetMission"]')) return;
         const currentStatus = statusEl?.textContent?.trim() ?? '';
         if (!['Paused', 'Failed', 'Stopped', 'Cancelled'].includes(currentStatus)) return;
         const isPaused = currentStatus === 'Paused';
@@ -1054,6 +1068,23 @@
                 <button type="submit" class="btn btn-sm btn-outline-danger">Reset</button>
             </form>`}`;
         bar.appendChild(wrapper);
+    }
+
+    // ── Initial error state (for failures that occur before SignalR connects) ──────────────────
+    if (bootstrap.currentRunStatus === 'Failed' && bootstrap.error) {
+        // The run failed before the client established SignalR connection.
+        // Apply the failure state immediately from the persisted error.
+        applyRunStatus('Failed');
+        if (badgeEl) badgeEl.className = 'badge fs-6 ' + (STATUS_CLASSES['Failed'] ?? 'text-bg-secondary');
+        if (statusEl) statusEl.textContent = 'Failed';
+        if (spinnerEl) spinnerEl.remove();
+        cancelEl?.remove();
+        stopTimer();
+        removeCursor();
+        clearInterval(elapsedTimer);
+        injectPostRunButtons();
+        // Display halt banner with the error
+        checkForHaltBanner('run-failed', bootstrap.error);
     }
 
     // ── SignalR live updates ───────────────────────────────────────────
@@ -1096,11 +1127,13 @@
         });
 
         conn.on('streamDelta', e => {
-            if (currentStage) appendOutput(currentStage, e.content);
+            const stage = e.stage || currentStage;
+            if (stage) appendOutput(stage, e.content);
         });
 
         conn.on('message', e => {
-            if (currentStage) appendOutput(currentStage, `[${e.level}] ${e.message}\n`);
+            const stage = e.stage || currentStage;
+            if (stage) appendOutput(stage, `[${e.level}] ${e.message}\n`);
         });
 
         conn.on('stageCompleted', e => {
@@ -1153,6 +1186,10 @@
                 appendOutput(currentStage, `\n! ${e.error}\n`);
                 finalizeCard(currentStage, 'failed', timerStart ? Math.round((Date.now() - timerStart) / 1000) : 0);
                 updateStation(currentStage, 'is-failed', 'failed');
+            } else if (e.error) {
+                // No current stage (failure before any stage started), but we have an error message.
+                // Display it in a visible banner or alert area.
+                checkForHaltBanner('run-failed', e.error);
             }
             finalizeRun('Failed');
             injectPostRunButtons();

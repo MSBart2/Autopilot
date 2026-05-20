@@ -1,0 +1,35 @@
+Test run for C:\Users\rdpuser\Source\Cyberpilot\tests\Cyberpilot.Web.PlaywrightTests\bin\Release\net10.0\Cyberpilot.Web.PlaywrightTests.dll (.NETCoreApp,Version=v10.0)
+Test run for C:\Users\rdpuser\Source\Cyberpilot\tests\Cyberpilot.Sdk.Tests\bin\Release\net10.0\Cyberpilot.Sdk.Tests.dll (.NETCoreApp,Version=v10.0)
+Test run for C:\Users\rdpuser\Source\Cyberpilot\tests\Cyberpilot.Web.IntegrationTests\bin\Release\net10.0\Cyberpilot.Web.IntegrationTests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified pattern.
+Test run for C:\Users\rdpuser\Source\Cyberpilot\tests\Cyberpilot.Web.UnitTests\bin\Release\net10.0\Cyberpilot.Web.UnitTests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+  Skipped HomePage_LoadsAndDisplaysWelcomeHeading [12 ms]
+
+Skipped! - Failed:     0, Passed:     0, Skipped:     1, Total:     1, Duration: 12 ms - Cyberpilot.Web.PlaywrightTests.dll (net10.0)
+
+Passed!  - Failed:     0, Passed:     4, Skipped:     0, Total:     4, Duration: 845 ms - Cyberpilot.Web.IntegrationTests.dll (net10.0)
+
+Passed!  - Failed:     0, Passed:   339, Skipped:     0, Total:   339, Duration: 1 s - Cyberpilot.Sdk.Tests.dll (net10.0)
+
+Passed!  - Failed:     0, Passed:   190, Skipped:     0, Total:   190, Duration: 2 s - Cyberpilot.Web.UnitTests.dll (net10.0)
+
+Calculating coverage result...
+  Generating report 'C:\Users\rdpuser\Source\Cyberpilot\tests\Cyberpilot.Web.UnitTests\coverage.json'
+
++----------------+--------+--------+--------+
+| Module         | Line   | Branch | Method |
++----------------+--------+--------+--------+
+| Cyberpilot.Web | 78.31% | 46.66% | 66.66% |
++----------------+--------+--------+--------+
+
++---------+--------+--------+--------+
+|         | Line   | Branch | Method |
++---------+--------+--------+--------+
+| Total   | 78.31% | 46.66% | 66.66% |
++---------+--------+--------+--------+
+| Average | 78.31% | 46.66% | 66.66% |
++---------+--------+--------+--------+
+

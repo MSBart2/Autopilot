@@ -621,6 +621,43 @@ public class PipelineRunDetailsViewModelTests
     }
 
     [Fact]
+    public void IsRepositoryCleanlinessFailure_WithDirtyRepositoryError_ReturnsTrue()
+    {
+        var run = new PipelineRun
+        {
+            IssueNumber = 1,
+            Repository = "r",
+            Model = "m",
+            Status = "Failed",
+            Error = "Blocking gate 'repository-clean' failed for stage 'triage': Repository has uncommitted changes.",
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, []);
+
+        Assert.True(vm.IsRepositoryCleanlinessFailure);
+        Assert.True(vm.CanContinue);
+    }
+
+    [Fact]
+    public void IsRepositoryCleanlinessFailure_WithRepositoryCleanGateDispatch_ReturnsTrue()
+    {
+        var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m", Status = "Failed" };
+        var dispatches = new[]
+        {
+            new PipelineDispatch
+            {
+                RunId = run.Id,
+                Type = DispatchType.Gate,
+                Message = "Gate 'repository-clean' failed for stage 'triage': Dirty files: ?? smoke-test.html",
+            },
+        };
+
+        var vm = new PipelineRunDetailsViewModel(run, [], [], Dispatches: dispatches);
+
+        Assert.True(vm.IsRepositoryCleanlinessFailure);
+    }
+
+    [Fact]
     public void Constructor_WithoutLabels_DefaultsToEmpty()
     {
         var run = new PipelineRun { IssueNumber = 1, Repository = "r", Model = "m" };

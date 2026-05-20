@@ -222,6 +222,35 @@ public sealed class CyberpilotPipelineServiceTests : IDisposable
         await service.StopAsync(CancellationToken.None);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_FailedRunnerResult_PersistsError()
+    {
+        var queue = new CyberpilotRunQueue();
+        var runner = new BlockingRunner(expectedConcurrentStarts: 1)
+        {
+            Result = new CyberpilotRunResult(20, "triage", "Failed", null, null, "Repository has uncommitted changes.", []),
+        };
+        using var provider = CreateProvider(queue, runner);
+        await SeedRunAsync(provider, "run-1", "owner/repo-one");
+        var service = CreateService(provider, queue);
+
+        await service.StartAsync(CancellationToken.None);
+        await queue.EnqueueAsync(CreateRequest("run-1", "owner/repo-one", "C:\\Repos\\One"));
+        await runner.WaitForExpectedStartsAsync();
+        runner.ReleaseAll();
+
+        await WaitForRunStatusAsync(provider, "run-1", "Failed");
+
+        using (var scope = provider.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<CyberpilotDbContext>();
+            var run = await dbContext.PipelineRuns.SingleAsync(item => item.Id == "run-1");
+            Assert.Equal("Repository has uncommitted changes.", run.Error);
+        }
+
+        await service.StopAsync(CancellationToken.None);
+    }
+
     private static CyberpilotPipelineService CreateService(ServiceProvider provider, ICyberpilotRunQueue queue)
     {
         var hubContext = provider.GetRequiredService<IHubContext<PipelineHub>>();

@@ -54,24 +54,7 @@ public sealed class LocalRepositoryValidator : ILocalRepositoryValidator
 
         EnsureWritable(normalizedRepoRoot);
         await RunGitAsync(normalizedRepoRoot, ["rev-parse", "--is-inside-work-tree"], null, cancellationToken, "Configured repository root is not a git work tree");
-        await EnsureCleanWorkingTreeAsync(normalizedRepoRoot, cancellationToken);
         return normalizedRepoRoot;
-    }
-
-    private async Task EnsureCleanWorkingTreeAsync(string repoRoot, CancellationToken cancellationToken)
-    {
-        var result = await gitCommandRunner.RunAsync(repoRoot, ["status", "--porcelain"], null, cancellationToken);
-        if (result.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"Failed to check working tree status ({repoRoot}). git status exited with code {result.ExitCode}: {result.StandardError}");
-        }
-
-        var dirty = result.StandardOutput.Trim();
-        if (!string.IsNullOrEmpty(dirty))
-        {
-            throw new InvalidOperationException(
-                $"Repository at {repoRoot} has uncommitted changes. Cyberpilot requires a clean working tree before running a pipeline.\n\nDirty files:\n{dirty}");
-        }
     }
 
     private async Task CloneAsync(string repoRoot, string repository, string? githubToken, CancellationToken cancellationToken)

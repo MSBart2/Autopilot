@@ -64,6 +64,17 @@ public sealed class PipelineGateRunnerTests
         Assert.Equal(["Register a deterministic evaluator for gate 'missing-gate'."], evaluation.Result.RequiredActions);
     }
 
+    [Fact]
+    public void DefaultPipelineDefinition_EveryStageHasRepositoryCleanBeforeStageGate()
+    {
+        foreach (var stage in DefaultPipelineDefinitionProvider.Definition.Stages)
+        {
+            var gate = Assert.Single(stage.Gates, item => item.Name == BuiltInPipelineGates.RepositoryClean);
+            Assert.Equal(GateTiming.BeforeStage, gate.Timing);
+            Assert.True(gate.IsBlocking);
+        }
+    }
+
     private static PipelineExecutionContext Context()
     {
         var options = new CyberpilotOptions(1, Directory.GetCurrentDirectory(), "owner/repo", "test-model", false, false, false, false, TimeSpan.FromMinutes(10), true, false, null, null, false);

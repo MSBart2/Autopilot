@@ -173,14 +173,14 @@ public sealed class SignalRProgressSink(
     {
         logger.LogInformation("Cyberpilot {Level}: {Message}", level, message);
         AppendLine($"[{level}] {message}");
-        hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("message", new { runId, level, message }).GetAwaiter().GetResult();
+        hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("message", new { runId, stage = currentLog?.StageName, level, message }).GetAwaiter().GetResult();
     }
 
     /// <inheritdoc />
     public void OnStreamDelta(string content)
     {
         buffer.Append(content);
-        hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("streamDelta", new { runId, content }).GetAwaiter().GetResult();
+        hubContext.Clients.Group(PipelineHub.GroupName(runId)).SendAsync("streamDelta", new { runId, stage = currentLog?.StageName, content }).GetAwaiter().GetResult();
         if (buffer.Length > 4096 || content.Contains('\n', StringComparison.Ordinal))
         {
             FlushBufferAsync().GetAwaiter().GetResult();

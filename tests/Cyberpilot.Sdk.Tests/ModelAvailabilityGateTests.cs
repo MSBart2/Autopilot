@@ -37,7 +37,8 @@ public sealed class ModelAvailabilityGateTests
     [Fact]
     public void BuiltInPipelineGates_Create_RegistersModelAvailabilityGate()
     {
-        var gates = BuiltInPipelineGates.Create(new RecordingModelChecker(ModelAvailabilityResult.Available), new RecordingLabelService(), new RecordingIssueClient());
+        var cleanlinessChecker = new RecordingRepositoryCleanlinessChecker();
+        var gates = BuiltInPipelineGates.Create(cleanlinessChecker, new RecordingModelChecker(ModelAvailabilityResult.Available), new RecordingLabelService(), new RecordingIssueClient());
 
         Assert.True(gates.ContainsKey(BuiltInPipelineGates.ModelAvailable));
         Assert.IsType<ModelAvailabilityGate>(gates[BuiltInPipelineGates.ModelAvailable]);
@@ -97,5 +98,15 @@ public sealed class ModelAvailabilityGateTests
         public Task CloseIssueAsync(int issueNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ClosePullRequestAsync(int pullRequestNumber, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CreateOrUpdateLabelAsync(string label, string color, string description, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class RecordingRepositoryCleanlinessChecker : Cyberpilot.Git.IRepositoryCleanlinessChecker
+    {
+        private readonly Cyberpilot.Git.RepositoryCleanlinessResult result = Cyberpilot.Git.RepositoryCleanlinessResult.Clean;
+
+        public Task<Cyberpilot.Git.RepositoryCleanlinessResult> CheckAsync(string repoRoot, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(result);
+        }
     }
 }

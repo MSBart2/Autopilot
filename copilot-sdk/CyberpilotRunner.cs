@@ -49,6 +49,7 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
         var promptBuilder = new PromptBuilder(request.RepoRoot, request.AgentPromptRoot ?? request.RepoRoot, request.IssueNumber, request.TargetRepositoryProfileSummary, request.RuntimePreferences);
         var stageRunner = new CopilotStageRunner(request.RepoRoot, progressSink, TextWriter.Null);
         var modelChecker = new CopilotModelAvailabilityChecker();
+        var cleanlinessChecker = new GitRepositoryCleanlinessChecker();
         var options = new CyberpilotOptions(
             request.IssueNumber,
             request.RepoRoot,
@@ -79,7 +80,7 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
             RuntimePreferences: request.RuntimePreferences,
             RunId: request.RunId);
 
-        var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, modelChecker, progressSink, output);
+        var runner = new SdkCyberpilotRunner(options, issueClient, labels, branchProvisioner, promptBuilder, stageRunner, cleanlinessChecker, modelChecker, progressSink, output);
         var exitCode = await runner.RunAsync(cancellationToken);
         var status = exitCode switch
         {
@@ -88,7 +89,20 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
             3 => "Paused",
             _ => "Failed",
         };
-        return CyberpilotRunResult.FromExitCode(exitCode, runner.FinalStage, status, runner.BranchName, runner.PrUrl, stageResults: runner.StageResults);
+        var stageResults = runner.StageResults;
+        var error = status == "Failed" ? ExtractFailureError(stageResults) : null;
+        return CyberpilotRunResult.FromExitCode(exitCode, runner.FinalStage, status, runner.BranchName, runner.PrUrl, error, stageResults);
+    }
+
+    private static string? ExtractFailureError(IReadOnlyList<StageResult> stageResults)
+    {
+        var failedResult = stageResults.LastOrDefault(result => !result.IsValid || !result.Status.Equals(StageStatus.Go, StringComparison.OrdinalIgnoreCase));
+        if (failedResult is null)
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(failedResult.Error) ? failedResult.Status : failedResult.Error;
     }
 
     private IGitHubIssueClient CreateIssueClient(CyberpilotRunRequest request)
