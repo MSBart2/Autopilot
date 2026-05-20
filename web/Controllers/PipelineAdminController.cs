@@ -99,6 +99,7 @@ public sealed class PipelineAdminController(IPipelineDefinitionAdminStore store,
     {
         if (!ModelState.IsValid)
         {
+            model.WizardActiveStep = ComputeWizardStep(ModelState);
             return View("Pipeline", await PopulatePoliciesAsync(model, cancellationToken));
         }
 
@@ -112,6 +113,7 @@ public sealed class PipelineAdminController(IPipelineDefinitionAdminStore store,
         {
             logger.LogWarning(ex, "Pipeline definition save failed for {PipelineName}.", model.Name);
             ModelState.AddModelError(string.Empty, ex.Message);
+            model.WizardActiveStep = ComputeWizardStep(ModelState);
             return View("Pipeline", await PopulatePoliciesAsync(model, cancellationToken));
         }
     }
@@ -208,5 +210,59 @@ public sealed class PipelineAdminController(IPipelineDefinitionAdminStore store,
             .DefaultIfEmpty(new PipelineAdminPolicySummaryViewModel("standard", "Standard", "Balanced default gates and diagnostics"))
             .ToArray();
         return model;
+    }
+
+    /// <summary>
+    /// Returns the lowest 1-based wizard step number that has a ModelState validation error.
+    /// Step 1 = Basics (Name, Version, PolicyProfileName).
+    /// Step 2 = Stages (Stages[*] non-gate fields).
+    /// Step 3 = Gates (Stages[*].GatesText).
+    /// Step 4 = Transitions (TransitionsText).
+    /// Falls back to step 1 for model-level or unrecognised keys.
+    /// </summary>
+    private static int ComputeWizardStep(Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary modelState)
+    {
+        static bool HasError(Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary ms, string key)
+            => ms.ContainsKey(key) && ms[key]!.Errors.Count > 0;
+
+        static bool HasErrorPrefix(Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary ms, string prefix)
+            => ms.Keys.Any(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+               && ms[k]!.Errors.Count > 0);
+
+        // Step 1 — Basics
+        if (HasError(modelState, nameof(Models.PipelineAdminDefinitionEditViewModel.Name))
+            || HasError(modelState, nameof(Models.PipelineAdminDefinitionEditViewModel.Version))
+            || HasError(modelState, nameof(Models.PipelineAdminDefinitionEditViewModel.PolicyProfileName)))
+        {
+            return 1;
+        }
+
+        // Step 2 — Stages (non-gate fields)
+        var stageKeys = modelState.Keys
+            .Where(k => k.StartsWith("Stages[", StringComparison.OrdinalIgnoreCase)
+                        && !k.EndsWith(".GatesText", StringComparison.OrdinalIgnoreCase)
+                        && modelState[k]!.Errors.Count > 0)
+            .ToList();
+        if (stageKeys.Count > 0)
+        {
+            return 2;
+        }
+
+        // Step 3 — Gates
+        if (HasErrorPrefix(modelState, "Stages[") &&
+            modelState.Keys.Any(k => k.EndsWith(".GatesText", StringComparison.OrdinalIgnoreCase)
+                                     && modelState[k]!.Errors.Count > 0))
+        {
+            return 3;
+        }
+
+        // Step 4 — Transitions
+        if (HasError(modelState, nameof(Models.PipelineAdminDefinitionEditViewModel.TransitionsText)))
+        {
+            return 4;
+        }
+
+        // Default: go back to basics (e.g., model-level errors like missing stage)
+        return 1;
     }
 }

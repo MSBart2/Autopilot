@@ -1,0 +1,54 @@
+@model Cyberpilot.Web.Models.PipelineAdminDefinitionEditViewModel
+
+<section data-wizard-step-panel="5" class="wizard-panel">
+    <div class="telemetry-panel">
+        <p class="eyebrow">Almost There</p>
+        <h2 class="h5 mb-3">Review</h2>
+        <p class="text-secondary small mb-3">Check everything looks right before saving. No changes are written until you click Save pipeline.</p>
+
+        <div data-review-content>
+            @* JS populates this dynamically. The noscript fallback below renders when JS is unavailable. *@
+            <noscript>
+                <dl class="row">
+                    <dt class="col-sm-3">Name</dt>
+                    <dd class="col-sm-9">@Model.Name</dd>
+
+                    <dt class="col-sm-3">Version</dt>
+                    <dd class="col-sm-9">@Model.Version</dd>
+
+                    <dt class="col-sm-3">Policy</dt>
+                    <dd class="col-sm-9">@Model.PolicyProfileName</dd>
+
+                    <dt class="col-sm-3">Stages</dt>
+                    <dd class="col-sm-9">
+                        @if (Model.Stages.Count == 0)
+                        {
+                            <span class="text-secondary">None defined</span>
+                        }
+                        else
+                        {
+                            <ol class="mb-0">
+                                @foreach (var stage in Model.Stages)
+                                {
+                                    <li>@stage.DisplayName (@stage.Name)</li>
+                                }
+                            </ol>
+                        }
+                    </dd>
+
+                    <dt class="col-sm-3">Transitions</dt>
+                    <dd class="col-sm-9">
+                        @if (string.IsNullOrWhiteSpace(Model.TransitionsText))
+                        {
+                            <span class="text-secondary">Auto-linked in order</span>
+                        }
+                        else
+                        {
+                            <pre class="mb-0 small font-monospace">@Model.TransitionsText</pre>
+                        }
+                    </dd>
+                </dl>
+            </noscript>
+        </div>
+    </div>
+</section>

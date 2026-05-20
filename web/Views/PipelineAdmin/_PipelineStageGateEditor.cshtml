@@ -1,0 +1,18 @@
+@model (Cyberpilot.Web.Models.PipelineAdminStageInputModel Stage, int Index)
+@{
+    var stage = Model.Item1;
+    var index = Model.Item2;
+    var prefix = index < 0 ? "Stages[__index__]" : $"Stages[{index}]";
+    var cardTitle = string.IsNullOrWhiteSpace(stage.DisplayName) ? $"Stage {index + 1}" : stage.DisplayName;
+}
+
+<article class="telemetry-panel" data-gate-card data-gate-index="@index">
+    <p class="eyebrow">@cardTitle</p>
+    <h3 class="h5 mb-3">@(string.IsNullOrWhiteSpace(stage.Name) ? "Stage" : stage.Name)</h3>
+    <div>
+        <label class="form-label" for="@(prefix).GatesText">Gates</label>
+        <textarea class="form-control font-monospace" id="@(prefix).GatesText" name="@(prefix).GatesText" rows="3"
+                  placeholder="model-available|BeforeStage|true&#10;review-approval|AfterStage|true">@stage.GatesText</textarea>
+        <div class="form-text text-secondary">One gate per line: name|BeforeStage or AfterStage|true or false.</div>
+    </div>
+</article>

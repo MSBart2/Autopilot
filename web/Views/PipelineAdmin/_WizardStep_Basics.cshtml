@@ -1,0 +1,30 @@
+@model Cyberpilot.Web.Models.PipelineAdminDefinitionEditViewModel
+
+<section data-wizard-step-panel="1" class="wizard-panel">
+    <div class="telemetry-panel">
+        <p class="eyebrow">Pipeline Identity</p>
+        <h2 class="h5 mb-3">Basics</h2>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label" asp-for="Name"></label>
+                <input class="form-control" asp-for="Name" />
+                <span class="text-danger small" asp-validation-for="Name"></span>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" asp-for="Version"></label>
+                <input class="form-control" asp-for="Version" />
+                <span class="text-danger small" asp-validation-for="Version"></span>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label" asp-for="PolicyProfileName">Policy profile</label>
+                <select class="form-select" asp-for="PolicyProfileName">
+                    @foreach (var policy in Model.PolicyProfiles)
+                    {
+                        <option value="@policy.Name">@policy.Name (@policy.Strictness)</option>
+                    }
+                </select>
+                <span class="text-danger small" asp-validation-for="PolicyProfileName"></span>
+            </div>
+        </div>
+    </div>
+</section>

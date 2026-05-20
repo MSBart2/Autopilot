@@ -1,87 +1,62 @@
 @model Cyberpilot.Web.Models.PipelineAdminDefinitionEditViewModel
+@using Cyberpilot.Web.Models
 @{
     ViewData["Title"] = string.IsNullOrWhiteSpace(Model.OriginalName) ? "New Pipeline" : $"Edit {Model.Name}";
+
+    var ms = ViewData.ModelState;
+    var steps = new List<PipelineWizardStepModel>
+    {
+        new(1, "Basics",      "Name, version, policy",   ms.Keys.Any(k => (k == nameof(Model.Name) || k == nameof(Model.Version) || k == nameof(Model.PolicyProfileName)) && ms[k]!.Errors.Count > 0)),
+        new(2, "Stages",      "Execution order",         ms.Keys.Any(k => k.StartsWith("Stages[") && !k.EndsWith(".GatesText") && ms[k]!.Errors.Count > 0)),
+        new(3, "Gates",       "Quality checks",          ms.Keys.Any(k => k.EndsWith(".GatesText") && ms[k]!.Errors.Count > 0)),
+        new(4, "Transitions", "Stage connections",       ms.Keys.Any(k => k == nameof(Model.TransitionsText) && ms[k]!.Errors.Count > 0)),
+        new(5, "Review",      "Confirm and save",        false),
+    };
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/pipeline-wizard.css" asp-append-version="true" />
 }
 
 <section class="guide-viewport" aria-labelledby="pipeline-editor-title">
     <aside class="guide-rail">
         <p class="eyebrow">Admin</p>
         <h1 id="pipeline-editor-title">Pipeline Editor</h1>
-        <p class="rail-summary">Define pipeline metadata, ordered stages, stage gates, required artifacts, and
-            transitions.</p>
-            <a class="btn btn-outline-info btn-sm" asp-action="Index">Back to admin</a>
-        </aside>
+        <p class="rail-summary">Guided wizard: define metadata, stages, gates, transitions, then review before saving.</p>
+        <a class="btn btn-outline-info btn-sm" asp-action="Index">Back to admin</a>
+    </aside>
 
-        <div class="guide-content-wrap">
-            <form asp-action="SavePipeline" method="post" class="d-grid gap-3" id="pipeline-editor-form">
-                @Html.AntiForgeryToken()
-                <input type="hidden" asp-for="OriginalName" />
-                <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+    <div class="guide-content-wrap">
+        <partial name="_WizardStepMap" model="steps" />
 
-                <section class="telemetry-panel">
-                    <p class="eyebrow">Definition</p>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label" asp-for="Name"></label>
-                            <input class="form-control" asp-for="Name" />
-                            <span class="text-danger small" asp-validation-for="Name"></span>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label" asp-for="Version"></label>
-                            <input class="form-control" asp-for="Version" />
-                            <span class="text-danger small" asp-validation-for="Version"></span>
-                        </div>
-                        <div class="col-md-5">
-                            <label class="form-label" asp-for="PolicyProfileName">Policy profile</label>
-                            <select class="form-select" asp-for="PolicyProfileName">
-                                @foreach (var policy in Model.PolicyProfiles)
-                                {
-                                    <option value="@policy.Name">@policy.Name (@policy.Strictness)</option>
-                                }
-                            </select>
-                            <span class="text-danger small" asp-validation-for="PolicyProfileName"></span>
-                        </div>
-                    </div>
-                </section>
+        <form asp-action="SavePipeline" method="post" class="d-grid gap-3" id="pipeline-editor-form"
+              data-wizard-form data-wizard-active-step="@Model.WizardActiveStep">
+            @Html.AntiForgeryToken()
+            <input type="hidden" asp-for="OriginalName" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
 
-                <section class="telemetry-panel">
-                    <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
-                        <div>
-                            <p class="eyebrow">Stages</p>
-                            <h2 class="h5 mb-0">Execution Order</h2>
-                        </div>
-                        <button class="btn btn-outline-info btn-sm" type="button" data-add-stage>Add stage</button>
-                    </div>
-                    <div class="d-grid gap-3" data-stage-list>
-                        @for (var index = 0; index < Model.Stages.Count; index++)
-                        {
-                            <partial name="_PipelineStageEditor" model="(Model.Stages[index], index)" />
-                        }
-                    </div>
-                </section>
+            <partial name="_WizardStep_Basics"      model="Model" />
+            <partial name="_WizardStep_Stages"      model="Model" />
+            <partial name="_WizardStep_Gates"       model="Model" />
+            <partial name="_WizardStep_Transitions" model="Model" />
+            <partial name="_WizardStep_Review"      model="Model" />
 
-                <section class="telemetry-panel">
-                    <p class="eyebrow">Transitions</p>
-                    <label class="form-label" asp-for="TransitionsText">Transitions</label>
-                    <textarea class="form-control font-monospace" asp-for="TransitionsText" rows="5"
-                              placeholder="triage|plan|go&#10;plan|implement|go"></textarea>
-                    <div class="form-text text-secondary">Use one transition per line: fromStage|toStage|condition. Leave
-                        blank to auto-link stages in order with condition "go".</div>
-                        <span class="text-danger small" asp-validation-for="TransitionsText"></span>
-                    </section>
-
-                    <div class="d-flex gap-2 justify-content-end">
-                        <a class="btn btn-outline-secondary" asp-action="Index">Cancel</a>
-                        <button class="btn btn-primary" type="submit">Save pipeline</button>
-                    </div>
-                </form>
+            <div class="wizard-nav d-flex justify-content-between align-items-center gap-2">
+                <button class="btn btn-outline-secondary" type="button" data-wizard-prev>Previous</button>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-info" type="button" data-wizard-next>Next</button>
+                    <button class="btn btn-primary wizard-save-btn" type="submit">Save pipeline</button>
+                </div>
             </div>
-        </section>
+        </form>
+    </div>
+</section>
 
-        <template id="stage-template">
-            <partial name="_PipelineStageEditor" model="(new Cyberpilot.Web.Models.PipelineAdminStageInputModel(), -1)" />
-        </template>
+<template id="stage-template">
+    <partial name="_PipelineStageEditor" model="(new Cyberpilot.Web.Models.PipelineAdminStageInputModel(), -1)" />
+</template>
 
-        @section Scripts {
-            <script src="~/js/pipeline-admin.js" asp-append-version="true"></script>
-        }
+@section Scripts {
+    <script src="~/js/pipeline-wizard.js" asp-append-version="true"></script>
+    <script src="~/js/pipeline-admin.js" asp-append-version="true"></script>
+}

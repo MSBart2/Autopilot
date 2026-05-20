@@ -1,0 +1,15 @@
+@model Cyberpilot.Web.Models.PipelineAdminDefinitionEditViewModel
+
+<section data-wizard-step-panel="4" class="wizard-panel">
+    <div class="telemetry-panel">
+        <p class="eyebrow">Stage Connections</p>
+        <h2 class="h5 mb-3">Transitions</h2>
+        <label class="form-label" asp-for="TransitionsText">Transitions</label>
+        <textarea class="form-control font-monospace" asp-for="TransitionsText" rows="5"
+                  placeholder="triage|plan|go&#10;plan|implement|go"></textarea>
+        <div class="form-text text-secondary">
+            Use one transition per line: <code>fromStage|toStage|condition</code>. Leave blank to auto-link stages in order with condition <code>go</code>.
+        </div>
+        <span class="text-danger small" asp-validation-for="TransitionsText"></span>
+    </div>
+</section>

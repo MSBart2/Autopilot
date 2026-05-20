@@ -1,0 +1,138 @@
+/* ============================================================
+   Pipeline Setup Wizard — pipeline-wizard.css
+   Uses --cyan, --green, --rose variables from site.css
+   ============================================================ */
+
+/* Step map: horizontal strip across top of form */
+.wizard-step-map {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 1.5rem;
+    padding: 1rem 0 2rem;
+    list-style: none;
+    margin: 0;
+}
+
+/* Individual step indicator */
+.wizard-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 4.5rem;
+    text-align: center;
+    position: relative;
+    cursor: default;
+    transition: opacity 0.2s ease;
+}
+
+/* Connector line between steps */
+.wizard-step + .wizard-step::before {
+    content: '';
+    position: absolute;
+    top: 1rem;
+    right: 100%;
+    width: 1.5rem;
+    height: 2px;
+    background: var(--bs-border-color, #444);
+}
+
+/* Step circle */
+.wizard-step__circle {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: var(--bs-body-bg, #1a1a2e);
+    border: 2px solid var(--bs-border-color, #555);
+    color: var(--bs-body-color, #ccc);
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* Step label */
+.wizard-step__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--bs-body-color, #ccc);
+    transition: color 0.2s ease;
+}
+
+/* Step description */
+.wizard-step__desc {
+    font-size: 0.65rem;
+    color: var(--bs-secondary-color, #888);
+}
+
+/* Badge */
+.wizard-step__badge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.35rem;
+}
+
+/* ── Active step ── */
+.wizard-step--active .wizard-step__circle {
+    background: var(--cyan, #0891b2);
+    border-color: var(--cyan, #0891b2);
+    color: #fff;
+}
+
+.wizard-step--active .wizard-step__label {
+    color: var(--cyan, #0891b2);
+}
+
+/* ── Complete step ── */
+.wizard-step--complete .wizard-step__circle {
+    background: var(--green, #15803d);
+    border-color: var(--green, #15803d);
+    color: #fff;
+}
+
+.wizard-step--complete .wizard-step__circle::after {
+    content: '✓';
+    font-size: 0.8rem;
+}
+
+/* Swap number for checkmark when complete */
+.wizard-step--complete .wizard-step__circle {
+    font-size: 0; /* hide number */
+}
+
+/* ── Error step ── */
+.wizard-step--error .wizard-step__circle {
+    background: var(--rose, #be123c);
+    border-color: var(--rose, #be123c);
+    color: #fff;
+}
+
+/* ============================================================
+   Wizard panels: only the active panel is visible
+   ============================================================ */
+[data-wizard-step-panel] {
+    display: none;
+}
+
+[data-wizard-step-panel].wizard-panel--active {
+    display: block;
+}
+
+/* ============================================================
+   Wizard nav footer
+   ============================================================ */
+.wizard-nav {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--bs-border-color, #444);
+}
+
+/* ============================================================
+   Badge colours used for "Needs attention" badge
+   ============================================================ */
+.badge--rose {
+    background-color: var(--rose, #be123c);
+    color: #fff;
+}
