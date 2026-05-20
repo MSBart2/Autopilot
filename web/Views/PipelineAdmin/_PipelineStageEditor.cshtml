@@ -45,11 +45,5 @@
             <input class="form-control" id="@(prefix).RequiredArtifactsText" name="@(prefix).RequiredArtifactsText"
                    value="@stage.RequiredArtifactsText" placeholder="plan, tests, pull-request" />
         </div>
-        <div class="col-12">
-            <label class="form-label" for="@(prefix).GatesText">Gates</label>
-            <textarea class="form-control font-monospace" id="@(prefix).GatesText" name="@(prefix).GatesText" rows="3"
-                      placeholder="model-available|BeforeStage|true&#10;review-approval|AfterStage|true">@stage.GatesText</textarea>
-            <div class="form-text text-secondary">One gate per line: name|BeforeStage or AfterStage|true or false.</div>
-        </div>
     </div>
 </article>
