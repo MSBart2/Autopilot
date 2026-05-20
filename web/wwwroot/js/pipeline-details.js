@@ -781,20 +781,21 @@
     }
 
     // ── Overall run state helpers ──────────────────────────────────────
-    const STATUS_CLASSES = { Completed:'text-bg-success', Failed:'text-bg-danger', Running:'text-bg-primary', Pausing:'text-bg-info awaiting-pulse', Paused:'text-bg-warning text-dark', Stopped:'text-bg-warning text-dark', Cancelled:'text-bg-warning' };
+    const STATUS_CLASSES = { Completed:'text-bg-success', Failed:'text-bg-danger', Running:'text-bg-primary', Pausing:'text-bg-info awaiting-pulse', Paused:'text-bg-warning text-dark', Stopped:'text-bg-warning text-dark', Cancelled:'text-bg-warning', BlockedByGate:'text-bg-warning text-dark' };
     const badgeEl   = document.getElementById('run-status-badge');
     const statusEl  = document.getElementById('run-status');
     const cancelEl  = document.getElementById('cancel-section');
     const spinnerEl = document.getElementById('run-spinner');
     const elapsedEl = document.getElementById('run-elapsed');
-    const HALT_BANNER_STATUSES = new Set(['Queued', 'Running', 'Pausing', 'Paused', 'Failed', 'Stopped', 'Cancelled']);
+    const HALT_BANNER_STATUSES = new Set(['Queued', 'Running', 'Pausing', 'Paused', 'Failed', 'Stopped', 'Cancelled', 'BlockedByGate']);
     let   elapsedTimer = null;
     let   currentRunStatus = String(bootstrap.currentRunStatus ?? 'Unknown');
 
     function applyRunStatus(status) {
         currentRunStatus = status;
         if (badgeEl) badgeEl.className = 'badge fs-6 ' + (STATUS_CLASSES[status] ?? 'text-bg-secondary');
-        if (statusEl) statusEl.textContent = status === 'Pausing' ? '⏸ Pausing…' : status;
+        const displayStatus = status === 'Pausing' ? '⏸ Pausing…' : (status === 'BlockedByGate' ? 'Awaiting Approval' : status);
+        if (statusEl) statusEl.textContent = displayStatus;
         if (spinnerEl && status !== 'Running' && status !== 'Pausing') spinnerEl.remove();
         if (!HALT_BANNER_STATUSES.has(status)) removeHaltBanner();
         // Hide pause button when pausing
@@ -1082,12 +1083,13 @@
     }
 
     // ── Initial error state (for failures that occur before SignalR connects) ──────────────────
-    if (bootstrap.currentRunStatus === 'Failed' && bootstrap.error) {
-        // The run failed before the client established SignalR connection.
-        // Apply the failure state immediately from the persisted error.
-        applyRunStatus('Failed');
-        if (badgeEl) badgeEl.className = 'badge fs-6 ' + (STATUS_CLASSES['Failed'] ?? 'text-bg-secondary');
-        if (statusEl) statusEl.textContent = 'Failed';
+    if ((bootstrap.currentRunStatus === 'Failed' || bootstrap.currentRunStatus === 'BlockedByGate') && bootstrap.error) {
+        // The run failed/blocked before the client established SignalR connection.
+        // Apply the terminal state immediately from the persisted error.
+        applyRunStatus(bootstrap.currentRunStatus);
+        if (badgeEl) badgeEl.className = 'badge fs-6 ' + (STATUS_CLASSES[bootstrap.currentRunStatus] ?? 'text-bg-secondary');
+        const displayStatus = bootstrap.currentRunStatus === 'BlockedByGate' ? 'Awaiting Approval' : 'Failed';
+        if (statusEl) statusEl.textContent = displayStatus;
         if (spinnerEl) spinnerEl.remove();
         cancelEl?.remove();
         stopTimer();

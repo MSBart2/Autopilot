@@ -13,6 +13,7 @@
         "Paused" => "text-bg-warning text-dark",
         "Stopped" => "text-bg-warning text-dark",
         "Cancelled" => "text-bg-warning",
+        "BlockedByGate" => "text-bg-warning text-dark",
         "AwaitingCopilot" => "text-bg-info awaiting-pulse",
         _ => "text-bg-secondary"
     };
@@ -110,7 +111,7 @@
                     <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"
                           id="run-spinner"></span>
                 }
-                <span id="run-status">@Model.Run.Status</span>
+                <span id="run-status">@(Model.Run.Status == "BlockedByGate" ? "Awaiting Approval" : Model.Run.Status)</span>
             </span>
         </div>
     </div>

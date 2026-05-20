@@ -112,7 +112,7 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
         : null;
 
     /// <summary>Gets whether this terminal run can be requeued from its current stage.</summary>
-    public bool CanContinue => Run.Status is "Failed" or "Stopped" or "Paused" or "Cancelled" && !HasPendingApprovals && !HasRejectedApprovals;
+    public bool CanContinue => Run.Status is "Failed" or "Stopped" or "Paused" or "Cancelled" or "BlockedByGate" && !HasPendingApprovals && !HasRejectedApprovals;
 
     /// <summary>Gets whether the run failed because the target repository working tree is dirty.</summary>
     public bool IsRepositoryCleanlinessFailure => Run.Status == "Failed"
@@ -123,7 +123,7 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
 
     /// <summary>Gets whether the run can be sent back to implementation after a blocked review.</summary>
     public bool CanReworkFromReview => !Run.IsRemote
-        && Run.Status is "Failed" or "Stopped"
+        && Run.Status is "Failed" or "Stopped" or "BlockedByGate"
         && IsReviewStage(Run.CurrentStage ?? Logs
             .Where(log => PipelineStopDiagnostic.IsBlockedStatus(log.Status))
             .OrderByDescending(log => log.CompletedAt ?? log.StartedAt)
@@ -165,7 +165,7 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
     /// <summary>Gets whether a specific stage can be retried (run is terminal, stage is known, retry count is below the cap).</summary>
     public bool CanRetryStage(string stageName, int maxStageRetries)
         => !Run.IsRemote
-        && Run.Status is "Failed" or "Stopped" or "Cancelled" or "Paused"
+        && Run.Status is "Failed" or "Stopped" or "Cancelled" or "Paused" or "BlockedByGate"
         && ValidStageNames.Any(s => s.Equals(stageName, StringComparison.OrdinalIgnoreCase))
         && GetStageRetryCount(stageName) < maxStageRetries;
 

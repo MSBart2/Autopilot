@@ -87,6 +87,7 @@ public sealed class CyberpilotRunner : ICyberpilotRunner
             0 => "Completed",
             2 => "Stopped",
             3 => "Paused",
+            4 => "BlockedByGate",
             _ => "Failed",
         };
         var stageResults = runner.StageResults;

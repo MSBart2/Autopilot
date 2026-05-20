@@ -15,6 +15,8 @@ internal sealed class PipelineEngine(
     PipelineConsoleWriter console)
 {
     private CyberpilotOptions Options => context.Options;
+    private bool blockedByPostStageGate = false;
+    public bool BlockedByPostStageGate => blockedByPostStageGate;
 
     public async Task<int> ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -424,6 +426,12 @@ internal sealed class PipelineEngine(
             progressSink.OnDispatch(DispatchType.Gate, $"Gate '{evaluation.Gate.Name}' {outcome} for stage '{stageDefinition.Stage.Name}': {evaluation.Result.Summary}");
             if (!evaluation.Result.Passed && evaluation.Gate.IsBlocking)
             {
+                // Track if this is a post-stage gate block (e.g., approval gates)
+                if (timing == GateTiming.AfterStage)
+                {
+                    blockedByPostStageGate = true;
+                }
+
                 var summary = $"Blocking gate '{evaluation.Gate.Name}' failed for stage '{stageDefinition.Stage.Name}': {evaluation.Result.Summary}";
                 return new StageResult(
                     "INVALID",

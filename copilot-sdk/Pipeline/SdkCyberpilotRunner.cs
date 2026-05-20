@@ -103,7 +103,15 @@ internal sealed class SdkCyberpilotRunner(
 
         var deliveryCoordinator = new PipelineDeliveryCoordinator(pipelineContext, new GitHubCli(options.RepoRoot, options.Repository), progressSink, console);
         var engine = new PipelineEngine(pipelineContext, labels, branchCoordinator, stageExecutor, new PipelineGateRunner(BuiltInPipelineGates.Create(cleanlinessChecker, modelChecker, labels, issueClient)), deliveryCoordinator, progressSink, console);
-        return await engine.ExecuteAsync(cancellationToken);
+        var exitCode = await engine.ExecuteAsync(cancellationToken);
+        
+        // Return exit code 4 if blocked by post-stage gate instead of generic failure
+        if (engine.BlockedByPostStageGate)
+        {
+            return 4;
+        }
+        
+        return exitCode;
     }
 
     private bool TryCreatePipelineDefinitionProvider(out IPipelineDefinitionProvider? provider, out string? error)
