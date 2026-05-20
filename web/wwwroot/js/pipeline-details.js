@@ -622,11 +622,22 @@
         if (noteEl) {
             if (statusLower === 'duplicate') noteEl.textContent = STATE_NOTES.duplicate;
             else if (cls === 'state-stopped') noteEl.textContent = STATE_NOTES.stopped;
-            else if (cls === 'state-failed') noteEl.textContent = STATE_NOTES.failed;
+            else if (cls === 'state-failed') {
+                noteEl.textContent = STATE_NOTES.failed;
+                // If there's a run error and this is a failed stage stuck in Running, show error detail
+                if (bootstrap.error) {
+                    const detail = document.createElement('div');
+                    detail.className = 'agent-state-error-detail mt-1';
+                    detail.style.fontSize = '0.9em';
+                    detail.style.color = '#721c24';
+                    detail.textContent = `Error: ${bootstrap.error}`;
+                    noteEl.appendChild(detail);
+                }
+            }
             else if (cls === 'state-skipped') noteEl.textContent = STATE_NOTES.skipped;
             else noteEl.textContent = typeof STATE_NOTES.done === 'function' ? STATE_NOTES.done(stage) : STATE_NOTES.done;
         }
-        if (['go', 'duplicate', 'stop'].includes(statusLower)) {
+        if (['go', 'duplicate', 'stop', 'failed'].includes(statusLower)) {
             addStageDocumentLink(card, stage);
         }
         if (tokenData && hasMetricData(tokenData)) {
