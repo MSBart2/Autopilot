@@ -1,0 +1,19 @@
+@model IReadOnlyList<Cyberpilot.Web.Models.PipelineWizardStepModel>
+
+<nav class="wizard-step-map" aria-label="Pipeline setup steps">
+    @foreach (var step in Model)
+    {
+        <div class="wizard-step" data-wizard-step-indicator="@step.Number" aria-current="@(step.HasError ? "step" : null)">
+            <div class="wizard-step__circle">@step.Number</div>
+            <div class="wizard-step__label">@step.Label</div>
+            @if (!string.IsNullOrWhiteSpace(step.Description))
+            {
+                <div class="wizard-step__desc">@step.Description</div>
+            }
+            @if (step.HasError)
+            {
+                <span class="badge badge--rose wizard-step__badge">Needs attention</span>
+            }
+        </div>
+    }
+</nav>

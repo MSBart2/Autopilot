@@ -53,4 +53,23 @@ public class AppSmokeTests
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
+    [Fact]
+    public async Task PipelineAdmin_New_ReturnsWizard()
+    {
+        var response = await _client.GetAsync("/PipelineAdmin/Pipelines/New");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("Pipeline Identity");
+    }
+
+    [Fact]
+    public async Task PipelineAdmin_Index_ReturnsAdminDashboard()
+    {
+        var response = await _client.GetAsync("/PipelineAdmin");
+        var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        content.Should().Contain("Custom Pipelines");
+    }
 }

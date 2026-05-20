@@ -1,0 +1,24 @@
+@model Cyberpilot.Web.Models.PipelineAdminDefinitionEditViewModel
+
+<section data-wizard-step-panel="3" class="wizard-panel">
+    <div class="telemetry-panel mb-0">
+        <p class="eyebrow">Stage Configuration</p>
+        <h2 class="h5 mb-1">Gates</h2>
+        <p class="text-secondary small mb-3">Configure quality gates for each stage. Gates run before or after a stage and can block progression.</p>
+    </div>
+    <div class="d-grid gap-3 mt-3" data-gate-list>
+        @if (Model.Stages.Count == 0)
+        {
+            <div class="telemetry-panel text-secondary text-center" data-gate-empty-nudge>
+                <p class="mb-0">No stages defined yet. Add stages in the previous step first.</p>
+            </div>
+        }
+        else
+        {
+            @for (var index = 0; index < Model.Stages.Count; index++)
+            {
+                <partial name="_PipelineStageGateEditor" model="(Model.Stages[index], index)" />
+            }
+        }
+    </div>
+</section>

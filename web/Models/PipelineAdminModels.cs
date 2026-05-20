@@ -49,6 +49,15 @@ public sealed record PipelineDefinitionOptionViewModel(string Name, string Versi
 public sealed record PipelinePolicyOptionViewModel(string Name, string Description, bool IsBuiltIn);
 
 /// <summary>
+/// Describes one step in the pipeline setup wizard for the step map partial.
+/// </summary>
+/// <param name="Number">The 1-based step number.</param>
+/// <param name="Label">The short label shown in the step map.</param>
+/// <param name="Description">The longer description shown beneath the label.</param>
+/// <param name="HasError">Whether this step has a validation error.</param>
+public sealed record PipelineWizardStepModel(int Number, string Label, string Description, bool HasError);
+
+/// <summary>
 /// Captures editable pipeline definition metadata, stages, and transitions.
 /// </summary>
 public sealed class PipelineAdminDefinitionEditViewModel
@@ -56,6 +65,9 @@ public sealed class PipelineAdminDefinitionEditViewModel
     /// <summary>Gets or sets the original name when editing an existing definition.</summary>
     [StringLength(80)]
     public string? OriginalName { get; set; }
+
+    /// <summary>Gets or sets the wizard step (1–5) that should be shown on page load. Set by the controller when validation fails.</summary>
+    public int WizardActiveStep { get; set; } = 1;
 
     /// <summary>Gets or sets the pipeline definition name.</summary>
     [Required]
