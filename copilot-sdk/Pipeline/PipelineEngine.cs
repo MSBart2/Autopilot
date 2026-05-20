@@ -69,25 +69,46 @@ internal sealed class PipelineEngine(
             if (IsOnlyStage("implement")) return 0;
         }
 
-        StageDefinition? docsStage = null;
+        StageDefinition? nextPostReviewStage = null;
         if (ShouldRun(start, "review", out _))
         {
-            var (reviewExit, reviewDocsStage) = await RunReviewStageAsync(cancellationToken);
+            var (reviewExit, approvedNextStage) = await RunReviewStageAsync(cancellationToken);
             if (reviewExit.HasValue) return reviewExit.Value;
-            docsStage = reviewDocsStage;
+            nextPostReviewStage = approvedNextStage;
             if (IsOnlyStage("review")) return 0;
         }
 
-        if (docsStage is null && ShouldRun(start, "docs", out var selectedDocsStage))
+        if (nextPostReviewStage is null && ShouldRun(start, "docs", out var selectedDocsStage))
         {
-            docsStage = selectedDocsStage;
+            nextPostReviewStage = selectedDocsStage;
         }
 
-        if (docsStage is not null && ShouldRun(start, docsStage))
+        StageDefinition? summaryStage = null;
+        if (nextPostReviewStage is not null
+            && nextPostReviewStage.Name.Equals("docs", StringComparison.OrdinalIgnoreCase)
+            && ShouldRun(start, nextPostReviewStage))
         {
-            var result = await RunDocsStageAsync(docsStage, cancellationToken);
+            var (docsExit, docsNextStage) = await RunDocsStageAsync(nextPostReviewStage, cancellationToken);
+            if (docsExit.HasValue) return docsExit.Value;
+            summaryStage = docsNextStage;
+            if (IsOnlyStage("docs") || IsOnlyStage(nextPostReviewStage.Name)) return 0;
+        }
+
+        if (summaryStage is null && nextPostReviewStage is not null && nextPostReviewStage.Name.Equals("summary", StringComparison.OrdinalIgnoreCase))
+        {
+            summaryStage = nextPostReviewStage;
+        }
+
+        if (summaryStage is null && ShouldRun(start, "summary", out var selectedSummaryStage))
+        {
+            summaryStage = selectedSummaryStage;
+        }
+
+        if (summaryStage is not null && ShouldRun(start, summaryStage))
+        {
+            var result = await RunSummaryStageAsync(summaryStage, cancellationToken);
             if (result.HasValue) return result.Value;
-            if (IsOnlyStage("docs") || IsOnlyStage(docsStage.Name)) return 0;
+            if (IsOnlyStage("summary") || IsOnlyStage(summaryStage.Name)) return 0;
         }
 
         return await RunDeliverStageAsync(cancellationToken);
@@ -172,9 +193,9 @@ internal sealed class PipelineEngine(
         return await CheckPauseAsync("implement", cancellationToken);
     }
 
-    private async Task<(int? ExitCode, StageDefinition? DocsStage)> RunReviewStageAsync(CancellationToken cancellationToken)
+    private async Task<(int? ExitCode, StageDefinition? NextStage)> RunReviewStageAsync(CancellationToken cancellationToken)
     {
-        StageDefinition? docsStage = null;
+        StageDefinition? nextStage = null;
         progressSink.OnDispatch(DispatchType.ReviewLoop, "Entering review loop — architecture, security, quality, and test coverage checks");
 
         var review = await RunReviewLoopAsync(cancellationToken);
@@ -187,15 +208,20 @@ internal sealed class PipelineEngine(
         if (!StageDecision.IsApproved(review))
         {
             progressSink.OnDispatch(DispatchType.Halt, "Review did not approve the changes — halting for human intervention");
-            console.WriteWarning("Review did not return an approval. Halting before docs/deliver.");
+            console.WriteWarning("Review did not return an approval. Halting before docs/summary/deliver.");
             return (4, null);
         }
 
         var approvedTarget = TransitionTarget("review", "approved");
         if (approvedTarget.Name.Equals("docs", StringComparison.OrdinalIgnoreCase))
         {
-            docsStage = approvedTarget;
+            nextStage = approvedTarget;
             progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Docs stage");
+        }
+        else if (approvedTarget.Name.Equals("summary", StringComparison.OrdinalIgnoreCase))
+        {
+            nextStage = approvedTarget;
+            progressSink.OnDispatch(DispatchType.Routing, "Review approved — all checks passed, dispatching to Summary stage");
         }
         else if (approvedTarget.Name.Equals("deliver", StringComparison.OrdinalIgnoreCase))
         {
@@ -206,31 +232,55 @@ internal sealed class PipelineEngine(
             return (await HaltAsync($"Review approved transition targets unsupported stage '{approvedTarget.Name}'.", cancellationToken), null);
         }
 
-        return (await CheckPauseAsync("review", cancellationToken), docsStage);
+        return (await CheckPauseAsync("review", cancellationToken), nextStage);
     }
 
-    private async Task<int?> RunDocsStageAsync(StageDefinition docsStage, CancellationToken cancellationToken)
+    private async Task<(int? ExitCode, StageDefinition? NextStage)> RunDocsStageAsync(StageDefinition docsStage, CancellationToken cancellationToken)
     {
         await labels.SetStageAsync(Options.IssueNumber, docsStage.Label, cancellationToken);
         var docs = await RunStageAsync(docsStage, "Update XML/markdown documentation and post the human verification walkthrough. Continue even if there are no docs changes.", cancellationToken);
+        var nextStage = TransitionTarget(docsStage.Name, "GO");
 
         if (!StageStatus.IsGo(docs))
         {
             if (!Options.AllowMissingDocs)
             {
                 progressSink.OnDispatch(DispatchType.Routing, $"Docs returned '{docs.Status}' — halting pipeline");
-                return await HaltAsync($"Docs returned '{docs.Status}'. Rerun with --allow-missing-docs to continue anyway.", cancellationToken);
+                return (await HaltAsync($"Docs returned '{docs.Status}'. Rerun with --allow-missing-docs to continue anyway.", cancellationToken), null);
             }
 
-            progressSink.OnDispatch(DispatchType.Routing, $"Docs returned '{docs.Status}' but --allow-missing-docs is set — continuing to delivery");
+            progressSink.OnDispatch(DispatchType.Routing, $"Docs returned '{docs.Status}' but --allow-missing-docs is set — continuing to {nextStage.Name}");
             console.WriteWarning($"Docs returned '{docs.Status}', but --allow-missing-docs is set. Continuing.");
         }
-        else
+        else if (nextStage.Name.Equals("summary", StringComparison.OrdinalIgnoreCase))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, "Documentation updated — dispatching to Summary stage");
+        }
+        else if (nextStage.Name.Equals("deliver", StringComparison.OrdinalIgnoreCase))
         {
             progressSink.OnDispatch(DispatchType.Routing, "Documentation updated — dispatching to Deliver stage");
         }
+        else
+        {
+            return (await HaltAsync($"Docs transition targets unsupported stage '{nextStage.Name}'.", cancellationToken), null);
+        }
 
-        return await CheckPauseAsync("docs", cancellationToken);
+        return (await CheckPauseAsync("docs", cancellationToken), nextStage.Name.Equals("summary", StringComparison.OrdinalIgnoreCase) ? nextStage : null);
+    }
+
+    private async Task<int?> RunSummaryStageAsync(StageDefinition summaryStage, CancellationToken cancellationToken)
+    {
+        await labels.SetStageAsync(Options.IssueNumber, summaryStage.Label, cancellationToken);
+        var summary = await RunStageAsync(summaryStage, "Synthesize the approved PR into a stakeholder-ready summary report with optional changelog artifacts. Do not merge, push commits, or perform ad hoc GitHub mutations from this stage.", cancellationToken);
+
+        if (!StageStatus.IsGo(summary))
+        {
+            progressSink.OnDispatch(DispatchType.Routing, $"Summary returned '{summary.Status}' — halting pipeline");
+            return await HaltAsync($"Summary returned '{summary.Status}'.", cancellationToken);
+        }
+
+        progressSink.OnDispatch(DispatchType.Routing, "Summary package ready — dispatching to Deliver stage");
+        return await CheckPauseAsync("summary", cancellationToken);
     }
 
     private async Task<int> RunDeliverStageAsync(CancellationToken cancellationToken)

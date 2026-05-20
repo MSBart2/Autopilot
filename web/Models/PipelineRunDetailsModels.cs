@@ -36,7 +36,7 @@ public sealed record PipelineRunDetailsViewModel(PipelineRun Run, IReadOnlyList<
         : this(run, logs, []) { }
 
     /// <summary>Gets the ordered list of valid pipeline stage names.</summary>
-    public static IReadOnlyList<string> ValidStageNames { get; } = ["triage", "plan", "implement", "review", "docs", "deliver"];
+    public static IReadOnlyList<string> ValidStageNames { get; } = ["triage", "plan", "implement", "review", "docs", "summary", "deliver"];
 
     /// <summary>Gets stages that can be shown as standalone stage output documents.</summary>
     public static IReadOnlySet<string> StageDocumentNames { get; } = new HashSet<string>(ValidStageNames, StringComparer.OrdinalIgnoreCase);
@@ -372,6 +372,9 @@ public sealed record PipelineStageOutputViewModel(
             ("review", "review-verdict") => true,
             ("docs", "verification") => true,
             ("docs", "docs-comment") => true,
+            ("summary", "summary-report") => true,
+            ("summary", "pr-body-summary") => true,
+            ("summary", "changelog-entry") => true,
             ("deliver", "landing-report") => true,
             _ => artifactName.EndsWith("-comment", StringComparison.OrdinalIgnoreCase)
                 || artifactName.EndsWith("-report", StringComparison.OrdinalIgnoreCase)

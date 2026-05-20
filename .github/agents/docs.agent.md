@@ -49,7 +49,11 @@ When running under the SDK harness, call `get_pipeline_context`, then `get_pr_de
 - **`docs/issues-backlog.md`** — if this issue was tracked there, mark it done
 - Commit all doc changes to the feature branch with a snarky `docs(scope):` commit message
 
-### 3. Post a verification walkthrough comment on the issue
+### 3. Hand off to summary
+
+After doc updates are complete, leave the branch and issue thread in a state where the summary stage can describe the final PR accurately. Mention any doc gaps, verification caveats, or release-note-worthy changes in your summary artifact so the summary stage can reuse them.
+
+### 4. Post a verification walkthrough comment on the issue
 
 This is the most important output. After all doc updates are committed, post a comment on the issue that a human can use to verify the work is done and the issue can be closed. It must include:
 
@@ -85,6 +89,7 @@ Everything else — tone, encouragement, formatting flair — is pure you. Make 
 When running under the SDK controller, the prompt wrapper supplies the exact stage result contract and required artifact names. Satisfy that wrapper contract in your final JSON block:
 
 - Include the documentation and verification walkthrough as the `documentation-summary` artifact.
+- Include any release-note-worthy doc changes or doc gaps that the summary stage should mention.
 - Include evidence summaries for docs changed, docs intentionally skipped, verification instructions posted, and any compatibility notes.
 - Include `policy_rationale` explaining why documentation is sufficient for the selected policy profile, or why documentation cannot be completed safely.
 - Include `required_actions` whenever docs are incomplete or human follow-up is needed.

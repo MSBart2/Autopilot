@@ -238,6 +238,23 @@ public sealed class PipelineContextToolProviderTests
     }
 
     [Fact]
+    public async Task RenderStageCommentAsync_ReturnsDeterministicSummaryBody()
+    {
+        var context = CreateContext(prNumber: 17);
+        var provider = new PipelineContextToolProvider(context, Stage("summary"), new FakeGitHubCli());
+
+        var response = await provider.RenderStageCommentAsync("summary", "Human-readable rollout summary ready.");
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Data);
+        Assert.Equal("summary", response.Data.StageName);
+        Assert.Equal("summary_report", response.Data.CommentKind);
+        Assert.Equal("summary-report", response.Data.SuggestedArtifactName);
+        Assert.Equal("## 🧾 Summary & Changelog — Issue #42", response.Data.Heading);
+        Assert.Contains("Human-readable rollout summary ready.", response.Data.Body);
+    }
+
+    [Fact]
     public async Task GetChangedFileContentAsync_ReadsRepoRelativePathWithLineNumbers()
     {
         var repo = Directory.CreateTempSubdirectory("cyberpilot-sdk-test-");

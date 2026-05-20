@@ -50,6 +50,15 @@ public sealed class StageCatalogTests
     }
 
     [Fact]
+    public void Summary_HasCorrectProperties()
+    {
+        Assert.Equal("SUMMARY", StageCatalog.Summary.DisplayName);
+        Assert.Equal("summary", StageCatalog.Summary.Name);
+        Assert.Equal("summary.agent.md", StageCatalog.Summary.PromptFile);
+        Assert.Equal("sdk/summary", StageCatalog.Summary.Label);
+    }
+
+    [Fact]
     public void Deliver_HasCorrectProperties()
     {
         Assert.Equal("LAND", StageCatalog.Deliver.DisplayName);
@@ -62,7 +71,7 @@ public sealed class StageCatalogTests
     public void AllStages_HaveUniqueNames()
     {
         var stages = StageCatalog.All;
-        Assert.Equal(6, stages.Select(s => s.Name).Distinct().Count());
+        Assert.Equal(7, stages.Select(s => s.Name).Distinct().Count());
     }
 
     [Fact]
@@ -70,6 +79,6 @@ public sealed class StageCatalogTests
     {
         var stageNames = StageCatalog.All.Select(stage => stage.Name).ToArray();
 
-        Assert.Equal<string>(["triage", "plan", "implement", "review", "docs", "deliver"], stageNames);
+        Assert.Equal<string>(["triage", "plan", "implement", "review", "docs", "summary", "deliver"], stageNames);
     }
 }

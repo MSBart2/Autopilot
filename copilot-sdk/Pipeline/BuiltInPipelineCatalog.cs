@@ -30,8 +30,8 @@ public static class BuiltInPipelineCatalog
     public static IReadOnlyList<PipelineDefinitionMetadata> Definitions { get; } =
     [
         new(PipelineDefinitionDefaults.DefinitionName, PipelineDefinitionDefaults.DefinitionVersion, "Full issue-to-PR SDLC"),
-        new(BugfixDefinitionName, PipelineDefinitionDefaults.DefinitionVersion, "Plan, implement, review, and deliver a focused fix"),
-        new(DocsOnlyDefinitionName, PipelineDefinitionDefaults.DefinitionVersion, "Documentation and landing report only"),
+        new(BugfixDefinitionName, PipelineDefinitionDefaults.DefinitionVersion, "Plan, implement, review, summarize, and deliver a focused fix"),
+        new(DocsOnlyDefinitionName, PipelineDefinitionDefaults.DefinitionVersion, "Documentation, summary, and landing report only"),
     ];
 
     /// <summary>Gets the built-in policy profiles that operators can select.</summary>

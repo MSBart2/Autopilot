@@ -12,6 +12,7 @@ internal sealed class StageModelResolver(CyberpilotOptions options, IModelAvaila
         ["implement"] = ModelTier.Medium,
         ["review"] = ModelTier.Medium,
         ["docs"] = ModelTier.Small,
+        ["summary"] = ModelTier.Small,
         ["deliver"] = ModelTier.Small,
     };
 

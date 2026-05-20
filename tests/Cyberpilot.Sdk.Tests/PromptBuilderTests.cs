@@ -135,6 +135,28 @@ public sealed class PromptBuilderTests
     }
 
     [Fact]
+    public async Task BuildAsync_ForSummaryStage_IncludesSummaryGuidanceAndDeterministicPrTools()
+    {
+        using var targetRepo = new TempDirectory();
+        using var agentRepo = new TempDirectory();
+        var agentsDirectory = Path.Combine(agentRepo.Path, ".github", "agents");
+        Directory.CreateDirectory(agentsDirectory);
+        await File.WriteAllTextAsync(Path.Combine(agentsDirectory, "summary.agent.md"), "summary instructions");
+        var builder = new PromptBuilder(targetRepo.Path, agentRepo.Path, 42);
+
+        var prompt = await builder.BuildAsync(
+            Stage("SUMMARY", "summary", "summary.agent.md", "sdk/summary", ["summary-report"]),
+            "summarize the approved PR",
+            StandardPolicy(),
+            Context(targetRepo.Path));
+
+        Assert.Contains("summary instructions", prompt.UserMessage);
+        Assert.Contains("## Summary Report Guidance", prompt.UserMessage);
+        Assert.Contains("pr-body-summary", prompt.UserMessage);
+        Assert.Contains("get_pr_diff_summary", prompt.UserMessage);
+    }
+
+    [Fact]
     public async Task BuildAsync_WithTargetRepositoryProfile_IncludesProfileContext()
     {
         using var targetRepo = new TempDirectory();

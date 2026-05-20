@@ -38,7 +38,8 @@
                     <li><span>03</span><strong>Implement</strong><small>engineer</small></li>
                     <li><span>04</span><strong>Review</strong><small>quality gate</small></li>
                     <li><span>05</span><strong>Docs</strong><small>archivist</small></li>
-                    <li><span>06</span><strong>Deliver</strong><small>flight lead</small></li>
+                    <li><span>06</span><strong>Summary</strong><small>storyteller</small></li>
+                    <li><span>07</span><strong>Deliver</strong><small>flight lead</small></li>
                 </ol>
                 <p>
                     Each stage produces a <strong>stage result</strong> with a decision verdict (<code>GO</code>,
@@ -102,6 +103,12 @@
                                     <td><code>sdk/docs</code></td>
                                 </tr>
                                 <tr>
+                                    <td><strong>Summary</strong></td>
+                                    <td>Storyteller &mdash; turns the approved change set into a stakeholder-ready summary and changelog draft</td>
+                                    <td>Summary report and optional changelog artifacts</td>
+                                    <td><code>sdk/summary</code></td>
+                                </tr>
+                                <tr>
                                     <td><strong>Deliver</strong></td>
                                     <td>Flight lead &mdash; merges the approved PR, deletes the branch, posts a landing report
                                     </td>
@@ -139,17 +146,17 @@
                             <tbody>
                                 <tr>
                                     <td><code>cyberpilot-default</code></td>
-                                    <td>triage → plan → implement → review → docs → deliver</td>
+                                    <td>triage → plan → implement → review → docs → summary → deliver</td>
                                     <td>Full issue-to-PR SDLC workflow</td>
                                 </tr>
                                 <tr>
                                     <td><code>bugfix</code></td>
-                                    <td>plan → implement → review → deliver</td>
+                                    <td>plan → implement → review → summary → deliver</td>
                                     <td>Focused fixes where triage and docs are unnecessary</td>
                                 </tr>
                                 <tr>
                                     <td><code>docs-only</code></td>
-                                    <td>docs → deliver</td>
+                                    <td>docs → summary → deliver</td>
                                     <td>Documentation-only changes and landing reports</td>
                                 </tr>
                             </tbody>

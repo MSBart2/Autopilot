@@ -60,6 +60,7 @@ internal sealed record StageContextSnapshot(
     {
         return stageName.Equals("review", StringComparison.OrdinalIgnoreCase)
             || stageName.Equals("docs", StringComparison.OrdinalIgnoreCase)
+            || stageName.Equals("summary", StringComparison.OrdinalIgnoreCase)
             || stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -71,7 +72,8 @@ internal sealed record StageContextSnapshot(
             "implement" => ["triage", "plan", "review"],
             "review" => ["plan", "implement"],
             "docs" => ["implement", "review"],
-            "deliver" => ["review", "docs"],
+            "summary" => ["implement", "review", "docs"],
+            "deliver" => ["review", "docs", "summary"],
             _ => [],
         };
 

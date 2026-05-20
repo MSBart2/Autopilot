@@ -236,6 +236,7 @@ public class PipelinesControllerTests
     [InlineData("implement")]
     [InlineData("review")]
     [InlineData("docs")]
+    [InlineData("summary")]
     [InlineData("deliver")]
     public async Task StageDocument_ExistingRunWithStageOutput_ReturnsStageDocument(string stageName)
     {
@@ -257,6 +258,7 @@ public class PipelinesControllerTests
             "implement" => await controller.Implement(run.Id),
             "review" => await controller.Review(run.Id),
             "docs" => await controller.Docs(run.Id),
+            "summary" => await controller.Summary(run.Id),
             _ => await controller.Deliver(run.Id),
         });
 

@@ -10,7 +10,7 @@ on:
     inputs:
       issue_number:
         description: "Issue number to review"
-        required: true
+        required: false
         type: string
 
 runs-on: ${{ vars.PIPELINE_RUNNER }}
@@ -43,11 +43,11 @@ safe-outputs:
     target: "*"
     github-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
   remove-labels:
-    allowed: ["cloud/triage", "cloud/planning", "cloud/implementing", "cloud/review", "cloud/awaiting-merge", "cloud/documenting", "cloud/done"]
+    allowed: ["cloud/triage", "cloud/planning", "cloud/implementing", "cloud/review", "cloud/awaiting-merge", "cloud/documenting", "cloud/summarizing", "cloud/done"]
     max: 9
     target: "*"
     github-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-  dispatch-workflow: [cloud-docs, cloud-implement]
+  dispatch-workflow: [cloud-cyberpilot-docs, cloud-cyberpilot-implement]
 ---
 
 ## Pipeline — Review Agent
@@ -68,7 +68,7 @@ Run the imported `pipeline-review` agent instructions as the review policy for t
 
 ## Cloud Dispatch Chain
 
-- `APPROVE` or `COMMENT`: replace `cloud/review` with `cloud/awaiting-merge`, then dispatch `cloud-docs` with `issue_number` set to `${{ github.event.inputs.issue_number }}`.
+- `APPROVE` or `COMMENT`: replace `cloud/review` with `cloud/awaiting-merge`, then dispatch `cloud-docs` with `issue_number` set to `${{ github.event.inputs.issue_number }}`. Docs will then hand off to `cloud-summary` before finish.
 - `REQUEST_CHANGES`: keep `cloud/review`, count previous request-changes implementation reports, and dispatch `cloud-implement` only if fewer than 2 rework cycles have already occurred.
 - If 2 rework cycles have already occurred, post a halt comment and do not dispatch another workflow.
 

@@ -10,13 +10,15 @@ internal static class BuiltInPipelineDefinitions
             DefaultPipelineDefinitionProvider.Definition.PipelineStage("plan"),
             DefaultPipelineDefinitionProvider.Definition.PipelineStage("implement"),
             DefaultPipelineDefinitionProvider.Definition.PipelineStage("review"),
+            DefaultPipelineDefinitionProvider.Definition.PipelineStage("summary"),
             DefaultPipelineDefinitionProvider.Definition.PipelineStage("deliver"),
         ],
         [
             new StageTransition("plan", "implement", "GO"),
             new StageTransition("implement", "review", "GO"),
             new StageTransition("review", "implement", "changes_requested"),
-            new StageTransition("review", "deliver", "approved"),
+            new StageTransition("review", "summary", "approved"),
+            new StageTransition("summary", "deliver", "GO"),
         ]);
 
     private static PipelineDefinition DocsOnlyDefinition { get; } = new(
@@ -25,9 +27,13 @@ internal static class BuiltInPipelineDefinitions
         new PolicyProfile(PipelineDefinitionDefaults.PolicyProfileName, PolicyStrictness.Standard),
         [
             DefaultPipelineDefinitionProvider.Definition.PipelineStage("docs"),
+            DefaultPipelineDefinitionProvider.Definition.PipelineStage("summary"),
             DefaultPipelineDefinitionProvider.Definition.PipelineStage("deliver"),
         ],
-        [new StageTransition("docs", "deliver", "GO")]);
+        [
+            new StageTransition("docs", "summary", "GO"),
+            new StageTransition("summary", "deliver", "GO"),
+        ]);
 
     private static readonly IReadOnlyDictionary<string, PipelineDefinition> Definitions = new Dictionary<string, PipelineDefinition>(StringComparer.OrdinalIgnoreCase)
     {

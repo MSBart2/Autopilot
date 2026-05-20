@@ -493,6 +493,7 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
             "progress" or "update" => "progress",
             "verdict" or "decision" or "review_verdict" => "verdict",
             "verification" or "docs_verification" => "verification",
+            "summary" or "summary_report" or "changelog" => "summary_report",
             "landing" or "landing_report" or "deliver" => "landing_report",
             _ => null,
         };
@@ -510,6 +511,11 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
             return $"## 📚 Docs & Verification — Issue #{issueNumber}";
         }
 
+        if (stageName.Equals("summary", StringComparison.OrdinalIgnoreCase) && commentKind == "summary_report")
+        {
+            return $"## 🧾 Summary & Changelog — Issue #{issueNumber}";
+        }
+
         if (stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase) || commentKind == "landing_report")
         {
             return $"## 🚀 Landing Report — Issue #{issueNumber}";
@@ -524,6 +530,7 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
             "implement" => "🛠️",
             "review" => "🎸",
             "docs" => "📚",
+            "summary" => "🧾",
             _ => "🤖",
         };
 
@@ -552,6 +559,7 @@ internal sealed class PipelineContextToolProvider(PipelineExecutionContext conte
             "implement" => "pull-request",
             "review" => "review-verdict",
             "docs" => "documentation-summary",
+            "summary" => "summary-report",
             "deliver" => "landing-report",
             _ => "stage-comment",
         };

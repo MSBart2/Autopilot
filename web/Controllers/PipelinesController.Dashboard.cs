@@ -213,6 +213,14 @@ public partial class PipelinesController
     public Task<IActionResult> Docs(string id) => StageDocument(id, "docs");
 
     /// <summary>
+    /// Displays the latest captured summary output for a pipeline run as a standalone document.
+    /// </summary>
+    /// <param name="id">The run identifier.</param>
+    /// <returns>The summary document view, or NotFound when the run or stage output does not exist.</returns>
+    [HttpGet("{id}/Summary")]
+    public Task<IActionResult> Summary(string id) => StageDocument(id, "summary");
+
+    /// <summary>
     /// Displays the latest captured delivery output for a pipeline run as a standalone document.
     /// </summary>
     /// <param name="id">The run identifier.</param>

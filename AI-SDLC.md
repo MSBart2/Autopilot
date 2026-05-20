@@ -26,7 +26,7 @@ All modes use the GitHub issue as the state file. Each stage posts structured co
 ## Shared Pipeline Model
 
 ```text
-Issue -> Triage -> Plan -> Implement -> Review -> Docs -> Deliver
+Issue -> Triage -> Plan -> Implement -> Review -> Docs -> Summary -> Deliver
 ```
 
 The default stage order is shared across local and SDK mode. Cloud mode uses the same logical flow, with a final `Finish` workflow that performs delivery on GitHub Actions. SDK mode can also run selected pipeline definitions, such as focused `bugfix` and `docs-only` variants, while preserving the default full SDLC as `cyberpilot-default`.
@@ -38,6 +38,7 @@ The default stage order is shared across local and SDK mode. Cloud mode uses the
 | Implement | Apply the plan, run tests, and open a PR | Commits and pull request |
 | Review | Review architecture, security, quality, tests, docs, and build health | PR review verdict |
 | Docs | Update XML comments, Markdown docs, and human verification notes | Documentation commit and issue comment |
+| Summary | Generate a stakeholder-ready changelog and rollout summary | Summary report, PR-body draft, optional changelog entry |
 | Deliver | Merge the approved PR and record completion | Merge, branch cleanup, landing report |
 
 The issue thread is the handoff channel. Stage agents read prior comments instead of relying on hidden state.
@@ -62,6 +63,7 @@ The agent files live in [.github/agents/](.github/agents). Each file includes a 
 | `implement` | Stage | implementation | [.github/agents/implement.agent.md](.github/agents/implement.agent.md) |
 | `pipeline-review` | Stage | review | [.github/agents/pipeline-review.agent.md](.github/agents/pipeline-review.agent.md) |
 | `docs` | Stage | documentation | [.github/agents/docs.agent.md](.github/agents/docs.agent.md) |
+| `summary` | Stage | summary | [.github/agents/summary.agent.md](.github/agents/summary.agent.md) |
 | `deliver` | Stage | delivery | [.github/agents/deliver.agent.md](.github/agents/deliver.agent.md) |
 
 ### Specialists and Quality Gates
@@ -130,6 +132,7 @@ copilot "@deliver deliver PR 142"
 | Implement | `implement` | `backend`, `frontend`, `security-implementer`, `testing`, `build-validator` | code, tests, PR |
 | Review | `pipeline-review` | `security-reviewer`, `code-quality-reviewer`, `build-validator` | PR review verdict |
 | Docs | `docs` | `code-quality-reviewer`, `security-reviewer` | documentation and verification notes |
+| Summary | `summary` | none | stakeholder-ready summary and changelog draft |
 | Deliver | `deliver` | none | merge and landing report |
 
 ### Local Labels
@@ -144,6 +147,7 @@ The `cyberpilot` agent owns all `local/*` label transitions. Stage agents do not
 | `local/implementing` | Implementation in progress |
 | `local/review` | PR review in progress |
 | `local/docs` | Documentation update in progress |
+| `local/summary` | Summary/changelog generation in progress |
 | `local/delivering` | Delivery in progress |
 | `local/done` | Local pipeline complete |
 
@@ -176,6 +180,7 @@ You can also apply `cloud/triage-requested` directly to start at triage.
 | `.github/workflows/cloud-cyberpilot-implement.md` | Assign Copilot coding agent | workflow dispatch |
 | `.github/workflows/cloud-cyberpilot-review.md` | Multi-agent code review and issue report | `cloud/review` or dispatch |
 | `.github/workflows/cloud-cyberpilot-docs.md` | Add XML docs and update Markdown | workflow dispatch |
+| `.github/workflows/cloud-cyberpilot-summary.md` | Generate stakeholder-ready summary and changelog draft | workflow dispatch |
 | `.github/workflows/cloud-finish.yml` | Squash merge PR, delete branch, close issue | workflow dispatch |
 
 Agentic workflow sources are Markdown files compiled to lockfiles with `gh aw compile`. `cloud-finish.yml` is plain GitHub Actions YAML.
@@ -202,6 +207,7 @@ The resume label exists because GitHub's anti-recursion rule prevents workflows 
 | `cloud/review` | Review requested or in progress |
 | `cloud/awaiting-merge` | Review approved, waiting for docs/finish |
 | `cloud/documenting` | Documentation in progress |
+| `cloud/summarizing` | Summary and changelog generation in progress |
 | `cloud/done` | Cloud pipeline complete |
 
 ### Cloud End-to-End Flow
@@ -216,7 +222,8 @@ The resume label exists because GitHub's anti-recursion rule prevents workflows 
 7. Apply `cloud/review` to resume the pipeline
 8. Review approves or dispatches rework
 9. Docs updates documentation after approval
-10. Finish merges the PR, deletes the branch, and closes the issue
+10. Summary generates the stakeholder-ready changelog package
+11. Finish merges the PR, deletes the branch, and closes the issue
 ```
 
 ---
@@ -308,9 +315,9 @@ SDK mode selects a pipeline definition and policy profile before issue, label, m
 
 | Definition | Stages | Use case |
 |------------|--------|----------|
-| `cyberpilot-default` | `triage -> plan -> implement -> review -> docs -> deliver` | Full issue-to-PR SDLC |
-| `bugfix` | `plan -> implement -> review -> deliver` | Focused fixes when triage and docs are unnecessary |
-| `docs-only` | `docs -> deliver` | Documentation-only updates and landing reports |
+| `cyberpilot-default` | `triage -> plan -> implement -> review -> docs -> summary -> deliver` | Full issue-to-PR SDLC |
+| `bugfix` | `plan -> implement -> review -> summary -> deliver` | Focused fixes when triage and docs are unnecessary |
+| `docs-only` | `docs -> summary -> deliver` | Documentation-only updates and landing reports |
 
 The SDK executable supports JSON-backed definitions with `--pipeline-definition-file <path>`. File-backed definitions are combined with built-ins and validated before routing starts. The web launcher exposes built-in definitions only.
 
@@ -332,6 +339,7 @@ Web-triggered SDK runs can pause after a stage and create a first-class approval
 | `sdk/implementing` | Implementation in progress |
 | `sdk/review` | Review in progress |
 | `sdk/docs` | Documentation in progress |
+| `sdk/summary` | Summary generation in progress |
 | `sdk/delivering` | Delivery in progress |
 | `sdk/done` | SDK pipeline complete |
 | `sdk/failed` | SDK pipeline halted |

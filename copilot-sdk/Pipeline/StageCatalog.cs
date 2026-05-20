@@ -11,7 +11,8 @@ internal static class StageCatalog
     public static StageDefinition Implement { get; } = DefaultStages[2];
     public static StageDefinition Review { get; } = DefaultStages[3];
     public static StageDefinition Docs { get; } = DefaultStages[4];
-    public static StageDefinition Deliver { get; } = DefaultStages[5];
+    public static StageDefinition Summary { get; } = DefaultStages[5];
+    public static StageDefinition Deliver { get; } = DefaultStages[6];
 
     public static IReadOnlyList<StageDefinition> All { get; } = DefaultStages;
 
