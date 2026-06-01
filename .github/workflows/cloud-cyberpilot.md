@@ -10,7 +10,7 @@ on:
     inputs:
       issue_number:
         description: "Issue number to run through the full pipeline"
-        required: true
+        required: false
         type: string
 
 runs-on: ${{ vars.PIPELINE_RUNNER }}
@@ -35,11 +35,11 @@ safe-outputs:
     target: "*"
     github-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
   remove-labels:
-    allowed: ["cloud/triage", "cloud/planning", "cloud/implementing", "cloud/review", "cloud/awaiting-merge", "cloud/documenting", "cloud/done"]
+    allowed: ["cloud/triage", "cloud/planning", "cloud/implementing", "cloud/review", "cloud/awaiting-merge", "cloud/documenting", "cloud/summarizing", "cloud/done"]
     max: 9
     target: "*"
     github-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-  dispatch-workflow: [cloud-triage]
+  dispatch-workflow: [cloud-cyberpilot-triage]
 ---
 
 ## Pipeline — Cyberpilot
@@ -53,7 +53,7 @@ You are the Cyberpilot — the single entry point for the cloud AI-SDLC pipeline
 Once you dispatch triage, the pipeline auto-chains through all stages:
 
 ```
-TRIAGE → PLAN → IMPLEMENT → ⏸️ (human applies cloud/review label) → REVIEW ─┬─ DOCS → FINISH
+TRIAGE → PLAN → IMPLEMENT → ⏸️ (human applies cloud/review label) → REVIEW ─┬─ DOCS → SUMMARY → FINISH
                                                                               └─ (rework loop, max 2)
 ```
 
@@ -90,7 +90,8 @@ The full AI-SDLC pipeline has been activated for this issue.
 | 3 | Implement | ⏳ Queued |
 | 4 | Review | ⏳ Queued |
 | 5 | Docs | ⏳ Queued |
-| 6 | Finish | ⏳ Queued |
+| 6 | Summary | ⏳ Queued |
+| 7 | Finish | ⏳ Queued |
 
 Each stage will post its own status comment as it completes. After Implement, apply the `cloud/review` label to resume the pipeline.
 ```

@@ -63,7 +63,7 @@ public sealed class CyberpilotPipelineService(
         }
     }
 
-    private static readonly string[] StageOrder = ["triage", "plan", "implement", "review", "docs", "deliver"];
+    private static readonly string[] StageOrder = ["triage", "plan", "implement", "review", "docs", "summary", "deliver"];
 
     private static string? NextStage(string stage)
     {

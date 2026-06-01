@@ -211,7 +211,7 @@ public sealed class PipelineConfiguredIssueLoadRequest
 }
 
 /// <summary>
-/// Captures a request to run review → docs → deliver on an open pull request.
+/// Captures a request to run review → docs → summary → deliver on an open pull request.
 /// </summary>
 public sealed class PrReviewStartRequest
 {

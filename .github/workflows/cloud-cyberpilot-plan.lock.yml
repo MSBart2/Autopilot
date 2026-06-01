@@ -1,4 +1,4 @@
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"a753bf600c0271ec9ff123c874d3555b8832e56898730384dfbd0e6ac2320732","compiler_version":"v0.74.4","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"c95639bf8e58017a75b3d694c08f55289cdd66d6bd4718424c8a68be3c5966c3","compiler_version":"v0.74.4","strict":true,"agent_id":"copilot","agent_model":"claude-opus-4.6"}
 # gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"27d5ce7f107fe9357f9df03efb73ab90386fccae","version":"v5.0.5"},{"repo":"actions/cache/save","sha":"27d5ce7f107fe9357f9df03efb73ab90386fccae","version":"v5.0.5"},{"repo":"actions/checkout","sha":"de0fac2e4500dabe0009e67214ff5f5447ce83dd","version":"v6.0.2"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e","version":"v6.4.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"d3abfe96a194bce3a523ed2093ddedd5704cdf62","version":"v0.74.4"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.25.46"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.25.46"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.25.46"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.3.9","digest":"sha256:64828b42a4482f58fab16509d7f8f495a6d97c972a98a68aff20543531ac0388","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.3.9@sha256:64828b42a4482f58fab16509d7f8f495a6d97c972a98a68aff20543531ac0388"},{"image":"ghcr.io/github/github-mcp-server:v1.0.4"},{"image":"node:lts-alpine","digest":"sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f","pinned_image":"node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f"}]}
 #    ___                   _   _      
 #   / _ \                 | | (_)     
@@ -22,7 +22,11 @@
 #
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
-# Reads the plan from the issue and assigns Copilot coding agent
+# Creates a detailed implementation plan and saves it to the issue
+#
+# Resolved workflow manifest:
+#   Imports:
+#     - .github/agents/plan.agent.md
 #
 # Secrets used:
 #   - COPILOT_GITHUB_TOKEN
@@ -49,7 +53,7 @@
 #   - ghcr.io/github/github-mcp-server:v1.0.4
 #   - node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f
 
-name: "Cyberpilot — Implement"
+name: "Cyberpilot — Plan"
 on:
   workflow_dispatch:
     inputs:
@@ -59,7 +63,7 @@ on:
         required: false
         type: string
       issue_number:
-        description: Issue number to implement
+        description: Issue number to plan
         required: true
         type: string
 
@@ -68,7 +72,7 @@ permissions: {}
 concurrency:
   group: "gh-aw-${{ github.workflow }}"
 
-run-name: "Cyberpilot — Implement"
+run-name: "Cyberpilot — Plan"
 
 jobs:
   activation:
@@ -95,8 +99,8 @@ jobs:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Implement"
-          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-implement.lock.yml@${{ github.ref }}
+          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Plan"
+          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-plan.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.48"
           GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Generate agentic run info
@@ -104,11 +108,11 @@ jobs:
         env:
           GH_AW_INFO_ENGINE_ID: "copilot"
           GH_AW_INFO_ENGINE_NAME: "GitHub Copilot CLI"
-          GH_AW_INFO_MODEL: ${{ vars.GH_AW_MODEL_AGENT_COPILOT || 'claude-sonnet-4.6' }}
+          GH_AW_INFO_MODEL: "claude-opus-4.6"
           GH_AW_INFO_VERSION: "1.0.48"
           GH_AW_INFO_AGENT_VERSION: "1.0.48"
           GH_AW_INFO_CLI_VERSION: "v0.74.4"
-          GH_AW_INFO_WORKFLOW_NAME: "Cyberpilot — Implement"
+          GH_AW_INFO_WORKFLOW_NAME: "Cyberpilot — Plan"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
@@ -155,7 +159,7 @@ jobs:
         id: check-lock-file
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          GH_AW_WORKFLOW_FILE: "cloud-cyberpilot-implement.lock.yml"
+          GH_AW_WORKFLOW_FILE: "cloud-cyberpilot-plan.lock.yml"
           GH_AW_CONTEXT_WORKFLOW_REF: "${{ github.workflow_ref }}"
         with:
           script: |
@@ -190,21 +194,21 @@ jobs:
         run: |
           bash "${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh"
           {
-          cat << 'GH_AW_PROMPT_554ef61f7ec930b4_EOF'
+          cat << 'GH_AW_PROMPT_4560f660c507efaf_EOF'
           <system>
-          GH_AW_PROMPT_554ef61f7ec930b4_EOF
+          GH_AW_PROMPT_4560f660c507efaf_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/cache_memory_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_554ef61f7ec930b4_EOF'
+          cat << 'GH_AW_PROMPT_4560f660c507efaf_EOF'
           <safe-output-tools>
-          Tools: add_comment, add_labels, remove_labels(max:7), assign_to_agent, missing_tool, missing_data, noop
+          Tools: add_comment(max:2), update_issue, add_labels, remove_labels(max:7), dispatch_workflow, missing_tool, missing_data, noop
           </safe-output-tools>
-          GH_AW_PROMPT_554ef61f7ec930b4_EOF
+          GH_AW_PROMPT_4560f660c507efaf_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/mcp_cli_tools_prompt.md"
-          cat << 'GH_AW_PROMPT_554ef61f7ec930b4_EOF'
+          cat << 'GH_AW_PROMPT_4560f660c507efaf_EOF'
           <github-context>
           The following GitHub context information is available for this workflow:
           {{#if github.actor}}
@@ -233,12 +237,13 @@ jobs:
           {{/if}}
           </github-context>
           
-          GH_AW_PROMPT_554ef61f7ec930b4_EOF
+          GH_AW_PROMPT_4560f660c507efaf_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_554ef61f7ec930b4_EOF'
+          cat << 'GH_AW_PROMPT_4560f660c507efaf_EOF'
           </system>
-          {{#runtime-import .github/workflows/cloud-cyberpilot-implement.md}}
-          GH_AW_PROMPT_554ef61f7ec930b4_EOF
+          {{#runtime-import .github/agents/plan.agent.md}}
+          {{#runtime-import .github/workflows/cloud-cyberpilot-plan.md}}
+          GH_AW_PROMPT_4560f660c507efaf_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -335,7 +340,7 @@ jobs:
       GH_AW_ASSETS_BRANCH: ""
       GH_AW_ASSETS_MAX_SIZE_KB: 0
       GH_AW_MCP_LOG_DIR: /tmp/gh-aw/mcp-logs/safeoutputs
-      GH_AW_WORKFLOW_ID_SANITIZED: cloudcyberpilotimplement
+      GH_AW_WORKFLOW_ID_SANITIZED: cloudcyberpilotplan
     outputs:
       agentic_engine_timeout: ${{ steps.detect-copilot-errors.outputs.agentic_engine_timeout || 'false' }}
       checkout_pr_success: ${{ steps.checkout-pr.outputs.checkout_pr_success || 'true' }}
@@ -361,8 +366,8 @@ jobs:
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
           parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Implement"
-          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-implement.lock.yml@${{ github.ref }}
+          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Plan"
+          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-plan.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.48"
           GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Set runtime paths
@@ -377,6 +382,17 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - name: Merge remote .github folder
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          GH_AW_AGENT_FILE: ".github/agents/plan.agent.md"
+          GH_AW_AGENT_IMPORT_SPEC: ".github/agents/plan.agent.md"
+        with:
+          script: |
+            const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
+            setupGlobals(core, github, context, exec, io, getOctokit);
+            const { main } = require('${{ runner.temp }}/gh-aw/actions/merge_remote_agent_github_folder.cjs');
+            await main();
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -471,21 +487,45 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/gh-aw/safeoutputs"
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
-          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << GH_AW_SAFE_OUTPUTS_CONFIG_6b79d0315323fc68_EOF
-          {"add_comment":{"max":1,"target":"*"},"add_labels":{"allowed":["cloud/implementing"],"github-token":"${COPILOT_GITHUB_TOKEN}","max":1,"target":"*"},"assign_to_agent":{"custom-instructions":"## YOUR MISSION\n\nImplement the plan from issue #${{ github.event.inputs.issue_number }}.\n\n## STEP 0: READ THE PLAN (do this first)\n\nRead issue #${{ github.event.inputs.issue_number }} and find the comment titled \"📋 Pipeline — Plan\". That comment has your implementation plan with specific files, changes, and acceptance criteria. Follow it precisely.\n\n## STEP 1: IMPLEMENT\n\nUse the specialized sub-agents in .github/agents/:\n- `backend` agent for Controllers, Models, Services, Middleware, Program.cs\n- `frontend` agent for Views, Razor templates, CSS, JavaScript\n- `security-implementer` agent for security vulnerabilities (CSRF, XSS, SQL injection, auth)\n\n## STEP 2: TEST (mandatory — do not skip)\n\nUse `testing` agent to generate unit tests and integration tests for ALL changes.\n\n## STEP 3: DOCUMENT (mandatory — do not skip)\n\nUse `docs` agent to:\n- Add/update XML documentation on all new/modified public methods and classes\n- Update docs/ markdown files if the change affects architecture or APIs\n\n## STEP 4: VALIDATE\n\nUse `build-validator` agent to verify the project builds cleanly and tests pass.\n\n## STEP 5: COMMIT AND PR WITH PERSONALITY\n\nFollow the spirit of `.github/skills/snarky-commit/SKILL.md` even if you cannot invoke the skill directly from the cloud coding-agent environment.\n\n**Commit messages:**\n- Use conventional commit format when practical, but make the description vivid and specific.\n- Describe the real change with a little swagger, not generic filler like `update files`.\n- Keep the subject concise and PG-13.\n\n**PR title:**\n- Generate a spicy, confident PR title based on the actual changes and the issue title.\n- Do not reuse the issue title verbatim unless it is already interesting.\n- One emoji is fine; three is trying too hard.\n\n**PR body:**\n- Use the snarky PR body shape: `What's This?`, `Quality Checks`, `Commit Messages`, and `Side Effects` when relevant.\n- Keep the tone playful but still useful to reviewers.\n- Preserve every required pipeline line below, especially the closing keyword and automated-label behavior.\n\n## CRITICAL: PR BODY REQUIREMENT\n\nWhen creating the pull request, the PR body MUST include a closing keyword line:\n\n`\nCloses #${{ github.event.inputs.issue_number }}\n`\n\nThis line is required for the pipeline to automatically detect the linked issue and trigger the review stage. Do not omit it.\n\n## CRITICAL: PR LABEL REQUIREMENT\n\nWhen creating the pull request, apply the `automated` label to the PR.\n\nThat label is required because later pipeline stages are only allowed to push follow-up documentation commits to PR branches explicitly marked as pipeline-managed.\n\nNOTE: Do NOT post an implementation report on the issue. The review pipeline handles that automatically.\n","github-token":"${COPILOT_GITHUB_TOKEN}","max":1,"name":"copilot","target":"*"},"create_report_incomplete_issue":{},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"remove_labels":{"allowed":["cloud/triage","cloud/planning","cloud/implementing","cloud/review","cloud/awaiting-merge","cloud/done"],"github-token":"${COPILOT_GITHUB_TOKEN}","max":7,"target":"*"},"report_incomplete":{}}
-          GH_AW_SAFE_OUTPUTS_CONFIG_6b79d0315323fc68_EOF
+          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << GH_AW_SAFE_OUTPUTS_CONFIG_8685c25954183acd_EOF
+          {"add_comment":{"max":2,"target":"*"},"add_labels":{"allowed":["cloud/planning","cloud/implementing"],"github-token":"${COPILOT_GITHUB_TOKEN}","max":1,"target":"*"},"create_report_incomplete_issue":{},"dispatch_workflow":{"aw_context_workflows":["cloud-cyberpilot-implement"],"max":1,"workflow_files":{"cloud-cyberpilot-implement":".lock.yml"},"workflows":["cloud-cyberpilot-implement"]},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"remove_labels":{"allowed":["cloud/triage","cloud/planning","cloud/implementing","cloud/review","cloud/awaiting-merge","cloud/done"],"github-token":"${COPILOT_GITHUB_TOKEN}","max":7,"target":"*"},"report_incomplete":{},"update_issue":{"allow_body":true,"github-token":"${COPILOT_GITHUB_TOKEN}","max":1,"target":"*"}}
+          GH_AW_SAFE_OUTPUTS_CONFIG_8685c25954183acd_EOF
       - name: Generate Safe Outputs Tools
         env:
           GH_AW_TOOLS_META_JSON: |
             {
               "description_suffixes": {
-                "add_comment": " CONSTRAINTS: Maximum 1 comment(s) can be added. Target: *. Supports reply_to_id for discussion threading.",
-                "add_labels": " CONSTRAINTS: Maximum 1 label(s) can be added. Only these labels are allowed: [\"cloud/implementing\"]. Target: *.",
-                "assign_to_agent": " CONSTRAINTS: Maximum 1 issue(s) can be assigned to agent.",
-                "remove_labels": " CONSTRAINTS: Maximum 7 label(s) can be removed. Only these labels can be removed: [cloud/triage cloud/planning cloud/implementing cloud/review cloud/awaiting-merge cloud/done]. Target: *."
+                "add_comment": " CONSTRAINTS: Maximum 2 comment(s) can be added. Target: *. Supports reply_to_id for discussion threading.",
+                "add_labels": " CONSTRAINTS: Maximum 1 label(s) can be added. Only these labels are allowed: [\"cloud/planning\" \"cloud/implementing\"]. Target: *.",
+                "remove_labels": " CONSTRAINTS: Maximum 7 label(s) can be removed. Only these labels can be removed: [cloud/triage cloud/planning cloud/implementing cloud/review cloud/awaiting-merge cloud/done]. Target: *.",
+                "update_issue": " CONSTRAINTS: Maximum 1 issue(s) can be updated. Target: *. Body updates are allowed."
               },
               "repo_params": {},
-              "dynamic_tools": []
+              "dynamic_tools": [
+                {
+                  "_workflow_name": "cloud-cyberpilot-implement",
+                  "description": "Dispatch the 'cloud-cyberpilot-implement' workflow with workflow_dispatch trigger. This workflow must support workflow_dispatch and be in .github/workflows/ directory in the same repository.",
+                  "inputSchema": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "aw_context": {
+                        "default": "",
+                        "description": "Agent caller context (used internally by Agentic Workflows).",
+                        "type": "string"
+                      },
+                      "issue_number": {
+                        "description": "Issue number to implement",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "issue_number"
+                    ],
+                    "type": "object"
+                  },
+                  "name": "cloud_cyberpilot_implement"
+                }
+              ]
             }
           GH_AW_VALIDATION_JSON: |
             {
@@ -529,31 +569,6 @@ jobs:
                     "maxLength": 256
                   }
                 }
-              },
-              "assign_to_agent": {
-                "defaultMax": 1,
-                "fields": {
-                  "agent": {
-                    "type": "string",
-                    "sanitize": true,
-                    "maxLength": 128
-                  },
-                  "issue_number": {
-                    "issueNumberOrTemporaryId": true
-                  },
-                  "pull_number": {
-                    "optionalPositiveInteger": true
-                  },
-                  "pull_request_repo": {
-                    "type": "string",
-                    "maxLength": 256
-                  },
-                  "repo": {
-                    "type": "string",
-                    "maxLength": 256
-                  }
-                },
-                "customValidation": "requiresOneOf:issue_number,pull_number"
               },
               "missing_data": {
                 "defaultMax": 20,
@@ -646,6 +661,60 @@ jobs:
                     "maxLength": 1024
                   }
                 }
+              },
+              "update_issue": {
+                "defaultMax": 1,
+                "fields": {
+                  "assignees": {
+                    "type": "array",
+                    "itemType": "string",
+                    "itemSanitize": true,
+                    "itemMaxLength": 39
+                  },
+                  "body": {
+                    "type": "string",
+                    "sanitize": true,
+                    "maxLength": 65000
+                  },
+                  "issue_number": {
+                    "issueOrPRNumber": true
+                  },
+                  "labels": {
+                    "type": "array",
+                    "itemType": "string",
+                    "itemSanitize": true,
+                    "itemMaxLength": 128
+                  },
+                  "milestone": {
+                    "optionalPositiveInteger": true
+                  },
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "replace",
+                      "append",
+                      "prepend",
+                      "replace-island"
+                    ]
+                  },
+                  "repo": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "closed"
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "sanitize": true,
+                    "maxLength": 128
+                  }
+                },
+                "customValidation": "requiresOneOf:status,title,body"
               }
             }
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -733,7 +802,7 @@ jobs:
           
           mkdir -p /home/runner/.copilot
           GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-          cat << GH_AW_MCP_CONFIG_eb2f138d71f38178_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
+          cat << GH_AW_MCP_CONFIG_4ba58f3111ef4f2a_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
           {
             "mcpServers": {
               "github": {
@@ -774,7 +843,7 @@ jobs:
               "payloadDir": "${MCP_GATEWAY_PAYLOAD_DIR}"
             }
           }
-          GH_AW_MCP_CONFIG_eb2f138d71f38178_EOF
+          GH_AW_MCP_CONFIG_4ba58f3111ef4f2a_EOF
       - name: Mount MCP servers as CLIs
         id: mount-mcp-clis
         continue-on-error: true
@@ -820,7 +889,7 @@ jobs:
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
           COPILOT_API_KEY: dummy-byok-key-for-offline-mode
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-          COPILOT_MODEL: ${{ vars.GH_AW_MODEL_AGENT_COPILOT || 'claude-sonnet-4.6' }}
+          COPILOT_MODEL: claude-opus-4.6
           GH_AW_MCP_CONFIG: /home/runner/.copilot/mcp-config.json
           GH_AW_PHASE: agent
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
@@ -1023,12 +1092,13 @@ jobs:
       needs.activation.outputs.stale_lock_file_failed == 'true')
     runs-on: ubuntu-slim
     permissions:
+      actions: write
       contents: read
       discussions: write
       issues: write
       pull-requests: write
     concurrency:
-      group: "gh-aw-conclusion-cloud-cyberpilot-implement"
+      group: "gh-aw-conclusion-cloud-cyberpilot-plan"
       cancel-in-progress: false
       queue: max
     outputs:
@@ -1046,8 +1116,8 @@ jobs:
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
           parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Implement"
-          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-implement.lock.yml@${{ github.ref }}
+          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Plan"
+          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-plan.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.48"
           GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Download agent output artifact
@@ -1070,7 +1140,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
-          GH_AW_WORKFLOW_NAME: "Cyberpilot — Implement"
+          GH_AW_WORKFLOW_NAME: "Cyberpilot — Plan"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
           GH_AW_NOOP_REPORT_AS_ISSUE: "true"
@@ -1086,7 +1156,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Cyberpilot — Implement"
+          GH_AW_WORKFLOW_NAME: "Cyberpilot — Plan"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.outputs.detection_conclusion }}
           GH_AW_DETECTION_REASON: ${{ needs.detection.outputs.detection_reason }}
@@ -1103,7 +1173,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_MISSING_TOOL_CREATE_ISSUE: "true"
-          GH_AW_WORKFLOW_NAME: "Cyberpilot — Implement"
+          GH_AW_WORKFLOW_NAME: "Cyberpilot — Plan"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1117,7 +1187,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_REPORT_INCOMPLETE_CREATE_ISSUE: "true"
-          GH_AW_WORKFLOW_NAME: "Cyberpilot — Implement"
+          GH_AW_WORKFLOW_NAME: "Cyberpilot — Plan"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1131,10 +1201,10 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Cyberpilot — Implement"
+          GH_AW_WORKFLOW_NAME: "Cyberpilot — Plan"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
-          GH_AW_WORKFLOW_ID: "cloud-cyberpilot-implement"
+          GH_AW_WORKFLOW_ID: "cloud-cyberpilot-plan"
           GH_AW_ACTION_FAILURE_ISSUE_EXPIRES_HOURS: "168"
           GH_AW_ENGINE_ID: "copilot"
           GH_AW_SECRET_VERIFICATION_RESULT: ${{ needs.activation.outputs.secret_verification_result }}
@@ -1146,8 +1216,6 @@ jobs:
           GH_AW_AGENTIC_ENGINE_TIMEOUT: ${{ needs.agent.outputs.agentic_engine_timeout }}
           GH_AW_MODEL_NOT_SUPPORTED_ERROR: ${{ needs.agent.outputs.model_not_supported_error }}
           GH_AW_ENGINE_API_HOSTS: "api.enterprise.githubcopilot.com,api.githubcopilot.com,api.business.githubcopilot.com,api.individual.githubcopilot.com"
-          GH_AW_ASSIGNMENT_ERRORS: ${{ needs.safe_outputs.outputs.assign_to_agent_assignment_errors }}
-          GH_AW_ASSIGNMENT_ERROR_COUNT: ${{ needs.safe_outputs.outputs.assign_to_agent_assignment_error_count }}
           GH_AW_LOCKDOWN_CHECK_FAILED: ${{ needs.activation.outputs.lockdown_check_failed }}
           GH_AW_STALE_LOCK_FILE_FAILED: ${{ needs.activation.outputs.stale_lock_file_failed }}
           GH_AW_GROUP_REPORTS: "false"
@@ -1188,8 +1256,8 @@ jobs:
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
           parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Implement"
-          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-implement.lock.yml@${{ github.ref }}
+          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Plan"
+          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-plan.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.48"
           GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Download agent output artifact
@@ -1256,8 +1324,8 @@ jobs:
         if: always() && steps.detection_guard.outputs.run_detection == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          WORKFLOW_NAME: "Cyberpilot — Implement"
-          WORKFLOW_DESCRIPTION: "Reads the plan from the issue and assigns Copilot coding agent"
+          WORKFLOW_NAME: "Cyberpilot — Plan"
+          WORKFLOW_DESCRIPTION: "Creates a detailed implementation plan and saves it to the issue"
           HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
         with:
           script: |
@@ -1307,7 +1375,7 @@ jobs:
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
           COPILOT_API_KEY: dummy-byok-key-for-offline-mode
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-          COPILOT_MODEL: ${{ vars.GH_AW_MODEL_DETECTION_COPILOT || 'claude-sonnet-4.6' }}
+          COPILOT_MODEL: claude-opus-4.6
           GH_AW_PHASE: detection
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
           GH_AW_VERSION: v0.74.4
@@ -1372,25 +1440,23 @@ jobs:
     if: (!cancelled()) && needs.agent.result != 'skipped' && needs.detection.result == 'success'
     runs-on: ubuntu-slim
     permissions:
+      actions: write
       contents: read
       discussions: write
       issues: write
       pull-requests: write
     timeout-minutes: 15
     env:
-      GH_AW_CALLER_WORKFLOW_ID: "${{ github.repository }}/cloud-cyberpilot-implement"
+      GH_AW_CALLER_WORKFLOW_ID: "${{ github.repository }}/cloud-cyberpilot-plan"
       GH_AW_DETECTION_CONCLUSION: ${{ needs.detection.outputs.detection_conclusion }}
       GH_AW_DETECTION_REASON: ${{ needs.detection.outputs.detection_reason }}
       GH_AW_EFFECTIVE_TOKENS: ${{ needs.agent.outputs.effective_tokens }}
       GH_AW_ENGINE_ID: "copilot"
-      GH_AW_ENGINE_MODEL: ${{ needs.agent.outputs.model }}
+      GH_AW_ENGINE_MODEL: "claude-opus-4.6"
       GH_AW_ENGINE_VERSION: "1.0.48"
-      GH_AW_WORKFLOW_ID: "cloud-cyberpilot-implement"
-      GH_AW_WORKFLOW_NAME: "Cyberpilot — Implement"
+      GH_AW_WORKFLOW_ID: "cloud-cyberpilot-plan"
+      GH_AW_WORKFLOW_NAME: "Cyberpilot — Plan"
     outputs:
-      assign_to_agent_assigned: ${{ steps.process_safe_outputs.outputs.assign_to_agent_assigned }}
-      assign_to_agent_assignment_error_count: ${{ steps.process_safe_outputs.outputs.assign_to_agent_assignment_error_count }}
-      assign_to_agent_assignment_errors: ${{ steps.process_safe_outputs.outputs.assign_to_agent_assignment_errors }}
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
       code_push_failure_errors: ${{ steps.process_safe_outputs.outputs.code_push_failure_errors }}
       comment_id: ${{ steps.process_safe_outputs.outputs.comment_id }}
@@ -1409,8 +1475,8 @@ jobs:
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
           parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Implement"
-          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-implement.lock.yml@${{ github.ref }}
+          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Plan"
+          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-plan.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.48"
           GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Download agent output artifact
@@ -1444,8 +1510,7 @@ jobs:
           GH_AW_ALLOWED_DOMAINS: "api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,github.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,ppa.launchpad.net,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,telemetry.enterprise.githubcopilot.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.googleapis.com"
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_API_URL: ${{ github.api_url }}
-          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"add_comment\":{\"max\":1,\"target\":\"*\"},\"add_labels\":{\"allowed\":[\"cloud/implementing\"],\"github-token\":\"${{ secrets.COPILOT_GITHUB_TOKEN }}\",\"max\":1,\"target\":\"*\"},\"assign_to_agent\":{\"custom-instructions\":\"## YOUR MISSION\\n\\nImplement the plan from issue #${{ github.event.inputs.issue_number }}.\\n\\n## STEP 0: READ THE PLAN (do this first)\\n\\nRead issue #${{ github.event.inputs.issue_number }} and find the comment titled \\\"📋 Pipeline — Plan\\\". That comment has your implementation plan with specific files, changes, and acceptance criteria. Follow it precisely.\\n\\n## STEP 1: IMPLEMENT\\n\\nUse the specialized sub-agents in .github/agents/:\\n- `backend` agent for Controllers, Models, Services, Middleware, Program.cs\\n- `frontend` agent for Views, Razor templates, CSS, JavaScript\\n- `security-implementer` agent for security vulnerabilities (CSRF, XSS, SQL injection, auth)\\n\\n## STEP 2: TEST (mandatory — do not skip)\\n\\nUse `testing` agent to generate unit tests and integration tests for ALL changes.\\n\\n## STEP 3: DOCUMENT (mandatory — do not skip)\\n\\nUse `docs` agent to:\\n- Add/update XML documentation on all new/modified public methods and classes\\n- Update docs/ markdown files if the change affects architecture or APIs\\n\\n## STEP 4: VALIDATE\\n\\nUse `build-validator` agent to verify the project builds cleanly and tests pass.\\n\\n## STEP 5: COMMIT AND PR WITH PERSONALITY\\n\\nFollow the spirit of `.github/skills/snarky-commit/SKILL.md` even if you cannot invoke the skill directly from the cloud coding-agent environment.\\n\\n**Commit messages:**\\n- Use conventional commit format when practical, but make the description vivid and specific.\\n- Describe the real change with a little swagger, not generic filler like `update files`.\\n- Keep the subject concise and PG-13.\\n\\n**PR title:**\\n- Generate a spicy, confident PR title based on the actual changes and the issue title.\\n- Do not reuse the issue title verbatim unless it is already interesting.\\n- One emoji is fine; three is trying too hard.\\n\\n**PR body:**\\n- Use the snarky PR body shape: `What's This?`, `Quality Checks`, `Commit Messages`, and `Side Effects` when relevant.\\n- Keep the tone playful but still useful to reviewers.\\n- Preserve every required pipeline line below, especially the closing keyword and automated-label behavior.\\n\\n## CRITICAL: PR BODY REQUIREMENT\\n\\nWhen creating the pull request, the PR body MUST include a closing keyword line:\\n\\n`\\nCloses #${{ github.event.inputs.issue_number }}\\n`\\n\\nThis line is required for the pipeline to automatically detect the linked issue and trigger the review stage. Do not omit it.\\n\\n## CRITICAL: PR LABEL REQUIREMENT\\n\\nWhen creating the pull request, apply the `automated` label to the PR.\\n\\nThat label is required because later pipeline stages are only allowed to push follow-up documentation commits to PR branches explicitly marked as pipeline-managed.\\n\\nNOTE: Do NOT post an implementation report on the issue. The review pipeline handles that automatically.\\n\",\"github-token\":\"${{ secrets.COPILOT_GITHUB_TOKEN }}\",\"max\":1,\"name\":\"copilot\",\"target\":\"*\"},\"create_report_incomplete_issue\":{},\"missing_data\":{},\"missing_tool\":{},\"noop\":{\"max\":1,\"report-as-issue\":\"true\"},\"remove_labels\":{\"allowed\":[\"cloud/triage\",\"cloud/planning\",\"cloud/implementing\",\"cloud/review\",\"cloud/awaiting-merge\",\"cloud/done\"],\"github-token\":\"${{ secrets.COPILOT_GITHUB_TOKEN }}\",\"max\":7,\"target\":\"*\"},\"report_incomplete\":{}}"
-          GH_AW_ASSIGN_TO_AGENT_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"add_comment\":{\"max\":2,\"target\":\"*\"},\"add_labels\":{\"allowed\":[\"cloud/planning\",\"cloud/implementing\"],\"github-token\":\"${{ secrets.COPILOT_GITHUB_TOKEN }}\",\"max\":1,\"target\":\"*\"},\"create_report_incomplete_issue\":{},\"dispatch_workflow\":{\"aw_context_workflows\":[\"cloud-cyberpilot-implement\"],\"max\":1,\"workflow_files\":{\"cloud-cyberpilot-implement\":\".lock.yml\"},\"workflows\":[\"cloud-cyberpilot-implement\"]},\"missing_data\":{},\"missing_tool\":{},\"noop\":{\"max\":1,\"report-as-issue\":\"true\"},\"remove_labels\":{\"allowed\":[\"cloud/triage\",\"cloud/planning\",\"cloud/implementing\",\"cloud/review\",\"cloud/awaiting-merge\",\"cloud/done\"],\"github-token\":\"${{ secrets.COPILOT_GITHUB_TOKEN }}\",\"max\":7,\"target\":\"*\"},\"report_incomplete\":{},\"update_issue\":{\"allow_body\":true,\"github-token\":\"${{ secrets.COPILOT_GITHUB_TOKEN }}\",\"max\":1,\"target\":\"*\"}}"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1474,7 +1539,7 @@ jobs:
     runs-on: ubuntu-slim
     permissions: {}
     env:
-      GH_AW_WORKFLOW_ID_SANITIZED: cloudcyberpilotimplement
+      GH_AW_WORKFLOW_ID_SANITIZED: cloudcyberpilotplan
     steps:
       - name: Setup Scripts
         id: setup
@@ -1485,8 +1550,8 @@ jobs:
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
           parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Implement"
-          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-implement.lock.yml@${{ github.ref }}
+          GH_AW_SETUP_WORKFLOW_NAME: "Cyberpilot — Plan"
+          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/cloud-cyberpilot-plan.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.48"
           GH_AW_INFO_ENGINE_ID: "copilot"
       - name: Download cache-memory artifact (default)

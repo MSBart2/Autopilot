@@ -8,6 +8,7 @@ public class CyberpilotIssueCommentClassifierTests
     [InlineData("## ⚡ BUILD COMPLETE — Ship It! 🔨\nDone.")]
     [InlineData("## 🎸 Review Complete\nVerdict posted.")]
     [InlineData("## 📚 Docs & Verification\nAll tidy.")]
+    [InlineData("## 🧾 Summary & Changelog\nStory time.")]
     [InlineData("## 🚀 Mission Control — Landing Report\nTouchdown.")]
     public void IsAgentComment_RecognizesCurrentCyberpilotMarkers(string body)
     {

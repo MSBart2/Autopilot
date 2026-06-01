@@ -47,7 +47,7 @@ safe-outputs:
     max: 7
     target: "*"
     github-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-  dispatch-workflow: [cloud-implement]
+  dispatch-workflow: [cloud-cyberpilot-implement]
 ---
 
 ## Pipeline — Plan Agent

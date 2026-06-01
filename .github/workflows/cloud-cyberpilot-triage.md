@@ -39,7 +39,7 @@ safe-outputs:
     max: 7
     target: "triggering"
     github-token: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-  dispatch-workflow: [cloud-plan]
+  dispatch-workflow: [cloud-cyberpilot-plan]
 ---
 
 ## Pipeline — Triage Agent

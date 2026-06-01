@@ -16,6 +16,7 @@ public static class CyberpilotIssueCommentClassifier
         "## 🎸 Review Started",
         "## 🎸 Review Complete",
         "## 📚 Docs & Verification",
+        "## 🧾 Summary & Changelog",
         "SDK Cyberpilot branch ready:",
         "Planning Started",
         "Research Complete",

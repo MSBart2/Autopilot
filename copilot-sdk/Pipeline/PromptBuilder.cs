@@ -292,6 +292,7 @@ internal sealed class PromptBuilder(
 	{
 		if (!IsReviewStage(stageName)
 		    && !stageName.Equals("docs", StringComparison.OrdinalIgnoreCase)
+		    && !stageName.Equals("summary", StringComparison.OrdinalIgnoreCase)
 		    && !stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase))
 		{
 			return string.Empty;
@@ -310,7 +311,7 @@ internal sealed class PromptBuilder(
 
 			When validating .NET changes, call `collect_validation_evidence` for `dotnet_build` or `dotnet_test` with a repository-relative solution/project path instead of inventing shell commands.
 
-			If the imported stage prompt asks you to post a started/progress/verdict/verification/landing comment, call `render_stage_comment` and return the rendered body in the required stage artifact instead of using shell or GitHub commands to post from the SDK session.
+			If the imported stage prompt asks you to post a started/progress/verdict/verification/summary/landing comment, call `render_stage_comment` and return the rendered body in the required stage artifact instead of using shell or GitHub commands to post from the SDK session.
 			""";
 	}
 
@@ -375,6 +376,20 @@ internal sealed class PromptBuilder(
 
 	private static string BuildReportingGuidance(string stageName)
 	{
+		if (stageName.Equals("summary", StringComparison.OrdinalIgnoreCase))
+		{
+			return """
+
+				## Summary Report Guidance
+
+				When you prepare the summary stage output:
+				- Make `summary-report` the canonical stakeholder-facing artifact.
+				- Optionally include `pr-body-summary` and `changelog-entry` artifacts when they add downstream value.
+				- Synthesize from issue context, implementation artifacts, review verdicts, documentation updates, and deterministic PR evidence instead of re-investigating the repository.
+				- Call out affected components, breaking changes, migration notes, and rollback guidance explicitly when relevant.
+				""";
+		}
+
 		if (!stageName.Equals("deliver", StringComparison.OrdinalIgnoreCase))
 		{
 			return string.Empty;
@@ -386,7 +401,7 @@ internal sealed class PromptBuilder(
 
 				When you post the final landing report, include a compact evidence and policy summary:
 				- Link to the merged pull request or relevant PR evidence.
-				- Mention the validation, documentation, and delivery artifacts that support the landing decision.
+				- Mention the validation, documentation, summary, and delivery artifacts that support the landing decision.
 				- Summarize policy signals, gate outcomes, approvals, and any required actions that were resolved.
 				- Keep raw transcripts out of the report; cite concise evidence links or summaries instead.
 				""";

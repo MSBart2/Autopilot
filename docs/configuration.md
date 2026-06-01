@@ -115,7 +115,7 @@ dotnet run --project .\copilot-sdk-exe\Cyberpilot.Sdk.Exe.csproj -- --check-mode
 
 ### Pipeline Definitions
 
-The SDK runner defaults to `cyberpilot-default`, which runs the full `triage -> plan -> implement -> review -> docs -> deliver` flow. The built-in `bugfix` definition skips triage and docs for focused fixes, and `docs-only` runs only documentation plus delivery.
+The SDK runner defaults to `cyberpilot-default`, which runs the full `triage -> plan -> implement -> review -> docs -> summary -> deliver` flow. The built-in `bugfix` definition skips triage and docs for focused fixes, and `docs-only` runs documentation, summary, and delivery only.
 
 Select a built-in definition from the command line:
 

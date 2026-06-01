@@ -261,7 +261,7 @@ public partial class PipelinesController
     }
 
     /// <summary>
-    /// Starts a review → docs → deliver run for an open pull request.
+    /// Starts a review → docs → summary → deliver run for an open pull request.
     /// </summary>
     /// <param name="prNumber">The pull request number.</param>
     /// <param name="request">The PR review start request.</param>

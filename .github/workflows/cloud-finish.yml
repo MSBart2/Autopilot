@@ -232,6 +232,7 @@ jobs:
               'Implement | ✅ Complete',
               'Review | ✅ Approved',
               'Docs | ✅ Complete',
+              'Summary | ✅ Complete',
               'Finish | ✅ Merged & Closed',
               '',
               'The full AI-SDLC pipeline has completed successfully. This issue is now closed.',

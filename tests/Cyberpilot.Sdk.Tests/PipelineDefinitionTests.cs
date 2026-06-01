@@ -32,7 +32,7 @@ public sealed class PipelineDefinitionTests
             .Select(stage => stage.Stage.Name)
             .ToArray();
 
-        Assert.Equal<string>(["triage", "plan", "implement", "review", "docs", "deliver"], stageNames);
+        Assert.Equal<string>(["triage", "plan", "implement", "review", "docs", "summary", "deliver"], stageNames);
     }
 
     [Fact]
@@ -81,6 +81,12 @@ public sealed class PipelineDefinitionTests
             },
             stage =>
             {
+                Assert.Equal("summary", stage.Name);
+                Assert.Equal("summary.agent.md", stage.PromptFile);
+                Assert.Equal("sdk/summary", stage.Label);
+            },
+            stage =>
+            {
                 Assert.Equal("deliver", stage.Name);
                 Assert.Equal("deliver.agent.md", stage.PromptFile);
                 Assert.Equal("sdk/delivering", stage.Label);
@@ -94,6 +100,8 @@ public sealed class PipelineDefinitionTests
 
         Assert.Contains(transitions, transition => transition is { FromStage: "review", ToStage: "implement", Condition: "changes_requested" });
         Assert.Contains(transitions, transition => transition is { FromStage: "review", ToStage: "docs", Condition: "approved" });
+        Assert.Contains(transitions, transition => transition is { FromStage: "docs", ToStage: "summary", Condition: "GO" });
+        Assert.Contains(transitions, transition => transition is { FromStage: "summary", ToStage: "deliver", Condition: "GO" });
     }
 
     [Theory]
@@ -181,8 +189,9 @@ public sealed class PipelineDefinitionTests
 
         Assert.True(found);
         Assert.Equal("docs-only", definition!.Name);
-        Assert.Equal<string>(["docs", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
-        Assert.Contains(definition.Transitions, transition => transition is { FromStage: "docs", ToStage: "deliver", Condition: "GO" });
+        Assert.Equal<string>(["docs", "summary", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+        Assert.Contains(definition.Transitions, transition => transition is { FromStage: "docs", ToStage: "summary", Condition: "GO" });
+        Assert.Contains(definition.Transitions, transition => transition is { FromStage: "summary", ToStage: "deliver", Condition: "GO" });
         Assert.Contains("docs-only", BuiltInPipelineDefinitions.AvailableNames);
     }
 
@@ -193,9 +202,10 @@ public sealed class PipelineDefinitionTests
 
         Assert.True(found);
         Assert.Equal("bugfix", definition!.Name);
-        Assert.Equal<string>(["plan", "implement", "review", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+        Assert.Equal<string>(["plan", "implement", "review", "summary", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
         Assert.Contains(definition.Transitions, transition => transition is { FromStage: "review", ToStage: "implement", Condition: "changes_requested" });
-        Assert.Contains(definition.Transitions, transition => transition is { FromStage: "review", ToStage: "deliver", Condition: "approved" });
+        Assert.Contains(definition.Transitions, transition => transition is { FromStage: "review", ToStage: "summary", Condition: "approved" });
+        Assert.Contains(definition.Transitions, transition => transition is { FromStage: "summary", ToStage: "deliver", Condition: "GO" });
         Assert.Contains("bugfix", BuiltInPipelineDefinitions.AvailableNames);
     }
 
@@ -224,7 +234,7 @@ public sealed class PipelineDefinitionTests
         Assert.True(selected);
         Assert.Null(error);
         Assert.Equal("docs-only", definition!.Name);
-        Assert.Equal<string>(["docs", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+        Assert.Equal<string>(["docs", "summary", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
         Assert.Equal("standard", definition.PolicyProfile.Name);
     }
 
@@ -253,7 +263,7 @@ public sealed class PipelineDefinitionTests
         Assert.True(selected);
         Assert.Null(error);
         Assert.Equal("bugfix", definition!.Name);
-        Assert.Equal<string>(["plan", "implement", "review", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+        Assert.Equal<string>(["plan", "implement", "review", "summary", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
         Assert.Equal("standard", definition.PolicyProfile.Name);
     }
 
@@ -264,8 +274,15 @@ public sealed class PipelineDefinitionTests
             "custom-docs",
             new PipelineDefinitionVersion("1.0"),
             new PolicyProfile("standard", PolicyStrictness.Standard),
-            [DefaultPipelineDefinitionProvider.Definition.PipelineStage("docs"), DefaultPipelineDefinitionProvider.Definition.PipelineStage("deliver")],
-            [new StageTransition("docs", "deliver", "GO")]);
+            [
+                DefaultPipelineDefinitionProvider.Definition.PipelineStage("docs"),
+                DefaultPipelineDefinitionProvider.Definition.PipelineStage("summary"),
+                DefaultPipelineDefinitionProvider.Definition.PipelineStage("deliver"),
+            ],
+            [
+                new StageTransition("docs", "summary", "GO"),
+                new StageTransition("summary", "deliver", "GO"),
+            ]);
         var provider = new FakePipelineDefinitionProvider(customDefinition);
         var options = new Cyberpilot.Options.CyberpilotOptions(
             1,
@@ -289,7 +306,7 @@ public sealed class PipelineDefinitionTests
         Assert.True(selected);
         Assert.Null(error);
         Assert.Equal("custom-docs", definition!.Name);
-        Assert.Equal<string>(["docs", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+        Assert.Equal<string>(["docs", "summary", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
     }
 
     [Fact]
@@ -307,8 +324,9 @@ public sealed class PipelineDefinitionTests
             Assert.Equal("json-docs", definition!.Name);
             Assert.Equal("1.0", definition.Version.Value);
             Assert.Equal("standard", definition.PolicyProfile.Name);
-            Assert.Equal<string>(["docs", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
-            Assert.Contains(definition.Transitions, transition => transition is { FromStage: "docs", ToStage: "deliver", Condition: "GO" });
+            Assert.Equal<string>(["docs", "summary", "deliver"], definition.Stages.Select(stage => stage.Stage.Name).ToArray());
+            Assert.Contains(definition.Transitions, transition => transition is { FromStage: "docs", ToStage: "summary", Condition: "GO" });
+            Assert.Contains(definition.Transitions, transition => transition is { FromStage: "summary", ToStage: "deliver", Condition: "GO" });
         }
         finally
         {
@@ -457,6 +475,13 @@ public sealed class PipelineDefinitionTests
                                             "contract": { "version": "1.0", "requiredArtifacts": ["documentation-summary"] }
                                         },
                                         {
+                                            "displayName": "SUMMARY",
+                                            "name": "summary",
+                                            "promptFile": "summary.agent.md",
+                                            "label": "sdk/summary",
+                                            "contract": { "version": "1.0", "requiredArtifacts": ["summary-report"] }
+                                        },
+                                        {
                                             "displayName": "LAND",
                                             "name": "deliver",
                                             "promptFile": "deliver.agent.md",
@@ -465,7 +490,8 @@ public sealed class PipelineDefinitionTests
                                         }
                                     ],
                                     "transitions": [
-                                        { "fromStage": "docs", "toStage": "deliver", "condition": "GO" }
+                                        { "fromStage": "docs", "toStage": "summary", "condition": "GO" },
+                                        { "fromStage": "summary", "toStage": "deliver", "condition": "GO" }
                                     ]
                                 }
                             ]

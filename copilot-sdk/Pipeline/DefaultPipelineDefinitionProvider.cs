@@ -17,6 +17,7 @@ internal static class DefaultPipelineDefinitionProvider
             Stage("IMPLEMENT", "implement", "implement.agent.md", "sdk/implementing", ["pull-request", "validation-summary"], PreStageGates()),
             Stage("REVIEW", "review", "pipeline-review.agent.md", "sdk/review", ["review-verdict"], PreStageGates()),
             Stage("DOCS", "docs", "docs.agent.md", "sdk/docs", ["documentation-summary"], PreStageGates()),
+            Stage("SUMMARY", "summary", "summary.agent.md", "sdk/summary", ["summary-report"], PreStageGates()),
             Stage("LAND", "deliver", "deliver.agent.md", "sdk/delivering", ["landing-report"], PreStageGates()),
         ],
         [
@@ -25,7 +26,8 @@ internal static class DefaultPipelineDefinitionProvider
             new StageTransition("implement", "review", "GO"),
             new StageTransition("review", "docs", "approved"),
             new StageTransition("review", "implement", "changes_requested"),
-            new StageTransition("docs", "deliver", "GO"),
+            new StageTransition("docs", "summary", "GO"),
+            new StageTransition("summary", "deliver", "GO"),
         ]);
 
     private static PipelineStageDefinition Stage(

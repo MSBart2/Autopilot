@@ -228,7 +228,7 @@ else
 @if (Model.PullRequests.Any())
 {
     <h2 class="mt-5 mb-3">Open Pull Requests</h2>
-    <p class="text-muted small mb-3">Run review → docs → deliver on a human-authored PR.</p>
+    <p class="text-muted small mb-3">Run review → docs → summary → deliver on a human-authored PR.</p>
     <div class="dispatch-grid">
         @foreach (var pr in Model.PullRequests)
         {
@@ -281,8 +281,8 @@ else
                             }
                         </select>
                         <button class="btn btn-sm btn-secondary w-100" type="submit" @(prActive ? "disabled" : null)
-                                title="@(prActive ? "A run is already in progress" : "Review, document, and deliver this PR")">
-                            Review → Docs → Deliver
+                                title="@(prActive ? "A run is already in progress" : "Review, document, summarize, and deliver this PR")">
+                            Review → Docs → Summary → Deliver
                         </button>
                     </form>
                 </div>

@@ -72,10 +72,10 @@ Instructions, persona, and behavioral guidelines in Markdown...
 ### `cyberpilot.agent.md`
 
 **Tools:** `read`, `search`, `execute`, `github`, `agent`, `web`
-**Agents:** `triage`, `plan`, `implement`, `pipeline-review`, `deliver`
+**Agents:** `triage`, `plan`, `implement`, `pipeline-review`, `docs`, `summary`, `deliver`
 **Argument hint:** "Say 'run issue 135' to run the full pipeline on an issue"
 
-The entry point for the autonomous pipeline. Auto-chains through all stages (triage → plan → implement → pipeline review → docs → deliver) without pausing. Handles retry loops if review requests changes (max 2 cycles). Choose this agent to run the full pipeline on an issue.
+The entry point for the autonomous pipeline. Auto-chains through all stages (triage → plan → implement → pipeline review → docs → summary → deliver) without pausing. Handles retry loops if review requests changes (max 2 cycles). Choose this agent to run the full pipeline on an issue.
 
 ---
 
@@ -111,6 +111,14 @@ Executes plans by delegating to specialist agents, writing code, committing, and
 **Agents:** `security-reviewer`, `code-quality-reviewer`, `build-validator`
 
 Pipeline PR review orchestrator covering architecture, security, code quality, test coverage, and documentation. Delegates specialist checks and makes approve/request-changes decisions. Choose this agent to run the pipeline review gate for a PR.
+
+---
+
+### `summary.agent.md`
+
+**Tools:** `read`, `search`, `github`
+
+Synthesizes a stakeholder-ready summary and changelog package from issue, PR, review, and docs context. Choose this agent to produce release-note-style summaries without merging.
 
 ---
 
